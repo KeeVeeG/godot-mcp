@@ -508,13 +508,22 @@ func _capture_input_state() -> Dictionary:
 func _replay_input(data: Dictionary) -> void:
 	for key_name: String in data:
 		if key_name == "mouse_left":
-			# Can't easily simulate mouse in editor
-			pass
+			var event: InputEventMouseButton = InputEventMouseButton.new()
+			event.button_index = MOUSE_BUTTON_LEFT
+			event.pressed = true
+			Input.parse_input_event(event)
 		elif key_name == "mouse_right":
-			pass
+			var event: InputEventMouseButton = InputEventMouseButton.new()
+			event.button_index = MOUSE_BUTTON_RIGHT
+			event.pressed = true
+			Input.parse_input_event(event)
 		else:
-			# Would need runtime IPC for actual input simulation
-			pass
+			var keycode: int = OS.find_keycode_from_string(key_name)
+			if keycode != 0:
+				var event: InputEventKey = InputEventKey.new()
+				event.keycode = keycode as Key
+				event.pressed = true
+				Input.parse_input_event(event)
 
 
 ## Helper: Step handler - input.
