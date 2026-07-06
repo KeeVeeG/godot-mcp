@@ -78,7 +78,7 @@ static func _auto_parse_string(s: String) -> Variant:
 		return _parse_color(s)
 
 	# Check for constructor-style formats
-	if s.begins_with("Vector2(") or s.begins_with("Vector2("):
+	if s.begins_with("Vector2("):
 		return _parse_vector2(s)
 	if s.begins_with("Vector2i("):
 		return _parse_vector2i(s)
@@ -525,6 +525,34 @@ static func serialize_value(value: Variant) -> Variant:
 	elif value is PackedByteArray:
 		var packed: PackedByteArray = value as PackedByteArray
 		return packed.hex_encode()
+	elif value is PackedInt32Array:
+		return Array(value as PackedInt32Array)
+	elif value is PackedInt64Array:
+		return Array(value as PackedInt64Array)
+	elif value is PackedFloat32Array:
+		return Array(value as PackedFloat32Array)
+	elif value is PackedFloat64Array:
+		return Array(value as PackedFloat64Array)
+	elif value is PackedStringArray:
+		return Array(value as PackedStringArray)
+	elif value is PackedVector2Array:
+		var arr: PackedVector2Array = value as PackedVector2Array
+		var out: Array = []
+		for v: Vector2 in arr:
+			out.append({"x": v.x, "y": v.y})
+		return out
+	elif value is PackedVector3Array:
+		var arr: PackedVector3Array = value as PackedVector3Array
+		var out: Array = []
+		for v: Vector3 in arr:
+			out.append({"x": v.x, "y": v.y, "z": v.z})
+		return out
+	elif value is PackedColorArray:
+		var arr: PackedColorArray = value as PackedColorArray
+		var out: Array = []
+		for c: Color in arr:
+			out.append({"r": c.r, "g": c.g, "b": c.b, "a": c.a})
+		return out
 	else:
 		return value
 
