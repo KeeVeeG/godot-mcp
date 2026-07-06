@@ -8,6 +8,7 @@ var _plugin: EditorPlugin
 const REQUEST_PATH: String = "user://mcp_runtime_request.json"
 const RESPONSE_PATH: String = "user://mcp_runtime_response.json"
 const IPC_TIMEOUT: float = 5.0
+var _next_request_id: int = 1
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
@@ -52,7 +53,10 @@ func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	if FileAccess.file_exists(RESPONSE_PATH):
 		DirAccess.remove_absolute(RESPONSE_PATH)
 
-	var request: Dictionary = {"method": method, "params": params}
+	var request_id: String = "mcp_%d" % _next_request_id
+	_next_request_id += 1
+
+	var request: Dictionary = {"method": method, "params": params, "request_id": request_id}
 	var json_text: String = JSON.stringify(request)
 	var file := FileAccess.open(REQUEST_PATH, FileAccess.WRITE)
 	if file == null:
@@ -74,7 +78,13 @@ func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 				var json := JSON.new()
 				var err := json.parse(resp_text)
 				if err == OK and json.data is Dictionary:
-					return json.data as Dictionary
+					var resp_data: Dictionary = json.data as Dictionary
+					# Validate request_id correlation — reject stale responses
+					var resp_id: String = resp_data.get("request_id", "")
+					if not resp_id.is_empty() and resp_id != request_id:
+						push_warning("[MCP Runtime] Ignoring stale response (expected %s, got %s)" % [request_id, resp_id])
+						continue
+					return resp_data
 				return {"error": "Failed to parse IPC response"}
 		OS.delay_msec(10)
 	return {"error": "IPC request timed out (%.1fs)" % IPC_TIMEOUT}
