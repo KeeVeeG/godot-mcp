@@ -1,0 +1,347 @@
+## Script commands module - 9 tools.
+## Handles script CRUD, validation, and search.
+class_name MCPScriptCommands
+extends RefCounted
+
+var _plugin: EditorPlugin
+
+
+func set_plugin(plugin: EditorPlugin) -> void:
+	_plugin = plugin
+
+
+## Router compatibility: returns callable map for MCPCommandRouter.
+func get_commands() -> Dictionary:
+	return {
+		"script/list": func(params: Dictionary) -> Dictionary: return execute("list_scripts", params),
+		"script/read": func(params: Dictionary) -> Dictionary: return execute("read_script", params),
+		"script/create": func(params: Dictionary) -> Dictionary: return execute("create_script", params),
+		"script/delete": func(params: Dictionary) -> Dictionary: return execute("delete_script", params),
+		"script/edit": func(params: Dictionary) -> Dictionary: return execute("edit_script", params),
+		"script/attach": func(params: Dictionary) -> Dictionary: return execute("attach_script", params),
+		"script/get_open": func(params: Dictionary) -> Dictionary: return execute("get_open_scripts", params),
+		"script/validate": func(params: Dictionary) -> Dictionary: return execute("validate_script", params),
+		"script/search_in_files": func(params: Dictionary) -> Dictionary: return execute("search_in_files", params),
+	}
+
+
+## Main dispatcher.
+func execute(method: String, params: Dictionary) -> Dictionary:
+	match method:
+		"list_scripts": return _list_scripts(params)
+		"read_script": return _read_script(params)
+		"create_script": return _create_script(params)
+		"delete_script": return _delete_script(params)
+		"edit_script": return _edit_script(params)
+		"attach_script": return _attach_script(params)
+		"get_open_scripts": return _get_open_scripts()
+		"validate_script": return _validate_script(params)
+		"search_in_files": return _search_in_files(params)
+	return {"success": false, "error": "Unknown method: " + method}
+
+
+## List all .gd scripts in the project with class info.
+func _list_scripts(params: Dictionary) -> Dictionary:
+	var max_depth: int = params.get("max_depth", 10)
+	var results: Array = []
+	_scan_scripts("res://", results, 0, max_depth)
+	return {"success": true, "scripts": results, "count": results.size()}
+
+
+func _scan_scripts(path: String, results: Array, depth: int, max_depth: int) -> void:
+	if depth >= max_depth:
+		return
+	var dir: DirAccess = DirAccess.open(path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var file_name: String = dir.get_next()
+	while file_name != "":
+		if file_name.begins_with("."):
+			file_name = dir.get_next()
+			continue
+		var full_path: String = path.path_join(file_name)
+		if dir.current_is_dir():
+			_scan_scripts(full_path, results, depth + 1, max_depth)
+		else:
+			var ext: String = file_name.get_extension().to_lower()
+			if ext == "gd":
+				var script_info: Dictionary = {
+					"path": full_path,
+					"name": file_name,
+				}
+				var scr: GDScript = ResourceLoader.load(full_path) as GDScript
+				if scr:
+					script_info["base_class"] = scr.get_instance_base_type()
+					script_info["class_name_str"] = scr.get_global_name()
+				results.append(script_info)
+		file_name = dir.get_next()
+	dir.list_dir_end()
+
+
+## Read a script file's content.
+func _read_script(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"success": false, "error": "Path is required"}
+	if not FileAccess.file_exists(path):
+		return {"success": false, "error": "Script not found: %s" % path}
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {"success": false, "error": "Cannot read script: %s" % path}
+	var content: String = file.get_as_text()
+	file.close()
+	var line_count: int = content.count("\n") + 1
+	return {"success": true, "path": path, "content": content, "lines": line_count}
+
+
+## Create a new script file with optional template.
+func _create_script(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var content: String = params.get("content", "")
+	var base_class: String = params.get("base_class", "RefCounted")
+	if path.is_empty():
+		return {"success": false, "error": "Path is required"}
+	if not path.ends_with(".gd"):
+		path += ".gd"
+
+	# Ensure parent directory exists
+	var dir_path: String = path.get_base_dir()
+	_ensure_dir(dir_path)
+
+	if content.is_empty():
+		var lifecycle_method: String = "_ready"
+		# Use _init() for non-Node classes (RefCounted, Resource, etc.)
+		if base_class != "Node" and not ClassDB.is_parent_class(base_class, "Node"):
+			lifecycle_method = "_init"
+		content = "extends %s\n\nfunc %s() -> void:\n\tpass\n" % [base_class, lifecycle_method]
+
+	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return {"success": false, "error": "Cannot create script: %s" % path}
+	file.store_string(content)
+	file.close()
+
+	_plugin.safe_scan_filesystem()
+	return {"success": true, "path": path, "base_class": base_class}
+
+
+## Delete a script file from the project.
+func _delete_script(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"success": false, "error": "Path is required"}
+	if not path.ends_with(".gd"):
+		path += ".gd"
+	if not FileAccess.file_exists(path):
+		return {"success": false, "error": "Script not found: %s" % path}
+	
+	# Check if script is currently open in the script editor
+	var open_scripts: Array = _get_open_scripts().get("open_scripts", [])
+	for s: Dictionary in open_scripts:
+		if s.get("path", "") == path:
+			return {"success": false, "error": "Script is currently open in the script editor. Close it first."}
+	
+	# Check if script is used by any autoload
+	var props: Array = ProjectSettings.get_property_list()
+	for p: Dictionary in props:
+		var prop_name: String = p.get("name", "")
+		if prop_name.begins_with("autoload/"):
+			var autoload_name: String = prop_name.trim_prefix("autoload/")
+			var autoload_path: String = ProjectSettings.get_setting(prop_name, "") as String
+			if autoload_path.begins_with("*"):
+				autoload_path = autoload_path.substr(1)
+			if autoload_path == path:
+				return {"success": false, "error": "Script is used by autoload '%s'. Remove it first." % autoload_name}
+	
+	# Check if script is attached to any node in the current scene
+	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
+	if root:
+		var attached_nodes: Array = _find_nodes_with_script(root, path, 0, 20)
+		if not attached_nodes.is_empty():
+			return {"success": false, "error": "Script is attached to nodes: %s. Use update_property to set script to null first." % str(attached_nodes)}
+	
+	var err: Error = DirAccess.remove_absolute(path)
+	if err != OK:
+		return {"success": false, "error": "Failed to delete script: %s" % error_string(err)}
+	
+	_plugin.safe_scan_filesystem()
+	return {"success": true, "path": path, "message": "Script deleted: %s" % path}
+
+
+## Helper: find nodes that use a specific script path.
+func _find_nodes_with_script(node: Node, script_path: String, depth: int = 0, max_depth: int = 20) -> Array:
+	var result: Array = []
+	if depth >= max_depth:
+		return result
+	var scr = node.get_script()
+	if scr and scr.resource_path == script_path:
+		result.append(node.get_path())
+	for child in node.get_children():
+		result.append_array(_find_nodes_with_script(child, script_path, depth + 1, max_depth))
+	return result
+
+
+## Edit a script file using find-and-replace.
+func _edit_script(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var old_text: String = params.get("old_text", "")
+	var new_text: String = params.get("new_text", "")
+	if path.is_empty() or old_text.is_empty():
+		return {"success": false, "error": "Path and old_text are required"}
+	if not FileAccess.file_exists(path):
+		return {"success": false, "error": "Script not found: %s" % path}
+
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {"success": false, "error": "Cannot read script: %s" % path}
+	var content: String = file.get_as_text()
+	file.close()
+
+	var idx: int = content.find(old_text)
+	if idx == -1:
+		return {"success": false, "error": "old_text not found in script"}
+
+	var occurrences: int = content.count(old_text)
+	content = content.replace(old_text, new_text)
+
+	file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return {"success": false, "error": "Cannot write script: %s" % path}
+	file.store_string(content)
+	file.close()
+
+	_plugin.safe_scan_filesystem()
+	return {"success": true, "path": path, "replacements": occurrences}
+
+
+## Attach a script to a node with UndoRedo support.
+func _attach_script(params: Dictionary) -> Dictionary:
+	var script_path: String = params.get("script_path", "")
+	var node_path: String = params.get("node_path", "")
+	if script_path.is_empty() or node_path.is_empty():
+		return {"success": false, "error": "script_path and node_path are required"}
+
+	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
+	if root == null:
+		return {"success": false, "error": "No scene open"}
+	var node: Node = root.get_node_or_null(node_path)
+	if node == null:
+		return {"success": false, "error": "Node not found: %s" % node_path}
+
+	var script: GDScript = ResourceLoader.load(script_path) as GDScript
+	if script == null:
+		return {"success": false, "error": "Cannot load script: %s" % script_path}
+
+	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
+	var old_script: Script = node.get_script()
+	ur.create_action("MCP: Attach script %s to %s" % [script_path, node_path])
+	ur.add_do_property(node, "script", script)
+	if old_script:
+		ur.add_undo_property(node, "script", old_script)
+	else:
+		ur.add_undo_property(node, "script", null)
+	ur.commit_action()
+
+	return {"success": true, "message": "Script %s attached to %s" % [script_path, node_path]}
+
+
+## Get all open scripts in the script editor.
+func _get_open_scripts() -> Dictionary:
+	var editor: ScriptEditor = _plugin.get_editor_interface().get_script_editor()
+	var open_scripts: Array = []
+	var scripts: Array = editor.get_open_scripts()
+	for scr: Script in scripts:
+		open_scripts.append({
+			"path": scr.resource_path,
+			"class_name_str": scr.get_global_name() if scr is GDScript else "",
+			"base_class": scr.get_instance_base_type(),
+		})
+	return {"success": true, "open_scripts": open_scripts, "count": open_scripts.size()}
+
+
+## Validate a script by reloading it and checking for compilation errors.
+func _validate_script(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"success": false, "error": "Path is required"}
+	if not FileAccess.file_exists(path):
+		return {"success": false, "error": "Script not found: %s" % path}
+
+	var script: GDScript = ResourceLoader.load(path) as GDScript
+	if script == null:
+		return {"success": true, "valid": false, "error": "Failed to load script"}
+
+	# Try reloading to check for errors
+	var err: Error = script.reload()
+	if err != OK:
+		if err == ERR_ALREADY_IN_USE:
+			return {"success": true, "valid": true, "warning": "Script has live instances, cannot reload while in use"}
+		return {"success": true, "valid": false, "error": "Compilation error (code: %d)" % err}
+
+	return {"success": true, "valid": true, "path": path, "base_class": script.get_instance_base_type()}
+
+
+## Search for text across files matching a pattern.
+func _search_in_files(params: Dictionary) -> Dictionary:
+	var query: String = params.get("query", "")
+	var file_pattern: String = params.get("file_pattern", "*.gd")
+	if query.is_empty():
+		return {"success": false, "error": "Query cannot be empty"}
+
+	var results: Array = []
+	_search_text_recursive("res://", query, file_pattern, results, 0, 10)
+	return {"success": true, "matches": results, "count": results.size()}
+
+
+func _search_text_recursive(path: String, query: String, pattern: String, results: Array, depth: int, max_depth: int) -> void:
+	if depth >= max_depth:
+		return
+	var dir: DirAccess = DirAccess.open(path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var file_name: String = dir.get_next()
+	while file_name != "":
+		if file_name.begins_with("."):
+			file_name = dir.get_next()
+			continue
+		var full_path: String = path.path_join(file_name)
+		if dir.current_is_dir():
+			_search_text_recursive(full_path, query, pattern, results, depth + 1, max_depth)
+		else:
+			if _matches_pattern(file_name, pattern):
+				var file: FileAccess = FileAccess.open(full_path, FileAccess.READ)
+				if file:
+					var content: String = file.get_as_text()
+					file.close()
+					var lines: PackedStringArray = content.split("\n")
+					for i: int in range(lines.size()):
+						if lines[i].find(query) != -1:
+							results.append({
+								"path": full_path,
+								"line": i + 1,
+								"content": lines[i].strip_edges(),
+							})
+		file_name = dir.get_next()
+	dir.list_dir_end()
+
+
+## Helper: check if filename matches a glob-like pattern.
+func _matches_pattern(file_name: String, pattern: String) -> bool:
+	if pattern == "*":
+		return true
+	if pattern.begins_with("*"):
+		var ext: String = pattern.substr(1)
+		return file_name.ends_with(ext)
+	return file_name == pattern
+
+
+## Helper: recursively create directories.
+func _ensure_dir(path: String) -> void:
+	if DirAccess.dir_exists_absolute(path):
+		return
+	var parent: String = path.get_base_dir()
+	if not DirAccess.dir_exists_absolute(parent):
+		_ensure_dir(parent)
+	DirAccess.make_dir_recursive_absolute(path)

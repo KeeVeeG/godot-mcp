@@ -1,0 +1,64 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build output
+*.js.map
+*.d.ts
+*.d.ts.map
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Godot engine cache
+.godot/
+*.godot/imported/
+
+# Test artifacts
+test-results*.json
+test-extended-results.json
+test-failure-analysis.json
+tool-consistency-report.json
+tests-full-*.log
+*-stderr-test.txt
+*-stdout-test.txt
+
+# Test project cache (test_project is a Godot project for testing)
+test_project/.godot/imported/
+test_project/.godot/editor/
+
+# Logs
+*.log
+*.log.*
+godot-output.log
+godot-stderr.log
+godot-stdout.log
+mcp-srv-err.txt
+mcp-srv-out.txt
+
+# Godot generated files
+*.uid
+
+# Environment / secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Claude / OpenCode local state
+.omo/
+
+# Test project addon (synced copy from addon/)
+test_project/addons/godot_mcp/
+
+# Generated catalog (tools-catalog.js is the canonical file for the site)
+web/tools-catalog.json

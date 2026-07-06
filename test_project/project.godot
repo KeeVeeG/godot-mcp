@@ -1,0 +1,78 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
+[application]
+
+config/name="TestProject"
+config/version="1.0.0"
+run/main_scene="res://_verify_scene.tscn"
+config/features=PackedStringArray("4.7")
+
+[audio]
+
+buses/default_bus_layout="uid://b6e6fr77hkeny"
+
+[autoload]
+
+1="*res://addons/godot_mcp/services/mcp_runtime.gd"
+
+[debug]
+
+settings/profiling/profiling_enabled=true
+settings/profiling/gpu_profiler_enabled=false
+settings/gdscript/warnings/enable=false
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1280.0
+window/size/window_height_override=720.0
+window/stretch/aspect="ignore"
+window/vsync/vsync_mode=0
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg")
+
+[export]
+
+file_export_filter=0
+
+[layer_names]
+
+3d_physics/layer_1="Player"
+
+[network]
+
+debug/remote_host="localhost"
+debug/remote_port=6007
+
+[physics]
+
+3d/default_gravity=980.0
+3d/default_gravity_vector=Vector3(0, 1, 0)
+
+[rendering]
+
+renderer/rendering_method.mobile="gl_compatibility"
+lights_and_shadows/directional_shadow/size=2048
+global_illumination/gi/use_half_resolution=true
+anti_aliasing/quality/msaa_3d=1
+lights_and_shadows/positional_shadow/atlas_size=1024
+anti_aliasing/quality/use_fxaa=true
+environment/defaults/use_bloom=false
+environment/ssao/enabled=false
+environment/ssr/enabled=false
+environment/volumetric_fog/enabled=false

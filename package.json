@@ -1,0 +1,29 @@
+{
+  "name": "godot-mcp",
+  "version": "1.0.0",
+  "description": "AI-powered game development for Godot Engine via Model Context Protocol",
+  "scripts": {
+    "format": "prettier --write \"**/*.{js,ts,css,html}\"",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "godot",
+    "mcp",
+    "ai",
+    "gamedev"
+  ],
+  "author": "KeeVeeG",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KeeVeeG/godot-mcp"
+  },
+  "homepage": "https://keeveeg.github.io/godot-mcp",
+  "bugs": {
+    "url": "https://github.com/KeeVeeG/godot-mcp/issues"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "prettier": "^3.9.4"
+  }
+}

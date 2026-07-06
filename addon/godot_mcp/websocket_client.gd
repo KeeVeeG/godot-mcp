@@ -1,0 +1,273 @@
+## WebSocket client that connects to the MCP Node.js server.
+## Extends Node so it can be added to the scene tree and receive _process.
+class_name MCPWebSocketClient
+extends Node
+
+## Emitted when connected to the MCP server
+signal connected(port: int)
+## Emitted when disconnected from the MCP server
+signal disconnected()
+## Emitted when a raw JSON-RPC message is received
+signal message_received(message: Dictionary)
+
+## WebSocket peer
+var _ws: WebSocketPeer = WebSocketPeer.new()
+
+## Current connection state
+var _is_connected: bool = false
+
+## Port that we are currently connected to
+var _connected_port: int = -1
+
+## Whether we are currently scanning for a server
+var _scanning: bool = false
+
+## Pending requests keyed by id
+var _pending_requests: Dictionary = {}
+
+## Request ID counter
+var _next_request_id: int = 1
+
+## Reconnect timer
+var _reconnect_timer: float = 0.0
+
+## Ping timer
+var _ping_timer: float = 0.0
+
+## Config reference
+var _config: MCPConfig
+
+
+func _ready() -> void:
+	_config = MCPConfig.get_instance()
+
+
+func _process(delta: float) -> void:
+	if _scanning:
+		return
+
+	if _is_connected:
+		_ws.poll()
+		var state: int = _ws.get_ready_state()
+
+		if state == WebSocketPeer.STATE_CLOSING:
+			# Wait for the close handshake
+			pass
+		elif state == WebSocketPeer.STATE_CLOSED:
+			_handle_disconnect()
+
+		# Read messages
+		while _ws.get_available_packet_count() > 0:
+			var packet: PackedByteArray = _ws.get_packet()
+			var text: String = packet.get_string_from_utf8()
+			_handle_message(text)
+
+		# Ping/pong keepalive
+		_ping_timer += delta
+		if _ping_timer >= MCPConfig.PING_INTERVAL:
+			_ping_timer = 0.0
+			_send_ping()
+
+		# Check request timeouts
+		var now: float = Time.get_unix_time_from_system()
+		var timed_out_ids: Array = []
+		for req_id: int in _pending_requests:
+			var req: Dictionary = _pending_requests[req_id] as Dictionary
+			if now - req["time"] as float > MCPConfig.REQUEST_TIMEOUT:
+				timed_out_ids.append(req_id)
+		for req_id: int in timed_out_ids:
+			var req: Dictionary = _pending_requests[req_id] as Dictionary
+			var deferred: Callable = req["callback"] as Callable
+			_pending_requests.erase(req_id)
+			deferred.call({"error": {"code": -1, "message": "Request timed out"}})
+	else:
+		# Auto-reconnect
+		_reconnect_timer += delta
+		if _reconnect_timer >= MCPConfig.RECONNECT_INTERVAL:
+			_reconnect_timer = 0.0
+			scan_for_server()
+
+
+## Scan ports 6505-6514 for an active MCP server.
+func scan_for_server() -> void:
+	if _scanning:
+		return
+	_scanning = true
+	var ports: Array[int] = _config.get_port_range()
+	for port in ports:
+		var url: String = "ws://localhost:%d" % port
+		var test_ws: WebSocketPeer = WebSocketPeer.new()
+		test_ws.connect_to_url(url)
+		# Wait up to 0.5 seconds for connection
+		var elapsed: float = 0.0
+		while elapsed < 0.5:
+			test_ws.poll()
+			var state: int = test_ws.get_ready_state()
+			if state == WebSocketPeer.STATE_OPEN:
+				test_ws.close()
+				# Let server process the close before reconnecting
+				OS.delay_msec(200)
+				_connect_to_port(port)
+				_scanning = false
+				return
+			elif state == WebSocketPeer.STATE_CLOSED:
+				break
+			OS.delay_msec(50)
+			elapsed += 0.05
+		test_ws.close()
+	_scanning = false
+
+
+## Connect to a specific port.
+func _connect_to_port(port: int) -> void:
+	if _is_connected:
+		_ws.close()
+	_ws = WebSocketPeer.new()
+	_ws.outbound_buffer_size = 8 * 1024 * 1024  # 8 MiB for large tool responses
+	_ws.inbound_buffer_size = 4 * 1024 * 1024   # 4 MiB for large requests
+	var url: String = "ws://localhost:%d" % port
+	var err: Error = _ws.connect_to_url(url)
+	if err != OK:
+		push_warning("[MCP] Failed to connect to %s: %s" % [url, error_string(err)])
+		return
+	_connected_port = port
+	_config.connected_port = port
+	_is_connected = true
+	_ping_timer = 0.0
+	_reconnect_timer = 0.0
+	connected.emit(port)
+
+
+## Handle disconnection.
+func _handle_disconnect() -> void:
+	_is_connected = false
+	var old_port: int = _connected_port
+	_connected_port = -1
+	_config.connected_port = -1
+	_pending_requests.clear()
+	print("[MCP] Disconnected from port %d" % old_port)
+	disconnected.emit()
+
+
+## Disconnect from the server.
+func disconnect_from_server() -> void:
+	if _is_connected:
+		_ws.close()
+		_handle_disconnect()
+
+
+## Send a JSON-RPC 2.0 request and wait for the response.
+func send_request(method_name: String, params: Dictionary = {}) -> Dictionary:
+	if not _is_connected:
+		return {"error": {"code": -1, "message": "Not connected"}}
+
+	var req_id: int = _next_request_id
+	_next_request_id += 1
+
+	var message: Dictionary = {
+		"jsonrpc": "2.0",
+		"id": req_id,
+		"method": method_name,
+		"params": params,
+	}
+
+	var json_text: String = JSON.stringify(message)
+	_ws.send_text(json_text)
+
+	# Create a semaphore to wait for the response
+	var result: Dictionary = {}
+	var received: bool = false
+
+	var callback: Callable = func(response: Dictionary) -> void:
+		result = response
+		received = true
+
+	_pending_requests[req_id] = {
+		"time": Time.get_unix_time_from_system(),
+		"callback": callback,
+	}
+
+	# Wait for the response (blocking, with timeout)
+	var start_time: float = Time.get_unix_time_from_system()
+	while not received:
+		OS.delay_msec(10)
+		# Process the WebSocket manually since we're blocking _process
+		_ws.poll()
+		while _ws.get_available_packet_count() > 0:
+			var packet: PackedByteArray = _ws.get_packet()
+			var text: String = packet.get_string_from_utf8()
+			_handle_message(text)
+		var elapsed: float = Time.get_unix_time_from_system() - start_time
+		if elapsed > MCPConfig.REQUEST_TIMEOUT:
+			_pending_requests.erase(req_id)
+			return {"error": {"code": -1, "message": "Request timed out"}}
+	return result
+
+
+## Handle an incoming message.
+func _handle_message(text: String) -> void:
+	var json := JSON.new()
+	var err := json.parse(text)
+	if err != OK:
+		push_warning("[MCP] Failed to parse message: " + json.get_error_message())
+		return
+	var message: Variant = json.data
+	if not message is Dictionary:
+		return
+	var msg_dict: Dictionary = message as Dictionary
+	message_received.emit(msg_dict)
+
+	# Check if it's a response to a pending request
+	if msg_dict.has("id"):
+		var msg_id: Variant = msg_dict["id"]
+		if msg_id is int and _pending_requests.has(msg_id as int):
+			var req: Dictionary = _pending_requests[msg_id as int] as Dictionary
+			var callback: Callable = req["callback"] as Callable
+			_pending_requests.erase(msg_id as int)
+			callback.call(msg_dict)
+
+
+## Send a JSON-RPC 2.0 response (with id, for request/reply pattern).
+func send_response(id: Variant, result: Variant = null, error: Variant = null) -> void:
+	if not _is_connected:
+		return
+	var message: Dictionary = {
+		"jsonrpc": "2.0",
+		"id": id,
+	}
+	if error != null:
+		message["error"] = error
+	else:
+		message["result"] = result
+	var json_text: String = JSON.stringify(message)
+	_ws.send_text(json_text)
+
+
+## Send a JSON-RPC 2.0 notification (no id, no response expected).
+func send_notification(method_name: String, params: Dictionary = {}) -> void:
+	if not _is_connected:
+		return
+	var message: Dictionary = {
+		"jsonrpc": "2.0",
+		"method": method_name,
+		"params": params,
+	}
+	var json_text: String = JSON.stringify(message)
+	_ws.send_text(json_text)
+
+
+## Send a ping for keepalive.
+func _send_ping() -> void:
+	if not _is_connected:
+		return
+	_ws.send_text(JSON.stringify({"jsonrpc": "2.0", "method": "ping"}))
+
+
+## Whether we are connected.
+func is_server_connected() -> bool:
+	return _is_connected
+
+
+## Get the port we are connected to.
+func get_connected_port() -> int:
+	return _connected_port

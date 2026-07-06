@@ -1,0 +1,7 @@
+[gd_resource type="ProjectSettings" format=3]
+
+config_version=5
+
+[application]
+
+config/name="Godot MCP Demo"

@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Godot MCP — Tools Catalog</title>
+    <meta name="description" content="Browse all 300+ MCP tools for Godot Engine organized by category. Scene manipulation, runtime inspection, animation, physics, and more." />
+    <link rel="canonical" href="https://keeveeg.github.io/godot-mcp/tools.html" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://keeveeg.github.io/godot-mcp/tools.html" />
+    <meta property="og:title" content="Godot MCP — Tools Catalog" />
+    <meta property="og:description" content="Browse all 300+ MCP tools for Godot Engine organized by category. Scene manipulation, runtime inspection, animation, physics, and more." />
+    <meta property="og:site_name" content="Godot MCP" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://keeveeg.github.io/godot-mcp/tools.html" />
+    <meta name="twitter:title" content="Godot MCP — Tools Catalog" />
+    <meta name="twitter:description" content="Browse all 300+ MCP tools for Godot Engine organized by category. Scene manipulation, runtime inspection, animation, physics, and more." />
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": "Godot MCP Tools Catalog",
+        "description": "Complete list of 300+ MCP tools for Godot Engine, organized by category.",
+        "url": "https://keeveeg.github.io/godot-mcp/tools.html",
+        "numberOfItems": 300,
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Scene Manipulation",
+            "description": "Create, open, save, and manage scenes. Add, delete, move, and reconfigure nodes."
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Runtime Inspection",
+            "description": "Query the live scene tree, read and write properties during gameplay, and execute GDScript."
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "Animation Authoring",
+            "description": "Create clips, add tracks, set keyframes, build state machines, and configure blend trees."
+          },
+          {
+            "@type": "ListItem",
+            "position": 4,
+            "name": "Physics Setup",
+            "description": "Add bodies, collision shapes, raycasts, and physics materials. Configure layers, masks, gravity."
+          },
+          {
+            "@type": "ListItem",
+            "position": 5,
+            "name": "Navigation",
+            "description": "Set up navigation regions, agents, bake navmeshes, and query pathfinding between points."
+          }
+        ]
+      }
+    </script>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- ────────────────────────────────────────────────────────────
+     NAVIGATION
+     ──────────────────────────────────────────────────────────── -->
+    <nav aria-label="Main navigation">
+      <div class="container">
+        <a href="index.html" class="nav-logo" aria-label="Godot MCP Home">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#478cbf" opacity="0.8" />
+            <path d="M2 17l10 5 10-5" stroke="#478cbf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M2 12l10 5 10-5" stroke="#5eaef0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          Godot MCP
+        </a>
+        <ul class="nav-links" id="navLinks" role="menubar">
+          <li role="none"><a href="index.html#architecture" role="menuitem">Architecture</a></li>
+          <li role="none"><a href="index.html#features" role="menuitem">Features</a></li>
+          <li role="none"><a href="index.html#install" role="menuitem">Install</a></li>
+          <li role="none">
+            <a href="tools.html" role="menuitem" class="nav-link-active">Tools</a>
+          </li>
+          <li role="none">
+            <a href="https://github.com/KeeVeeG/godot-mcp" class="nav-cta" role="menuitem">GitHub</a>
+          </li>
+        </ul>
+        <button class="nav-mobile-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">&#9776;</button>
+      </div>
+    </nav>
+
+    <main id="main-content">
+    <!-- ────────────────────────────────────────────────────────────
+     HERO / HEADER
+     ──────────────────────────────────────────────────────────── -->
+    <section class="tools-hero" aria-label="Tools catalog header">
+      <div class="container">
+        <a href="index.html" class="back-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          Back to Home
+        </a>
+        <div style="margin-top: var(--space-xl)">
+          <span class="section-label">Reference</span>
+          <h1>Tools <span class="gradient-text">Catalog</span></h1>
+          <p class="tools-count" id="toolsCount">Loading tools&hellip;</p>
+          <div class="tools-search-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="search" class="tools-search" id="toolsSearch" placeholder="Filter tools by name or description&hellip;" autocomplete="off" spellcheck="false" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ────────────────────────────────────────────────────────────
+     TOOLS LIST
+     ──────────────────────────────────────────────────────────── -->
+    <section class="tools-section" aria-label="Tools list">
+      <div class="container">
+        <div class="tools-categories" id="toolsCategories">
+          <div class="tools-loading" id="toolsLoading">Loading tools catalog&hellip;</div>
+        </div>
+        <div class="tools-no-results" id="toolsNoResults">No tools match your search.</div>
+      </div>
+    </section>
+
+    </main>
+
+    <!-- ────────────────────────────────────────────────────────────
+     FOOTER
+     ──────────────────────────────────────────────────────────── -->
+    <footer aria-label="Footer">
+      <div class="container">
+        <div class="footer-grid">
+          <div class="footer-brand">
+            <a href="index.html" class="nav-logo">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="28" aria-hidden="true">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#478cbf" opacity="0.8" />
+                <path d="M2 17l10 5 10-5" stroke="#478cbf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M2 12l10 5 10-5" stroke="#5eaef0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              Godot MCP
+            </a>
+            <p>AI-powered game development for Godot Engine via Model Context Protocol. 300+ tools, 40+ modules, infinite possibilities.</p>
+            <div class="footer-version">
+              <span class="footer-version-dot"></span>
+              Godot 4.x &middot; MIT License
+            </div>
+          </div>
+          <div class="footer-col">
+            <h3>Project</h3>
+            <ul>
+              <li><a href="https://github.com/KeeVeeG/godot-mcp">GitHub</a></li>
+              <li><a href="index.html#architecture">Architecture</a></li>
+              <li><a href="index.html#features">Features</a></li>
+              <li><a href="index.html#install">Installation</a></li>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <h3>Resources</h3>
+            <ul>
+              <li><a href="https://godotengine.org/">Godot Engine</a></li>
+              <li><a href="https://modelcontextprotocol.io/">MCP Protocol</a></li>
+              <li><a href="https://docs.godotengine.org/">Godot Docs</a></li>
+              <li><a href="https://github.com/KeeVeeG/godot-mcp/releases">Releases</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <span>&copy; 2025 Godot MCP. MIT License.</span>
+          <span>Built with AI by MiMo-V2.5-Pro (Xiaomi AI)</span>
+        </div>
+      </div>
+    </footer>
+
+    <script src="tools-catalog.js"></script>
+    <script>
+      (function () {
+        'use strict';
+
+        // в”Ђв”Ђ Mobile nav toggle в”Ђв”Ђ
+        var navToggle = document.getElementById('navToggle');
+        var navLinks = document.getElementById('navLinks');
+        if (navToggle && navLinks) {
+          navToggle.addEventListener('click', function () {
+            var expanded = navLinks.classList.toggle('open');
+            navToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+          });
+        }
+
+        // в”Ђв”Ђ Category display names в”Ђв”Ђ
+        var categoryNames = {
+          addon_management: 'Addon Management',
+          analysis: 'Analysis',
+          animation: 'Animation',
+          audio: 'Audio',
+          audio_config: 'Audio Configuration',
+          batch: 'Batch',
+          build_config: 'Build Configuration',
+          debug_config: 'Debug Configuration',
+          debugging: 'Debugging',
+          editor: 'Editor',
+          editor_config: 'Editor Configuration',
+          export: 'Export',
+          gameplay_automation: 'Gameplay Automation',
+          input: 'Input',
+          memory_profiling: 'Memory Profiling',
+          navigation: 'Navigation',
+          node: 'Node',
+          node_config: 'Node Configuration',
+          particles: 'Particles',
+          physics: 'Physics',
+          physics_config: 'Physics Configuration',
+          platform_export: 'Platform Export',
+          platform_specific: 'Platform Specific',
+          profiling: 'Profiling',
+          project: 'Project',
+          project_config: 'Project Configuration',
+          project_creation: 'Project Creation',
+          rendering_config: 'Rendering Configuration',
+          resource: 'Resource',
+          resource_config: 'Resource Configuration',
+          runtime: 'Runtime',
+          save_load: 'Save / Load',
+          scene: 'Scene',
+          scene3d: 'Scene 3D',
+          scene_config: 'Scene Configuration',
+          script: 'Script',
+          shader: 'Shader',
+          testing: 'Testing',
+          theme: 'Theme',
+          tilemap: 'TileMap',
+          visual_testing: 'Visual Testing',
+        };
+
+        function formatCategoryName(key) {
+          if (categoryNames[key]) return categoryNames[key];
+          return key.replace(/_/g, ' ').replace(/\b\w/g, function (c) {
+            return c.toUpperCase();
+          });
+        }
+
+        // в”Ђв”Ђ Elements в”Ђв”Ђ
+        var container = document.getElementById('toolsCategories');
+        var loadingEl = document.getElementById('toolsLoading');
+        var countEl = document.getElementById('toolsCount');
+        var searchEl = document.getElementById('toolsSearch');
+        var noResultsEl = document.getElementById('toolsNoResults');
+
+        var allTools = TOOLS_CATALOG || [];
+        var categoryCards = [];
+
+        // в”Ђв”Ђ Render immediately (no fetch вЂ” data loaded via script tag) в”Ђв”Ђ
+        render();
+
+        // в”Ђв”Ђ Group tools by category в”Ђв”Ђ
+        function groupByCategory(tools) {
+          var groups = {};
+          for (var i = 0; i < tools.length; i++) {
+            var cat = tools[i].category;
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(tools[i]);
+          }
+          // Sort categories alphabetically
+          var keys = Object.keys(groups).sort();
+          var result = [];
+          for (var j = 0; j < keys.length; j++) {
+            result.push({ key: keys[j], tools: groups[keys[j]] });
+          }
+          return result;
+        }
+
+        // в”Ђв”Ђ Render all categories в”Ђв”Ђ
+        function render() {
+          loadingEl.style.display = 'none';
+          var groups = groupByCategory(allTools);
+          var totalTools = allTools.length;
+          var totalCategories = groups.length;
+
+          countEl.innerHTML = '<strong>300+</strong> tools across <strong>40+</strong> modules';
+
+          var fragment = document.createDocumentFragment();
+          categoryCards = [];
+
+          for (var i = 0; i < groups.length; i++) {
+            var group = groups[i];
+            var card = createCategoryCard(group.key, group.tools);
+            categoryCards.push({ el: card, tools: group.tools, key: group.key });
+            fragment.appendChild(card);
+          }
+
+          container.appendChild(fragment);
+
+          // Open first category by default
+          if (categoryCards.length > 0) {
+            categoryCards[0].el.classList.add('open');
+          }
+        }
+
+        // в”Ђв”Ђ Create a category card element в”Ђв”Ђ
+        function createCategoryCard(categoryKey, tools) {
+          var card = document.createElement('div');
+          card.className = 'category-card';
+
+          // Header
+          var header = document.createElement('div');
+          header.className = 'category-header';
+          header.setAttribute('role', 'button');
+          header.setAttribute('tabindex', '0');
+          header.setAttribute('aria-expanded', 'false');
+
+          var left = document.createElement('div');
+          left.className = 'category-header-left';
+
+          var name = document.createElement('span');
+          name.className = 'category-name';
+          name.textContent = formatCategoryName(categoryKey);
+
+          var badge = document.createElement('span');
+          badge.className = 'category-badge';
+          badge.textContent = tools.length;
+
+          left.appendChild(name);
+          left.appendChild(badge);
+
+          var chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          chevron.setAttribute('class', 'category-chevron');
+          chevron.setAttribute('viewBox', '0 0 24 24');
+          chevron.setAttribute('fill', 'none');
+          chevron.setAttribute('stroke', 'currentColor');
+          chevron.setAttribute('stroke-width', '2');
+          chevron.setAttribute('stroke-linecap', 'round');
+          chevron.setAttribute('stroke-linejoin', 'round');
+          var polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+          polyline.setAttribute('points', '6 9 12 15 18 9');
+          chevron.appendChild(polyline);
+
+          header.appendChild(left);
+          header.appendChild(chevron);
+
+          // Body
+          var body = document.createElement('div');
+          body.className = 'category-body';
+
+          var inner = document.createElement('div');
+          inner.className = 'category-body-inner';
+
+          for (var i = 0; i < tools.length; i++) {
+            var item = document.createElement('div');
+            item.className = 'tool-item';
+
+            var id = document.createElement('span');
+            id.className = 'tool-id';
+            id.textContent = tools[i].tool_id;
+
+            var desc = document.createElement('span');
+            desc.className = 'tool-desc';
+            desc.textContent = tools[i].description;
+
+            item.appendChild(id);
+            item.appendChild(desc);
+            inner.appendChild(item);
+          }
+
+          body.appendChild(inner);
+          card.appendChild(header);
+          card.appendChild(body);
+
+          // Toggle
+          function toggle() {
+            var isOpen = card.classList.toggle('open');
+            header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+          }
+
+          header.addEventListener('click', toggle);
+          header.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggle();
+            }
+          });
+
+          return card;
+        }
+
+        // в”Ђв”Ђ Search / Filter в”Ђв”Ђ
+        var searchTimeout;
+        searchEl.addEventListener('input', function () {
+          clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(doFilter, 80);
+        });
+
+        function doFilter() {
+          var query = searchEl.value.trim().toLowerCase();
+
+          if (!query) {
+            // Show all, restore original grouping
+            for (var i = 0; i < categoryCards.length; i++) {
+              categoryCards[i].el.style.display = '';
+              // Restore full tool list
+              refreshToolsInCard(categoryCards[i], categoryCards[i].tools);
+            }
+            noResultsEl.classList.remove('visible');
+            return;
+          }
+
+          var anyVisible = false;
+
+          for (var i = 0; i < categoryCards.length; i++) {
+            var cc = categoryCards[i];
+            var matched = [];
+
+            for (var j = 0; j < cc.tools.length; j++) {
+              var t = cc.tools[j];
+              if (t.tool_id.toLowerCase().indexOf(query) !== -1 || t.description.toLowerCase().indexOf(query) !== -1) {
+                matched.push(t);
+              }
+            }
+
+            if (matched.length > 0) {
+              cc.el.style.display = '';
+              cc.el.classList.add('open');
+              refreshToolsInCard(cc, matched);
+              anyVisible = true;
+            } else {
+              cc.el.style.display = 'none';
+            }
+          }
+
+          if (anyVisible) {
+            noResultsEl.classList.remove('visible');
+          } else {
+            noResultsEl.classList.add('visible');
+          }
+        }
+
+        function refreshToolsInCard(cc, tools) {
+          var inner = cc.el.querySelector('.category-body-inner');
+          inner.innerHTML = '';
+
+          // Update badge
+          var badge = cc.el.querySelector('.category-badge');
+          badge.textContent = tools.length;
+
+          for (var i = 0; i < tools.length; i++) {
+            var item = document.createElement('div');
+            item.className = 'tool-item';
+
+            var id = document.createElement('span');
+            id.className = 'tool-id';
+            id.textContent = tools[i].tool_id;
+
+            var desc = document.createElement('span');
+            desc.className = 'tool-desc';
+            desc.textContent = tools[i].description;
+
+            item.appendChild(id);
+            item.appendChild(desc);
+            inner.appendChild(item);
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>
