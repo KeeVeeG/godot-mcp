@@ -1,4 +1,4 @@
-## Scene commands module - 9 tools.
+## Scene commands module - 11 tools.
 ## Handles scene tree, file operations, play/stop, and instancing.
 class_name MCPSceneCommands
 extends RefCounted
@@ -44,17 +44,17 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"save_scene": return _save_scene(params)
 		"get_loaded_scenes": return _get_loaded_scenes()
 		"set_main_scene": return _set_main_scene(params)
-	return {"success": false, "error": "Unknown method: " + method}
+	return {"error": "Unknown method: " + method}
 
 
 ## Get live scene hierarchy from the edited scene root.
 func _get_scene_tree(params: Dictionary) -> Dictionary:
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
 	if root == null:
-		return {"success": true, "tree": null, "message": "No scene open"}
+		return {"result": {"tree": null, "message": "No scene open"}}
 	var max_depth: int = params.get("max_depth", 15)
 	var tree: Dictionary = _serialize_node(root, 0, max_depth)
-	return {"success": true, "tree": tree}
+	return {"result": {"tree": tree}}
 
 
 func _serialize_node(node: Node, depth: int, max_depth: int) -> Dictionary:
@@ -94,18 +94,18 @@ func _serialize_node(node: Node, depth: int, max_depth: int) -> Dictionary:
 func _get_scene_file_content(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
-		var root: Node = _get_edited_scene_root()
+		var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
 		if root == null:
-			return {"success": false, "error": "No scene open and no path specified"}
+			return {"error": "No scene open and no path specified"}
 		path = root.scene_file_path
 	if not FileAccess.file_exists(path):
-		return {"success": false, "error": "Scene file not found: %s" % path}
+		return {"error": "Scene file not found: %s" % path}
 	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if file == null:
-		return {"success": false, "error": "Cannot read scene file: %s" % path}
+		return {"error": "Cannot read scene file: %s" % path}
 	var content: String = file.get_as_text()
 	file.close()
-	return {"success": true, "path": path, "content": content}
+	return {"result": {"path": path, "content": content}}
 
 
 ## Create a new scene with a specified root type and save to disk.
@@ -113,12 +113,12 @@ func _create_scene(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var root_type: String = params.get("root_node_type", params.get("root_type", "Node2D"))
 	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
+		return {"error": "Path is required"}
 
 	# Create the root node
-	var root_node: Node = _create_node_by_type(root_type)
+	var root_node: Node = MCPNodeFactory.create_node(root_type)
 	if root_node == null:
-		return {"success": false, "error": "Unknown node type: %s" % root_type}
+		return {"error": "Unknown node type: %s" % root_type}
 	root_node.name = root_type
 
 	# Pack it into a scene
@@ -126,29 +126,29 @@ func _create_scene(params: Dictionary) -> Dictionary:
 	var err: Error = scene.pack(root_node)
 	if err != OK:
 		root_node.queue_free()
-		return {"success": false, "error": "Failed to pack scene: %s" % error_string(err)}
+		return {"error": "Failed to pack scene: %s" % error_string(err)}
 	root_node.queue_free()
 
 	# Ensure parent directory exists
-	_ensure_dir(path.get_base_dir())
+	MCPCommandHelpers.ensure_dir(path.get_base_dir())
 
 	# Save to disk
 	err = ResourceSaver.save(scene, path)
 	if err != OK:
-		return {"success": false, "error": "Failed to save scene: %s" % error_string(err)}
+		return {"error": "Failed to save scene: %s" % error_string(err)}
 
-	return {"success": true, "path": path, "root_type": root_type}
+	return {"result": {"path": path, "root_type": root_type}}
 
 
 ## Open a scene in the editor.
 func _open_scene(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
+		return {"error": "Path is required"}
 	if not FileAccess.file_exists(path):
-		return {"success": false, "error": "Scene file not found: %s" % path}
+		return {"error": "Scene file not found: %s" % path}
 	_plugin.get_editor_interface().open_scene_from_path(path)
-	return {"success": true, "message": "Scene opened: %s" % path}
+	return {"result": {"message": "Scene opened: %s" % path}}
 
 
 ## Delete a scene file from disk.
@@ -156,29 +156,29 @@ func _delete_scene(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var force: bool = params.get("force", false)
 	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
+		return {"error": "Path is required"}
 	if not FileAccess.file_exists(path):
-		return {"success": false, "error": "Scene file not found: %s" % path}
+		return {"error": "Scene file not found: %s" % path}
 	
 	# Check if scene is currently open and close it if force=true
 	var open_scenes: PackedStringArray = _plugin.get_editor_interface().get_open_scenes()
 	if path in open_scenes:
 		if not force:
-			return {"success": false, "error": "Scene is currently open. Use force=true to close and delete: %s" % path}
+			return {"error": "Scene is currently open. Use force=true to close and delete: %s" % path}
 		# Close the scene by opening a different one
-		var root: Node = _get_edited_scene_root()
+		var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
 		if root != null and root.scene_file_path == path:
 			_plugin.get_editor_interface().close_scene()
 	
 	var err: Error = DirAccess.remove_absolute(path)
 	if err != OK:
-		return {"success": false, "error": "Failed to delete scene: %s" % error_string(err)}
+		return {"error": "Failed to delete scene: %s" % error_string(err)}
 	# Also delete .import file if exists
 	var import_path: String = path + ".import"
 	if FileAccess.file_exists(import_path):
 		DirAccess.remove_absolute(import_path)
 	_plugin.safe_scan_filesystem()
-	return {"success": true, "message": "Scene deleted: %s" % path}
+	return {"result": {"message": "Scene deleted: %s" % path}}
 
 
 ## Instance a scene into the current scene tree.
@@ -186,35 +186,35 @@ func _add_scene_instance(params: Dictionary) -> Dictionary:
 	var path: String = params.get("scene_path", params.get("path", ""))
 	var parent_path: String = params.get("parent_path", "")
 	if path.is_empty():
-		return {"success": false, "error": "Scene path is required"}
+		return {"error": "Scene path is required"}
 	if not FileAccess.file_exists(path):
-		return {"success": false, "error": "Scene file not found: %s" % path}
+		return {"error": "Scene file not found: %s" % path}
 
 	var scene_res: PackedScene = ResourceLoader.load(path) as PackedScene
 	if scene_res == null:
-		return {"success": false, "error": "Failed to load scene: %s" % path}
+		return {"error": "Failed to load scene: %s" % path}
 
 	var instance: Node = scene_res.instantiate()
 	if instance == null:
-		return {"success": false, "error": "Failed to instantiate scene"}
+		return {"error": "Failed to instantiate scene"}
 
-	var parent: Node = _get_edited_scene_root()
+	var parent: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
 	if parent == null:
 		instance.queue_free()
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	if parent_path != "":
 		parent = parent.get_node_or_null(parent_path)
 		if parent == null:
 			instance.queue_free()
-			return {"success": false, "error": "Parent node not found: %s" % parent_path}
+			return {"error": "Parent node not found: %s" % parent_path}
 
 	if _undo_helper:
 		_undo_helper.add_node_with_undo(instance, parent)
 	else:
 		parent.add_child(instance)
-		instance.set_owner(_get_edited_scene_root())
+		instance.set_owner(MCPCommandHelpers.get_edited_scene_root(_plugin))
 
-	return {"success": true, "path": path, "instance_name": str(instance.name), "parent": str(parent.get_path())}
+	return {"result": {"path": path, "instance_name": str(instance.name), "parent": str(parent.get_path())}}
 
 
 ## Play the game scene (main, current, or custom).
@@ -228,38 +228,38 @@ func _play_scene(params: Dictionary) -> Dictionary:
 			_plugin.get_editor_interface().play_current_scene()
 		"custom":
 			if scene_path.is_empty():
-				return {"success": false, "error": "scene_path required for custom mode"}
+				return {"error": "scene_path required for custom mode"}
 			_plugin.get_editor_interface().play_custom_scene(scene_path)
 		_:
 			_plugin.get_editor_interface().play_current_scene()
-	return {"success": true, "message": "Playing scene (mode: %s)" % mode}
+	return {"result": {"message": "Playing scene (mode: %s)" % mode}}
 
 
 ## Stop the running scene.
 func _stop_scene() -> Dictionary:
 	_plugin.get_editor_interface().stop_playing_scene()
-	return {"success": true, "message": "Scene stopped"}
+	return {"result": {"message": "Scene stopped"}}
 
 
 ## Save the current scene to disk (optionally to a new path).
 func _save_scene(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
 	if root == null:
-		return {"success": false, "error": "No scene to save"}
+		return {"error": "No scene to save"}
 	if path.is_empty():
 		path = root.scene_file_path
 	if path.is_empty():
-		return {"success": false, "error": "No path specified and scene has no file path"}
+		return {"error": "No path specified and scene has no file path"}
 
 	var scene: PackedScene = PackedScene.new()
 	var err: Error = scene.pack(root)
 	if err != OK:
-		return {"success": false, "error": "Failed to pack scene: %s" % error_string(err)}
+		return {"error": "Failed to pack scene: %s" % error_string(err)}
 	err = ResourceSaver.save(scene, path)
 	if err != OK:
-		return {"success": false, "error": "Failed to save scene: %s" % error_string(err)}
-	return {"success": true, "message": "Scene saved: %s" % path}
+		return {"error": "Failed to save scene: %s" % error_string(err)}
+	return {"result": {"message": "Scene saved: %s" % path}}
 
 
 ## Get all currently loaded/open scenes in the editor.
@@ -269,7 +269,7 @@ func _get_loaded_scenes() -> Dictionary:
 	for scene_path: String in open_scenes:
 		scenes.append({"path": scene_path})
 	# Also include the currently edited scene
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
 	if root != null and root.scene_file_path != "":
 		var current_path: String = root.scene_file_path
 		var already_listed: bool = false
@@ -279,130 +279,18 @@ func _get_loaded_scenes() -> Dictionary:
 				break
 		if not already_listed:
 			scenes.append({"path": current_path, "active": true})
-	return {"success": true, "scenes": scenes, "count": scenes.size()}
+	return {"result": {"scenes": scenes, "count": scenes.size()}}
 
 
 ## Set the project's main scene.
 func _set_main_scene(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
+		return {"error": "Path is required"}
 	if not FileAccess.file_exists(path):
-		return {"success": false, "error": "Scene file not found: %s" % path}
+		return {"error": "Scene file not found: %s" % path}
 	ProjectSettings.set_setting("application/run/main_scene", path)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
-		return {"success": false, "error": "Failed to save project settings: %s" % error_string(err)}
-	return {"success": true, "path": path, "message": "Main scene set to: %s" % path}
-
-
-## Helper: get edited scene root.
-func _get_edited_scene_root() -> Node:
-	if _plugin == null:
-		return null
-	return _plugin.get_editor_interface().get_edited_scene_root()
-
-
-## Helper: create a node by type string. Tries ClassDB fallback for unknown types.
-func _create_node_by_type(type_name: String) -> Node:
-	var node: Node = null
-	match type_name:
-		"Node":
-			node = Node.new()
-		"Node2D":
-			node = Node2D.new()
-		"Node3D":
-			node = Node3D.new()
-		"Control":
-			node = Control.new()
-		"Sprite2D":
-			node = Sprite2D.new()
-		"Sprite3D":
-			node = Sprite3D.new()
-		"MeshInstance2D":
-			node = MeshInstance2D.new()
-		"MeshInstance3D":
-			node = MeshInstance3D.new()
-		"Camera2D":
-			node = Camera2D.new()
-		"Camera3D":
-			node = Camera3D.new()
-		"StaticBody2D":
-			node = StaticBody2D.new()
-		"StaticBody3D":
-			node = StaticBody3D.new()
-		"CharacterBody2D":
-			node = CharacterBody2D.new()
-		"CharacterBody3D":
-			node = CharacterBody3D.new()
-		"RigidBody2D":
-			node = RigidBody2D.new()
-		"RigidBody3D":
-			node = RigidBody3D.new()
-		"Area2D":
-			node = Area2D.new()
-		"Area3D":
-			node = Area3D.new()
-		"Label":
-			node = Label.new()
-		"Button":
-			node = Button.new()
-		"TextureRect":
-			node = TextureRect.new()
-		"ColorRect":
-			node = ColorRect.new()
-		"VBoxContainer":
-			node = VBoxContainer.new()
-		"HBoxContainer":
-			node = HBoxContainer.new()
-		"MarginContainer":
-			node = MarginContainer.new()
-		"Panel":
-			node = Panel.new()
-		"PanelContainer":
-			node = PanelContainer.new()
-		"SubViewport":
-			node = SubViewport.new()
-		"SubViewportContainer":
-			node = SubViewportContainer.new()
-		"TileMap":
-			node = TileMap.new()
-		"NavigationRegion2D":
-			node = NavigationRegion2D.new()
-		"NavigationRegion3D":
-			node = NavigationRegion3D.new()
-		"AudioStreamPlayer":
-			node = AudioStreamPlayer.new()
-		"AudioStreamPlayer2D":
-			node = AudioStreamPlayer2D.new()
-		"AudioStreamPlayer3D":
-			node = AudioStreamPlayer3D.new()
-		"GPUParticles2D":
-			node = GPUParticles2D.new()
-		"GPUParticles3D":
-			node = GPUParticles3D.new()
-		"AnimationPlayer":
-			node = AnimationPlayer.new()
-		"AnimationTree":
-			node = AnimationTree.new()
-		"DirectionalLight3D":
-			node = DirectionalLight3D.new()
-		"OmniLight3D":
-			node = OmniLight3D.new()
-		"SpotLight3D":
-			node = SpotLight3D.new()
-		"CSGBox3D":
-			node = CSGBox3D.new()
-		_:
-			# Try ClassDB instantiation for any type not explicitly listed
-			if ClassDB.can_instantiate(type_name):
-				var obj: Object = ClassDB.instantiate(type_name)
-				if obj is Node:
-					node = obj as Node
-	return node
-
-
-func _ensure_dir(path: String) -> void:
-	if path.is_empty() or DirAccess.dir_exists_absolute(path):
-		return
-	DirAccess.make_dir_recursive_absolute(path)
+		return {"error": "Failed to save project settings: %s" % error_string(err)}
+	return {"result": {"path": path, "message": "Main scene set to: %s" % path}}

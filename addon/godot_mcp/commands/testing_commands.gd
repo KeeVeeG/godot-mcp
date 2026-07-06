@@ -27,9 +27,7 @@ func get_commands() -> Dictionary:
 
 
 func _get_edited_scene_root() -> Node:
-	if _plugin == null:
-		return null
-	return _plugin.get_editor_interface().get_edited_scene_root()
+	return MCPCommandHelpers.get_edited_scene_root(_plugin)
 
 
 ## Execute an array of test steps sequentially. Each step has a "type" and "params".
@@ -195,12 +193,12 @@ func run_stress_test(params: Dictionary) -> Dictionary:
 	var start_time: float = Time.get_ticks_usec()
 	var created: Array = []
 	for i: int in range(count):
-		var node: Node = _create_node_by_type(node_type)
+		var node: Node = MCPNodeFactory.create_node(node_type)
 		if node == null:
 			return {"error": "Cannot instantiate type: %s" % node_type}
 		node.name = "%s_%d" % [node_type, i]
 		for prop: String in properties:
-			if _has_property(node, prop):
+			if MCPCommandHelpers.has_property(node, prop):
 				node.set(prop, properties[prop])
 		parent.add_child(node)
 		node.set_owner(root)
@@ -271,14 +269,14 @@ func _step_add_node(params: Dictionary) -> Dictionary:
 		if parent == null:
 			return {"error": "Parent not found: %s" % parent_path}
 
-	var node: Node = _create_node_by_type(type_name)
+	var node: Node = MCPNodeFactory.create_node(type_name)
 	if node == null:
 		return {"error": "Unknown type: %s" % type_name}
 	node.name = node_name
 
 	for prop: String in properties:
-		if _has_property(node, prop):
-			var expected_type: int = _get_property_type(node, prop)
+		if MCPCommandHelpers.has_property(node, prop):
+			var expected_type: int = MCPCommandHelpers.get_property_type(node, prop)
 			var val: Variant = MCPVariantCodec.parse_for_property(properties[prop], expected_type)
 			node.set(prop, val)
 
@@ -337,8 +335,8 @@ func _step_set_property(params: Dictionary) -> Dictionary:
 		return {"error": "Node not found: %s" % path}
 
 	var parsed: Variant = value
-	if _has_property(node, property):
-		var expected_type: int = _get_property_type(node, property)
+	if MCPCommandHelpers.has_property(node, property):
+		var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
 		parsed = MCPVariantCodec.parse_for_property(value, expected_type)
 
 	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
@@ -447,58 +445,4 @@ func _find_text_recursive(node: Node, search_text: String, results: Array) -> vo
 		_find_text_recursive(child, search_text, results)
 
 
-## Helper: create node by type.
-func _create_node_by_type(type_name: String) -> Node:
-	match type_name:
-		"Node":
-			return Node.new()
-		"Node2D":
-			return Node2D.new()
-		"Node3D":
-			return Node3D.new()
-		"Control":
-			return Control.new()
-		"Sprite2D":
-			return Sprite2D.new()
-		"MeshInstance3D":
-			return MeshInstance3D.new()
-		"Label":
-			return Label.new()
-		"Button":
-			return Button.new()
-		"ColorRect":
-			return ColorRect.new()
-		"Panel":
-			return Panel.new()
-		"StaticBody2D":
-			return StaticBody2D.new()
-		"CharacterBody2D":
-			return CharacterBody2D.new()
-		"RigidBody2D":
-			return RigidBody2D.new()
-		"Area2D":
-			return Area2D.new()
-		"CollisionShape2D":
-			return CollisionShape2D.new()
-		_:
-			if ClassDB.can_instantiate(type_name):
-				var obj: Object = ClassDB.instantiate(type_name)
-				if obj is Node:
-					return obj as Node
-			return null
 
-
-## Helper: check if object has property.
-func _has_property(obj: Object, prop: String) -> bool:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return true
-	return false
-
-
-## Helper: get property type.
-func _get_property_type(obj: Object, prop: String) -> int:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return p["type"] as int
-	return TYPE_NIL
