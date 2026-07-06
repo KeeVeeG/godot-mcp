@@ -113,29 +113,7 @@ The AI can read your scene tree, create nodes, write scripts, simulate gameplay 
 
 ### Godot Addon Installation
 
-1. Copy `addon/godot_mcp/` into your project's `addons/` directory:
-
-```
-your-godot-project/
-  addons/
-    godot_mcp/
-      plugin.gd
-      websocket_client.gd
-      command_router.gd
-      config.gd
-      commands/
-        project_commands.gd
-        scene_commands.gd
-        node_commands.gd
-        ... (22 command modules)
-      services/
-        mcp_runtime.gd
-      ui/
-        status_panel.gd
-      utils/
-        undo_helper.gd
-        variant_codec.gd
-```
+1. Copy `addon/godot_mcp/` into your project's `addons/` directory.
 
 2. Open your project in Godot.
 
