@@ -67,15 +67,15 @@ func _enter_tree() -> void:
 	_status_panel.log_activity("Scanning for MCP server...", "info")
 	_ws_client.call_deferred("scan_for_server")
 
-	# Setup dialog auto-dismiss timer
+	# Setup dialog auto-dismiss timer (only runs during gameplay)
 	_dialog_timer = Timer.new()
 	_dialog_timer.wait_time = 1.0
 	_dialog_timer.timeout.connect(_check_and_dismiss_dialogs)
 	add_child(_dialog_timer)
-	_dialog_timer.start()
+	# Timer starts in _on_game_started(), stops in _on_game_stopped()
 
 	# Connect to scene changed signal for autoload injection
-	scene_changed.connect(_on_scene_changed)
+	# (Removed dead scene_changed handler — autoload injection handled in _ensure_runtime_autoload)
 
 	# Register runtime autoload so it's available when game starts
 	_ensure_runtime_autoload()
@@ -339,13 +339,18 @@ func _dismiss_dialogs_recursive(node: Node) -> void:
 		if confirm.visible:
 			confirm.hide()
 			print("[MCP] Auto-dismissed confirmation dialog")
+	if node is Popup:
+		var popup: Popup = node as Popup
+		if popup.visible and not (node is AcceptDialog or node is ConfirmationDialog):
+			popup.hide()
+			print("[MCP] Auto-dismissed popup: %s" % str(node.name))
 	for child: Node in node.get_children():
 		_dismiss_dialogs_recursive(child)
 
 
-## Scene changed callback for autoload injection.
-func _on_scene_changed(scene_root: Node) -> void:
-	pass  # Autoload injection happens in _notification
+## Scene changed callback for autoload injection (removed — was dead code).
+# func _on_scene_changed(scene_root: Node) -> void:
+# 	pass
 
 
 ## Track game start/stop for dialog auto-dismiss.
@@ -381,6 +386,8 @@ func _process(_delta: float) -> void:
 func _on_game_started() -> void:
 	print("[MCP] Game started - runtime IPC active")
 	_runtime_injected = true
+	if _dialog_timer:
+		_dialog_timer.start()
 	if _status_panel:
 		_status_panel.log_activity("Game started - runtime IPC active", "success")
 
@@ -389,6 +396,8 @@ func _on_game_started() -> void:
 func _on_game_stopped() -> void:
 	print("[MCP] Game stopped")
 	_runtime_injected = false
+	if _dialog_timer:
+		_dialog_timer.stop()
 	if _status_panel:
 		_status_panel.log_activity("Game stopped", "info")
 
