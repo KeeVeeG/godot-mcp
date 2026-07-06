@@ -46,13 +46,12 @@ func _get_settings() -> Dictionary:
 		config_name = "debug"
 	var settings: Dictionary = {
 		"configuration": config_name,
-		"scripting_backend": ProjectSettings.get_setting("dotnet/project/assembly_name", "").is_empty() if true else "csharp",
 		"custom_features": ProjectSettings.get_setting("application/config/features", PackedStringArray()),
 		"godot_version": Engine.get_version_info(),
 		"export_filter": ProjectSettings.get_setting("export/file_export_filter", 0),
 		"debug_build": is_debug,
 	}
-	# Determine scripting backend more accurately
+	# Determine scripting backend by checking for .NET/Mono build artifacts
 	var has_csharp: bool = DirAccess.dir_exists_absolute("res://.godot/mono")
 	settings["scripting_backend"] = "csharp" if has_csharp else "gdscript"
 	return {"success": true, "settings": settings}
