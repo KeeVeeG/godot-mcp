@@ -1,17 +1,7 @@
 {
-  "name": "godot-mcp",
-  "version": "1.0.0",
-  "description": "AI-powered game development for Godot Engine via Model Context Protocol",
-  "scripts": {
-    "format": "prettier --write \"**/*.{js,ts,css,html}\"",
-    "prepare": "husky"
-  },
-  "keywords": [
-    "godot",
-    "mcp",
-    "ai",
-    "gamedev"
-  ],
+  "name": "@keeveeg/godot-mcp",
+  "version": "1.0.1",
+  "description": "MCP server for Godot Engine — 300+ AI-powered tools for game development",
   "author": "KeeVeeG",
   "license": "MIT",
   "repository": {
@@ -22,8 +12,46 @@
   "bugs": {
     "url": "https://github.com/KeeVeeG/godot-mcp/issues"
   },
+  "keywords": [
+    "godot",
+    "mcp",
+    "model-context-protocol",
+    "game-development",
+    "ai",
+    "godot-engine",
+    "gamedev"
+  ],
+  "type": "module",
+  "main": "server/dist/index.js",
+  "bin": {
+    "godot-mcp": "server/dist/index.js"
+  },
+  "files": [
+    "server/dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "cd server && tsc",
+    "start": "node server/dist/index.js",
+    "dev": "cd server && tsc --watch",
+    "format": "prettier --write \"**/*.{js,ts,css,html}\"",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "ws": "^8.18.0",
+    "zod": "^3.24.0"
+  },
   "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.13",
     "husky": "^9.1.7",
-    "prettier": "^3.9.4"
+    "prettier": "^3.9.4",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }
