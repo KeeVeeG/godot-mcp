@@ -174,7 +174,16 @@ func set_shader_param(params: Dictionary) -> Dictionary:
 	var parsed: Variant = value
 	if value is String:
 		parsed = MCPVariantCodec._auto_parse_string(value as String)
-	shader_mat.set_shader_parameter(param, parsed)
+	# Store old value for undo
+	var old_val: Variant = shader_mat.get_shader_parameter(param)
+	if _undo_helper:
+		var ur: EditorUndoRedoManager = _undo_helper.get_undo_redo_manager()
+		ur.create_action("MCP: Set shader param '%s' on %s" % [param, node_path])
+		ur.add_do_method(shader_mat, "set_shader_parameter", param, parsed)
+		ur.add_undo_method(shader_mat, "set_shader_parameter", param, old_val)
+		ur.commit_action()
+	else:
+		shader_mat.set_shader_parameter(param, parsed)
 	return {"result": "Shader param '%s' set on %s" % [param, node_path]}
 
 
