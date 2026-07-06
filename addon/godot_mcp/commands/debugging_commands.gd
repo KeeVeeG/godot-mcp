@@ -175,26 +175,22 @@ func evaluate_expression(params: Dictionary) -> Dictionary:
 	if expression.is_empty():
 		return {"error": "expression is required"}
 
-	# NOTE: Both "editor" and "game" contexts currently execute in the editor.
-	# True game-context evaluation requires IPC to the running game process,
-	# which is not yet implemented.
-	if context == "game":
-		var script_text: String = "return " + expression
-		var result: Variant = _execute_in_editor(script_text)
-		return {"result": {
-			"expression": expression,
-			"context": context,
-			"value": result,
-		}}
-	else:
-		# Evaluate in the editor context
-		var script_text: String = "return " + expression
-		var result: Variant = _execute_in_editor(script_text)
-		return {"result": {
-			"expression": expression,
-			"context": context,
-			"value": result,
-		}}
+	# Try Expression class first (handles void methods correctly)
+	var expr := Expression.new()
+	var parse_err: Error = expr.parse(expression)
+	if parse_err == OK:
+		var result: Variant = expr.execute([], null)
+		if expr.has_execute_failed():
+			return {"error": "Execution failed: %s" % expr.get_error_text()}
+		return {"result": {"expression": expression, "context": context, "value": result}}
+
+	# Fall back to GDScript eval for complex expressions
+	var script_text: String = "return " + expression
+	var result: Variant = _execute_in_editor(script_text)
+	if result is Dictionary and result.has("error"):
+		# Try without return for void methods
+		result = _execute_in_editor(expression)
+	return {"result": {"expression": expression, "context": context, "value": result}}
 
 
 ## Step over the current line when paused at a breakpoint.
