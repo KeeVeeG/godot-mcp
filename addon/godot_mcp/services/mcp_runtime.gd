@@ -129,7 +129,7 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 		"execute_game_script":
 			return _execute_game_script(params.get("code", ""))
 		"capture_frames":
-			return _capture_frames(params.get("count", 1), params.get("interval", 0.1))
+			return await _capture_frames(params.get("count", 1), params.get("interval", 0.1))
 		"monitor_properties":
 			return _monitor_properties(params.get("path", ""), params.get("properties", []), params.get("duration", 5.0))
 		"start_recording":
@@ -418,8 +418,9 @@ func _stop_recording() -> Dictionary:
 func _record_input_frame(_delta: float) -> void:
 	var frame_events: Dictionary = {"time": Time.get_unix_time_from_system() - _record_start_time}
 	var keys: Array = []
-	for keycode: int in Input.get_pressed_keys():
-		keys.append(OS.get_keycode_string(keycode))
+	for keycode in range(KEY_SPACE, KEY_Z + 1):
+		if Input.is_key_pressed(keycode):
+			keys.append(OS.get_keycode_string(keycode))
 	if keys.size() > 0:
 		frame_events["keys"] = keys
 	var mouse_pos: Vector2 = get_viewport().get_mouse_position()
