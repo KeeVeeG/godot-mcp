@@ -110,6 +110,9 @@ func _exit_tree() -> void:
 	_undo_helper = null
 	_config = null
 
+	# Reset static config singleton so it re-reads config on next plugin load
+	MCPConfig._instance = null
+
 	# Remove runtime autoload
 	_remove_runtime_autoload()
 
@@ -139,7 +142,7 @@ func _ensure_runtime_autoload() -> void:
 		var existing_keys: PackedStringArray = config.get_section_keys("autoload")
 		for key in existing_keys:
 			var val: String = config.get_value("autoload", key, "")
-			if val.contains("mcp_runtime.gd"):
+			if val.ends_with("mcp_runtime.gd"):
 				# Fix stale editor-only prefix or numeric key
 				if key != "MCPRuntime" or val.begins_with("*"):
 					config.erase_section_key("autoload", key)
@@ -169,11 +172,13 @@ func _remove_runtime_autoload() -> void:
 	if err != OK:
 		return
 
-	# Find and remove the mcp_runtime entry
+	var autoload_path: String = "res://addons/godot_mcp/services/mcp_runtime.gd"
+
+	# Find and remove the mcp_runtime entry — exact match only
 	var keys: PackedStringArray = config.get_section_keys("autoload")
 	for key: String in keys:
 		var val: String = config.get_value("autoload", key, "")
-		if val.contains("mcp_runtime"):
+		if val == autoload_path or val == "*" + autoload_path:
 			config.erase_section_key("autoload", key)
 			print("[MCP] Removed autoload entry '%s' from project.godot" % key)
 
@@ -182,60 +187,71 @@ func _remove_runtime_autoload() -> void:
 
 ## Register all command modules.
 func _register_all_commands() -> void:
-	var modules: Array = [
-		preload("res://addons/godot_mcp/commands/project_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/scene_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/node_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/script_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/editor_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/input_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/runtime_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/animation_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/tilemap_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/theme_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/shader_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/resource_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/physics_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/scene3d_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/particles_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/navigation_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/audio_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/batch_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/analysis_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/testing_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/profiling_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/export_commands.gd").new(),
+	var module_paths: PackedStringArray = [
+		"res://addons/godot_mcp/commands/project_commands.gd",
+		"res://addons/godot_mcp/commands/scene_commands.gd",
+		"res://addons/godot_mcp/commands/node_commands.gd",
+		"res://addons/godot_mcp/commands/script_commands.gd",
+		"res://addons/godot_mcp/commands/editor_commands.gd",
+		"res://addons/godot_mcp/commands/input_commands.gd",
+		"res://addons/godot_mcp/commands/runtime_commands.gd",
+		"res://addons/godot_mcp/commands/animation_commands.gd",
+		"res://addons/godot_mcp/commands/tilemap_commands.gd",
+		"res://addons/godot_mcp/commands/theme_commands.gd",
+		"res://addons/godot_mcp/commands/shader_commands.gd",
+		"res://addons/godot_mcp/commands/resource_commands.gd",
+		"res://addons/godot_mcp/commands/physics_commands.gd",
+		"res://addons/godot_mcp/commands/scene3d_commands.gd",
+		"res://addons/godot_mcp/commands/particles_commands.gd",
+		"res://addons/godot_mcp/commands/navigation_commands.gd",
+		"res://addons/godot_mcp/commands/audio_commands.gd",
+		"res://addons/godot_mcp/commands/batch_commands.gd",
+		"res://addons/godot_mcp/commands/analysis_commands.gd",
+		"res://addons/godot_mcp/commands/testing_commands.gd",
+		"res://addons/godot_mcp/commands/profiling_commands.gd",
+		"res://addons/godot_mcp/commands/export_commands.gd",
 		# Extended modules (19)
-		preload("res://addons/godot_mcp/commands/addon_management_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/audio_config_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/build_config_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/debug_config_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/debugging_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/editor_config_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/gameplay_automation_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/memory_profiling_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/node_config_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/physics_config_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/platform_export_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/platform_specific_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/project_config_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/project_creation_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/rendering_config_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/resource_config_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/save_load_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/scene_config_commands.gd").new(),
-		preload("res://addons/godot_mcp/commands/visual_testing_commands.gd").new(),
+		"res://addons/godot_mcp/commands/addon_management_commands.gd",
+		"res://addons/godot_mcp/commands/audio_config_commands.gd",
+		"res://addons/godot_mcp/commands/build_config_commands.gd",
+		"res://addons/godot_mcp/commands/debug_config_commands.gd",
+		"res://addons/godot_mcp/commands/debugging_commands.gd",
+		"res://addons/godot_mcp/commands/editor_config_commands.gd",
+		"res://addons/godot_mcp/commands/gameplay_automation_commands.gd",
+		"res://addons/godot_mcp/commands/memory_profiling_commands.gd",
+		"res://addons/godot_mcp/commands/node_config_commands.gd",
+		"res://addons/godot_mcp/commands/physics_config_commands.gd",
+		"res://addons/godot_mcp/commands/platform_export_commands.gd",
+		"res://addons/godot_mcp/commands/platform_specific_commands.gd",
+		"res://addons/godot_mcp/commands/project_config_commands.gd",
+		"res://addons/godot_mcp/commands/project_creation_commands.gd",
+		"res://addons/godot_mcp/commands/rendering_config_commands.gd",
+		"res://addons/godot_mcp/commands/resource_config_commands.gd",
+		"res://addons/godot_mcp/commands/save_load_commands.gd",
+		"res://addons/godot_mcp/commands/scene_config_commands.gd",
+		"res://addons/godot_mcp/commands/visual_testing_commands.gd",
 	]
 
-	for module in modules:
-		if module is RefCounted:
-			var mod: RefCounted = module as RefCounted
-			# Inject plugin reference
-			if mod.has_method("set_plugin"):
-				mod.set_plugin(self)
-			_router.register_module(mod)
-			_command_modules.append(mod)
+	var failed_count: int = 0
+	for path: String in module_paths:
+		var script: Script = load(path) as Script
+		if script == null:
+			push_warning("[MCP] Failed to load module: %s — skipping" % path)
+			failed_count += 1
+			continue
+		var module: RefCounted = script.new() as RefCounted
+		if module == null:
+			push_warning("[MCP] Failed to instantiate module: %s — skipping" % path)
+			failed_count += 1
+			continue
+		# Inject plugin reference
+		if module.has_method("set_plugin"):
+			module.set_plugin(self)
+		_router.register_module(module)
+		_command_modules.append(module)
 
+	if failed_count > 0:
+		push_warning("[MCP] %d module(s) failed to load" % failed_count)
 	print("[MCP] Registered %d command modules with %d tools" % [_command_modules.size(), _router.get_registered_methods().size()])
 
 
