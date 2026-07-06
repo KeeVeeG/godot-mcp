@@ -115,14 +115,18 @@ func _get_input_map() -> Dictionary:
 	return {"success": true, "actions": actions}
 
 
-## Replace the entire input map.
+## Replace or merge the input map.
+## When merge=false (default), erases all non-default actions first.
+## When merge=true, only adds/updates the provided actions, preserving existing ones.
 func _set_input_map(params: Dictionary) -> Dictionary:
 	var actions: Dictionary = params.get("actions", {})
-	# Clear all non-default actions
-	for action_name: String in InputMap.get_actions():
-		if not action_name.begins_with("ui_"):
-			InputMap.erase_action(action_name)
-	# Add new actions
+	var merge: bool = params.get("merge", false)
+	# Only clear non-default actions when not merging
+	if not merge:
+		for action_name: String in InputMap.get_actions():
+			if not action_name.begins_with("ui_"):
+				InputMap.erase_action(action_name)
+	# Add/update actions
 	for action_name: String in actions:
 		var action_data: Variant = actions[action_name]
 		if not InputMap.has_action(action_name):
@@ -134,7 +138,7 @@ func _set_input_map(params: Dictionary) -> Dictionary:
 				var event: InputEvent = _create_input_event(event_data)
 				if event:
 					InputMap.action_add_event(action_name, event)
-	return {"success": true, "message": "Input map replaced"}
+	return {"success": true, "message": "Input map %s" % ("merged" if merge else "replaced")}
 
 
 ## Add a new input action with events.
@@ -221,6 +225,7 @@ func _remove_autoload(params: Dictionary) -> Dictionary:
 
 
 ## Reorder autoloads by specifying the new order.
+## Saves a backup before modifying to prevent data loss on failure.
 func _reorder_autoloads(params: Dictionary) -> Dictionary:
 	var order: Array = params.get("order", [])
 	if order.is_empty():
@@ -234,6 +239,12 @@ func _reorder_autoloads(params: Dictionary) -> Dictionary:
 			continue
 		var autoload_name: String = prop_name.substr("autoload/".length())
 		autoload_data[autoload_name] = ProjectSettings.get_setting(prop_name)
+	# Save backup to temp file for crash recovery
+	var backup_path: String = "user://mcp_autoload_backup.json"
+	var backup_file: FileAccess = FileAccess.open(backup_path, FileAccess.WRITE)
+	if backup_file != null:
+		backup_file.store_string(JSON.stringify(autoload_data, "\t"))
+		backup_file.close()
 	# Clear all autoloads
 	for autoload_name: String in autoload_data:
 		ProjectSettings.set_setting("autoload/%s" % autoload_name, null)
@@ -253,7 +264,14 @@ func _reorder_autoloads(params: Dictionary) -> Dictionary:
 			ProjectSettings.set_setting("autoload/%s" % name, autoload_data[name])
 	var err: Error = ProjectSettings.save()
 	if err != OK:
-		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
+		# Restore from backup on failure
+		for autoload_name: String in autoload_data:
+			ProjectSettings.set_setting("autoload/%s" % autoload_name, autoload_data[autoload_name])
+		ProjectSettings.save()
+		DirAccess.remove_absolute(backup_path)
+		return {"success": false, "error": "Failed to save autoloads: %s" % error_string(err)}
+	# Remove backup on success
+	DirAccess.remove_absolute(backup_path)
 	return {"success": true, "order": order, "message": "Autoloads reordered"}
 
 
