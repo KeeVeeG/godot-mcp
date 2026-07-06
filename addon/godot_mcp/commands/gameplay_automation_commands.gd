@@ -78,7 +78,7 @@ func simulate_gameplay_scenario(params: Dictionary) -> Dictionary:
 			failed += 1
 
 		if wait_ms > 0:
-			OS.delay_msec(wait_ms)
+			_non_blocking_wait(wait_ms)
 
 	var total_duration: float = Time.get_ticks_msec() - start_time
 
@@ -133,7 +133,8 @@ func record_gameplay(params: Dictionary) -> Dictionary:
 			})
 			next_sample = now + sample_interval
 
-		OS.delay_msec(16)  # ~60fps polling
+		# Non-blocking 16ms wait (~60fps polling) — keeps editor responsive
+		_non_blocking_wait(16)
 
 	_is_recording = false
 
@@ -206,7 +207,7 @@ func replay_gameplay(params: Dictionary) -> Dictionary:
 		var event_time: float = event.get("time", 0.0) / speed
 		var wait_ms: int = int(event_time - last_event_time)
 		if wait_ms > 0:
-			OS.delay_msec(wait_ms)
+			_non_blocking_wait(wait_ms)
 		last_event_time = event_time
 
 		var event_type: String = event.get("type", "")
@@ -438,7 +439,7 @@ func wait_for_game_event(params: Dictionary) -> Dictionary:
 					"waited_ms": Time.get_ticks_msec() - start_time,
 					"message": "Node found: %s" % node_path,
 				}}
-			OS.delay_msec(100)
+			_non_blocking_wait(100)
 
 		return {"result": {
 			"event": event,
@@ -469,7 +470,7 @@ func wait_for_game_event(params: Dictionary) -> Dictionary:
 						"waited_ms": Time.get_ticks_msec() - start_time,
 						"message": "Property %s.%s == %s" % [node_path, prop_name, expected_val],
 					}}
-			OS.delay_msec(100)
+			_non_blocking_wait(100)
 
 		return {"result": {
 			"event": event,
@@ -538,7 +539,7 @@ func _action_input(params: Dictionary) -> Dictionary:
 ## Helper: Step handler - wait.
 func _action_wait(params: Dictionary) -> Dictionary:
 	var seconds: float = params.get("seconds", 1.0)
-	OS.delay_msec(int(seconds * 1000.0))
+	_non_blocking_wait(int(seconds * 1000.0))
 	return {"result": "Waited %.1fs" % seconds}
 
 
@@ -638,3 +639,14 @@ func _find_buttons_recursive(node: Node, text: String, results: Array) -> void:
 			results.append(node)
 	for child: Node in node.get_children():
 		_find_buttons_recursive(child, text, results)
+
+
+## Helper: Non-blocking wait that processes editor events between 1ms sleeps.
+## Keeps the editor responsive during long waits instead of freezing.
+func _non_blocking_wait(total_ms: int) -> void:
+	var elapsed: int = 0
+	while elapsed < total_ms:
+		var chunk: int = min(1, total_ms - elapsed)
+		OS.delay_msec(chunk)
+		elapsed += chunk
+		DisplayServer.process_events()
