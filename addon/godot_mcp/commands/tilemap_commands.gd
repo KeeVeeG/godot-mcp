@@ -126,9 +126,9 @@ func tilemap_fill_rect(params: Dictionary) -> Dictionary:
 	var width: int = rect.get("width", rect.get("w", 1)) as int
 	var height: int = rect.get("height", rect.get("h", 1)) as int
 	
-	# Prevent editor freeze with huge rects
-	if width * height > 100000:
-		return {"error": "Rect too large (%d cells). Maximum is 100,000 cells." % (width * height)}
+	# Prevent editor freeze with huge rects (each cell creates 2 undo entries)
+	if width * height > 10000:
+		return {"error": "Rect too large (%d cells). Maximum is 10,000 cells to prevent undo system overload." % (width * height)}
 	
 	var atlas: Vector2i = Vector2i(-1, -1)
 	if atlas_coords_raw is Array:

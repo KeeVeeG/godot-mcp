@@ -197,9 +197,11 @@ func _update_property(params: Dictionary) -> Dictionary:
 	return {"success": true, "message": "Property %s updated on %s" % [property, path]}
 
 
-## Get all serialized properties of a node.
+## Get serialized properties of a node.
+## Optional "properties" param filters to only requested property names.
 func _get_node_properties(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
+	var filter_props: Array = params.get("properties", [])
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
@@ -208,17 +210,28 @@ func _get_node_properties(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Node not found: %s" % path}
 
 	var props: Dictionary = {}
-	var prop_list: Array = node.get_property_list()
-	for p: Dictionary in prop_list:
-		var pname: String = p["name"] as String
-		var usage: int = p["usage"] as int
-		# Skip internal properties (not stored or editable)
-		if usage & PROPERTY_USAGE_STORAGE == 0 and usage & PROPERTY_USAGE_EDITOR == 0:
-			continue
-		if pname.begins_with("_") and not pname.begins_with("__"):
-			continue
-		var val: Variant = node.get(pname)
-		props[pname] = MCPVariantCodec.serialize_value(val)
+
+	if filter_props.size() > 0:
+		# Return only requested properties
+		for prop_name_variant: Variant in filter_props:
+			var prop_name: String = prop_name_variant as String
+			if _has_property(node, prop_name):
+				props[prop_name] = MCPVariantCodec.serialize_value(node.get(prop_name))
+			else:
+				props[prop_name] = null
+	else:
+		# Return all stored/editor-visible properties
+		var prop_list: Array = node.get_property_list()
+		for p: Dictionary in prop_list:
+			var pname: String = p["name"] as String
+			var usage: int = p["usage"] as int
+			# Skip internal properties (not stored or editable)
+			if usage & PROPERTY_USAGE_STORAGE == 0 and usage & PROPERTY_USAGE_EDITOR == 0:
+				continue
+			if pname.begins_with("_") and not pname.begins_with("__"):
+				continue
+			var val: Variant = node.get(pname)
+			props[pname] = MCPVariantCodec.serialize_value(val)
 
 	return {"success": true, "path": path, "type": node.get_class(), "properties": props}
 
@@ -461,7 +474,7 @@ func _get_node_groups(params: Dictionary) -> Dictionary:
 	return {"success": true, "path": path, "groups": groups}
 
 
-## Set groups on a node (replaces all existing groups).
+## Set groups on a node (replaces user-added groups, preserves engine-managed ones).
 func _set_node_groups(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var groups: Array = params.get("groups", [])
@@ -472,10 +485,11 @@ func _set_node_groups(params: Dictionary) -> Dictionary:
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
 
-	# Remove from all current groups
+	# Remove only user-added groups (preserve engine-managed ones starting with "__")
 	var current_groups: Array = node.get_groups()
 	for g: String in current_groups:
-		node.remove_from_group(g)
+		if not g.begins_with("__"):
+			node.remove_from_group(g)
 
 	# Add to new groups
 	for g_variant: Variant in groups:
