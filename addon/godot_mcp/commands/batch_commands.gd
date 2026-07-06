@@ -206,17 +206,22 @@ func get_scene_dependencies(params: Dictionary) -> Dictionary:
 
 
 ## Iterate all .tscn scenes in the project and set a property on all matching nodes.
-## WARNING: This function modifies .tscn files on disk directly and CANNOT be undone
-## via the editor undo system. Use batch_set_property for in-editor undo support.
+## DESTRUCTIVE: This function modifies .tscn files on disk directly and CANNOT be undone
+## via the editor undo system (Ctrl+Z). Changes are best-effort text-based edits that
+## may corrupt complex scenes. Use batch/set_property for undoable in-editor changes.
+## Requires "confirm_no_undo": true parameter to proceed.
 func cross_scene_set_property(params: Dictionary) -> Dictionary:
 	var type_name: String = params.get("type_name", params.get("type", ""))
 	var property: String = params.get("property", "")
 	var value: Variant = params.get("value")
+	var confirm_no_undo: bool = params.get("confirm_no_undo", false)
 
 	if type_name.is_empty():
 		return {"error": "Type is required"}
 	if property.is_empty():
 		return {"error": "Property is required"}
+	if not confirm_no_undo:
+		return {"error": "This operation is DESTRUCTIVE and bypasses the undo system. Set \"confirm_no_undo\": true to acknowledge that these changes cannot be reversed via Ctrl+Z.", "hint": "Use batch/set_property for undoable in-scene changes."}
 
 	var scene_files: Array = _find_files_recursive("res://", ".tscn")
 	var modified_scenes: Array = []
@@ -227,7 +232,7 @@ func cross_scene_set_property(params: Dictionary) -> Dictionary:
 		if modified:
 			modified_scenes.append(scene_path)
 
-	return {"result": {"type": type_name, "property": property, "scenes_modified": modified_scenes.size(), "scenes": modified_scenes, "warning": "This function modifies .tscn files on disk directly and CANNOT be undone via the editor undo system. Use batch/set_property for undoable in-scene changes."}}
+	return {"result": {"type": type_name, "property": property, "scenes_modified": modified_scenes.size(), "scenes": modified_scenes, "warning": "DESTRUCTIVE: These .tscn files were modified on disk directly. Changes CANNOT be undone via the editor undo system (Ctrl+Z). This is a best-effort text-based edit — complex scenes with sub-resources or inherited scenes may be corrupted. Use batch/set_property for undoable in-scene changes."}}
 
 
 ## Search for script path references across the project.
