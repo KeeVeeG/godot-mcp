@@ -568,5 +568,17 @@ static func parse_for_property(value: Variant, expected_type: int) -> Variant:
 			return NodePath(str(value))
 		TYPE_STRING_NAME:
 			return StringName(str(value))
+		TYPE_OBJECT:
+			# Create resource from {type: "ResourceType", ...props} dict
+			if value is Dictionary and value.has("type"):
+				var res_type: String = value["type"]
+				if ClassDB.class_exists(res_type):
+					var res: Resource = ClassDB.instantiate(res_type) as Resource
+					if res:
+						for p in value:
+							if p != "type" and p in res:
+								res.set(p, parse_for_property(value[p], typeof(res.get(p))))
+						return res
+			return value
 		_:
 			return value
