@@ -86,20 +86,32 @@ func _get_game_screenshot(params: Dictionary) -> Dictionary:
 	var save_path: String = params.get("path", "user://mcp_game_screenshot.png")
 	if not _plugin.get_editor_interface().is_playing_scene():
 		return {"success": false, "error": "Game is not running"}
-	# Get the running game's viewport, not the editor's
-	var main_loop = Engine.get_main_loop()
-	if not main_loop is SceneTree:
-		return {"success": false, "error": "No game scene tree available"}
-	var viewport: Viewport = (main_loop as SceneTree).root
-	if viewport == null:
-		return {"success": false, "error": "No viewport available"}
-	var img: Image = viewport.get_texture().get_image()
-	if img == null:
-		return {"success": false, "error": "Failed to capture game viewport"}
-	var err: Error = img.save_png(save_path)
-	if err != OK:
-		return {"success": false, "error": "Failed to save screenshot: %s" % error_string(err)}
-	return {"success": true, "path": save_path, "width": img.get_width(), "height": img.get_height()}
+	# Game runs in a separate process — delegate to mcp_runtime.gd via file IPC
+	var request: Dictionary = {"method": "capture_screenshot", "params": {"path": save_path}}
+	var req_file := FileAccess.open("user://mcp_runtime_request.json", FileAccess.WRITE)
+	if req_file == null:
+		return {"success": false, "error": "Failed to write runtime request"}
+	req_file.store_string(JSON.stringify(request))
+	req_file.close()
+	# Wait for response
+	var start: float = Time.get_unix_time_from_system()
+	const TIMEOUT: float = 3.0
+	while Time.get_unix_time_from_system() - start < TIMEOUT:
+		if FileAccess.file_exists("user://mcp_runtime_response.json"):
+			var resp_file := FileAccess.open("user://mcp_runtime_response.json", FileAccess.READ)
+			if resp_file:
+				var resp_text: String = resp_file.get_as_text()
+				resp_file.close()
+				DirAccess.remove_absolute("user://mcp_runtime_response.json")
+				var json := JSON.new()
+				var err := json.parse(resp_text)
+				if err == OK and json.data is Dictionary:
+					var resp: Dictionary = json.data as Dictionary
+					if resp.has("result"):
+						return resp["result"]
+					return {"success": false, "error": str(resp.get("error", "Runtime error"))}
+		OS.delay_msec(10)
+	return {"success": false, "error": "Runtime screenshot timed out"}
 
 
 ## Execute arbitrary GDScript code in the editor context via EditorScript.

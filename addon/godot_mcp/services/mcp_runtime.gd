@@ -129,6 +129,8 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 			return _simulate_input(params)
 		"simulate_sequence":
 			return await _simulate_sequence(params)
+		"capture_screenshot":
+			return _capture_screenshot(params.get("path", "user://mcp_game_screenshot.png"))
 		"ping":
 			return {"result": "pong"}
 		_:
@@ -262,6 +264,15 @@ func _capture_frames(count: int, interval: float) -> Dictionary:
 		if i < count - 1 and interval > 0.0:
 			OS.delay_msec(int(interval * 1000.0))
 	return {"result": {"frames": frames, "count": frames.size()}}
+
+
+## Capture a single screenshot from the game viewport.
+func _capture_screenshot(path: String) -> Dictionary:
+	var image: Image = get_tree().root.get_texture().get_image()
+	if image == null:
+		return {"result": {"success": false, "error": "Failed to capture viewport"}}
+	image.save_png(path)
+	return {"result": {"success": true, "path": path, "width": image.get_width(), "height": image.get_height()}}
 
 
 ## Start monitoring properties over time.
