@@ -173,27 +173,31 @@ func _analyze_signals_recursive(node: Node, nodes: Array, edges: Array, node_set
 
 ## Find resources that exist in the project but are not referenced
 ## by any .tscn or .gd file.
+## Uses regex-based reference extraction (O(N+M)) instead of
+## per-resource substring matching (O(N×M)).
 func find_unused_resources(_params: Dictionary) -> Dictionary:
 	var resource_files: Array = []
 	_collect_resource_files("res://", resource_files)
 
-	# Collect all references from .tscn and .gd files
-	var all_references: Dictionary = {}
+	# Collect all code files (.tscn, .gd, .tres) that might reference resources
 	var code_files: Array = []
 	_collect_files_by_ext("res://", ".tscn", code_files)
 	_collect_files_by_ext("res://", ".gd", code_files)
 	_collect_files_by_ext("res://", ".tres", code_files)
+
+	# Single-pass: extract all res:// paths from all code files into a set
+	var all_references: Dictionary = {}
+	var regex: RegEx = RegEx.new()
+	regex.compile("res://[a-zA-Z0-9_/.\\-]+")
 
 	for file_path_variant: Variant in code_files:
 		var file_path: String = file_path_variant as String
 		var content: String = _read_file_content(file_path)
 		if content.is_empty():
 			continue
-		# Check each resource path in the content
-		for res_variant: Variant in resource_files:
-			var res_path: String = res_variant as String
-			if content.find(res_path) != -1:
-				all_references[res_path] = true
+		var matches: Array[RegExMatch] = regex.search_all(content)
+		for m: RegExMatch in matches:
+			all_references[m.get_string()] = true
 
 	var unused: Array = []
 	for res_variant: Variant in resource_files:
