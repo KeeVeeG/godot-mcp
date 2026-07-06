@@ -15,6 +15,9 @@ var _log_text: RichTextLabel
 ## Maximum log entries
 const MAX_LOG_ENTRIES: int = 200
 
+## Current line count (avoids O(n²) trimming)
+var _log_line_count: int = 0
+
 
 func _init() -> void:
 	_setup_ui()
@@ -114,20 +117,23 @@ func log_activity(message: String, level: String = "info") -> void:
 
 	var line: String = "[color=%s][%s] %s[/color]" % [color, timestamp, message]
 	_log_text.append_text(line + "\n")
+	_log_line_count += 1
 
-	# Trim old entries if too many
-	var text_content: String = _log_text.get_parsed_text()
-	var lines: PackedStringArray = text_content.split("\n")
-	if lines.size() > MAX_LOG_ENTRIES:
-		# Rebuild with last entries
+	# Trim old entries if too many (only when counter exceeds limit)
+	if _log_line_count > MAX_LOG_ENTRIES * 1.5:
+		var text_content: String = _log_text.get_parsed_text()
+		var lines: PackedStringArray = text_content.split("\n")
 		_log_text.clear()
-		var start_idx: int = lines.size() - MAX_LOG_ENTRIES
+		var start_idx: int = max(lines.size() - MAX_LOG_ENTRIES, 0)
+		_log_line_count = 0
 		for i: int in range(start_idx, lines.size()):
 			if lines[i].strip_edges() != "":
 				_log_text.append_text(lines[i] + "\n")
+				_log_line_count += 1
 
 
 ## Clear the log.
 func clear_log() -> void:
 	if _log_text:
 		_log_text.clear()
+		_log_line_count = 0

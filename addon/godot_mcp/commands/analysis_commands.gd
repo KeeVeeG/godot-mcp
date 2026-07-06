@@ -113,12 +113,18 @@ func analyze_signal_flow(_params: Dictionary) -> Dictionary:
 
 	_analyze_signals_recursive(root, nodes, edges, node_set)
 
-	return {"result": {
+	var truncated: bool = nodes.size() >= 25 or edges.size() >= 50
+	var result_dict: Dictionary = {
 		"node_count": nodes.size(),
 		"connection_count": edges.size(),
 		"nodes": nodes,
 		"connections": edges,
-	}}
+	}
+	if truncated:
+		result_dict["truncated"] = true
+		result_dict["warning"] = "Results truncated at %d nodes / %d edges. Large scenes may have more connections." % [nodes.size(), edges.size()]
+
+	return {"result": result_dict}
 
 
 func _analyze_signals_recursive(node: Node, nodes: Array, edges: Array, node_set: Dictionary) -> void:
@@ -244,7 +250,7 @@ func _scan_project_dir(dir_path: String, stats: Dictionary) -> void:
 				ext = "(no ext)"
 			var by_ext: Dictionary = stats["files_by_extension"] as Dictionary
 			by_ext[ext] = (by_ext.get(ext, 0) as int) + 1
-			# Get file size
+			# Get file size via FileAccess (GDScript has no OS-level stat API)
 			var file_size: int = 0
 			var f: FileAccess = FileAccess.open(full_path, FileAccess.READ)
 			if f != null:
