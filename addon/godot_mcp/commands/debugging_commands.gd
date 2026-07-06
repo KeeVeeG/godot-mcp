@@ -14,6 +14,13 @@ var _is_paused: bool = false
 var _last_call_stack: Array = []
 var _debugger_plugin: EditorDebuggerPlugin = null
 
+## Godot singletons that Expression's base_obj (Control node) cannot resolve.
+const _SINGLETON_NAMES: PackedStringArray = [
+	"Engine", "OS", "Input", "DisplayServer", "ProjectSettings",
+	"EditorInterface", "ClassDB", "ResourceLoader", "RenderingServer",
+	"PhysicsServer2D", "PhysicsServer3D", "Time", "InputMap",
+]
+
 
 func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
@@ -184,7 +191,8 @@ func evaluate_expression(params: Dictionary) -> Dictionary:
 
 	# Try Expression class first (handles void methods correctly)
 	# Skip when expression references edited_scene_root — Expression's base_obj can't resolve it.
-	if not "edited_scene_root" in expression:
+	# Also skip for singleton references (Engine, OS, Input, etc.) — Control nodes lack those.
+	if not "edited_scene_root" in expression and not _references_singleton(expression):
 		var expr := Expression.new()
 		var parse_err: Error = expr.parse(expression)
 		if parse_err == OK:
@@ -282,6 +290,52 @@ func _get_active_session(debugger: EditorDebuggerPlugin) -> EditorDebuggerSessio
 	return sessions[0] as EditorDebuggerSession
 
 
+## Helper: Check if expression references a Godot singleton as a bare word.
+## Returns true for "Engine.get_frames_per_second()" but false for "node.engine_speed".
+func _references_singleton(expr: String) -> bool:
+	for name in _SINGLETON_NAMES:
+		var idx: int = expr.find(name)
+		while idx >= 0:
+			# Must be a word start (not preceded by dot or identifier char)
+			var before_ok: bool = (idx == 0)
+			if not before_ok:
+				var prev: int = expr[idx - 1]
+				# 46 = '.', 48-57 = digits, 65-90 = A-Z, 95 = _, 97-122 = a-z
+				before_ok = not (
+					prev == 46 or
+					(prev >= 48 and prev <= 57) or
+					(prev >= 65 and prev <= 90) or
+					prev == 95 or
+					(prev >= 97 and prev <= 122)
+				)
+			# Must be a word end (not followed by identifier char)
+			var end_pos: int = idx + name.length()
+			var after_ok: bool = (end_pos >= expr.length())
+			if not after_ok:
+				var next_ch: int = expr[end_pos]
+				after_ok = not (
+					(next_ch >= 48 and next_ch <= 57) or
+					(next_ch >= 65 and next_ch <= 90) or
+					next_ch == 95 or
+					(next_ch >= 97 and next_ch <= 122)
+				)
+			if before_ok and after_ok:
+				return true
+			idx = expr.find(name, idx + 1)
+	return false
+
+
+## Helper: Reload a GDScript with editor warnings suppressed.
+## Saves and restores the original warning setting to avoid side effects.
+func _reload_quiet(script: GDScript) -> Error:
+	var setting_path: String = "debug/gdscript/warnings/enable"
+	var orig_val: Variant = ProjectSettings.get_setting(setting_path)
+	ProjectSettings.set_setting(setting_path, false)
+	var err: Error = script.reload()
+	ProjectSettings.set_setting(setting_path, orig_val)
+	return err
+
+
 ## Helper: Execute a GDScript expression in the editor context.
 ## Three-step fallback: EditorScript with capture → EditorScript void → RefCounted.
 func _execute_in_editor(code: String) -> Variant:
@@ -296,7 +350,7 @@ func _execute_in_editor(code: String) -> Variant:
 		if not capture_src.is_empty():
 			var script: GDScript = GDScript.new()
 			script.source_code = capture_src
-			var err: Error = script.reload()
+			var err: Error = _reload_quiet(script)
 			if err == OK:
 				var instance: Object = script.new()
 				if instance.has_method("_run"):
@@ -319,7 +373,7 @@ func _execute_in_editor(code: String) -> Variant:
 		var preamble: String = _build_editor_script_preamble(code)
 		var script: GDScript = GDScript.new()
 		script.source_code = "extends EditorScript\n\nfunc _run() -> void:\n\t%s%s" % [preamble, _strip_and_indent(code)]
-		var err: Error = script.reload()
+		var err: Error = _reload_quiet(script)
 		if err == OK:
 			var instance: Object = script.new()
 			if instance.has_method("_run"):
@@ -334,7 +388,7 @@ func _execute_in_editor(code: String) -> Variant:
 		s2.source_code = "extends RefCounted\n\nfunc eval():\n\treturn %s" % code
 	else:
 		s2.source_code = "extends RefCounted\n\nfunc eval():\n\t%sreturn %s" % [preamble_3, code]
-	var err: Error = s2.reload()
+	var err: Error = _reload_quiet(s2)
 	if err != OK:
 		return {"error": "Failed to compile expression"}
 	var inst2: Object = s2.new()
@@ -375,7 +429,7 @@ func _is_statement(line: String) -> bool:
 	if t.begins_with("else:"):
 		return true
 	# Keywords that can be standalone or followed by expression
-	for kw in ["return", "break", "continue", "pass"]:
+	for kw in ["return", "break", "continue", "pass", "assert"]:
 		if t.begins_with(kw) and t.length() > kw.length():
 			var next: int = t[kw.length()]
 			if next == 32 or next == 9: # space or tab
@@ -573,18 +627,6 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 	var line_len: int = line.length()
 
 	while i < line_len:
-		# Inside block comment - scan for closing */
-		if in_bc:
-			if i + 1 < line_len and line[i] == 42 and line[i + 1] == 47:
-				in_bc = false
-				i += 2
-				if seg_start >= 0:
-					segments.append([seg_start, i])
-					seg_start = -1
-				continue
-			i += 1
-			continue
-
 		# Inside triple-quoted string - scan for closing """
 		if in_tq:
 			if i + 2 < line_len and line[i] == 34 and line[i + 1] == 34 and line[i + 2] == 34:
@@ -595,21 +637,6 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 					seg_start = -1
 				continue
 			i += 1
-			continue
-
-		# Line comment //
-		if i + 1 < line_len and line[i] == 47 and line[i + 1] == 47:
-			if seg_start >= 0:
-				segments.append([seg_start, i])
-			return {"segments": segments, "in_tq": in_tq, "in_bc": in_bc}
-
-		# Block comment start /*
-		if i + 1 < line_len and line[i] == 47 and line[i + 1] == 42:
-			in_bc = true
-			if seg_start >= 0:
-				segments.append([seg_start, i])
-				seg_start = -1
-			i += 2
 			continue
 
 		# Triple-quoted string """
