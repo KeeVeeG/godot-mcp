@@ -31,6 +31,9 @@ var _reconnect_timer: float = 0.0
 ## Ping timer
 var _ping_timer: float = 0.0
 
+## Timestamp of last received message (for idle timeout detection)
+var _last_received_time: float = 0.0
+
 ## Config reference
 var _config: MCPConfig
 
@@ -80,6 +83,13 @@ func _process(delta: float) -> void:
 		if _ping_timer >= MCPConfig.PING_INTERVAL:
 			_ping_timer = 0.0
 			_send_ping()
+
+		# Idle timeout — force disconnect if no message received
+		var time_since_last: float = Time.get_unix_time_from_system() - _last_received_time
+		if time_since_last > MCPConfig.IDLE_TIMEOUT:
+			push_warning("[MCP] No message received in %.0fs — forcing disconnect" % MCPConfig.IDLE_TIMEOUT)
+			_handle_disconnect()
+			return
 
 		# Check request timeouts
 		var now: float = Time.get_unix_time_from_system()
@@ -190,6 +200,7 @@ func _connect_to_port(port: int) -> void:
 	_is_connected = true
 	_ping_timer = 0.0
 	_reconnect_timer = 0.0
+	_last_received_time = Time.get_unix_time_from_system()
 	connected.emit(port)
 
 
@@ -199,6 +210,11 @@ func _handle_disconnect() -> void:
 	var old_port: int = _connected_port
 	_connected_port = -1
 	_config.connected_port = -1
+	# Notify all pending request callers with a disconnect error
+	for req_id: int in _pending_requests:
+		var req: Dictionary = _pending_requests[req_id] as Dictionary
+		var callback: Callable = req["callback"] as Callable
+		callback.call({"error": {"code": -1, "message": "Disconnected from server"}})
 	_pending_requests.clear()
 	print("[MCP] Disconnected from port %d" % old_port)
 	disconnected.emit()
@@ -222,6 +238,7 @@ func _handle_message(text: String) -> void:
 	if not message is Dictionary:
 		return
 	var msg_dict: Dictionary = message as Dictionary
+	_last_received_time = Time.get_unix_time_from_system()
 	message_received.emit(msg_dict)
 
 	# Check if it's a response to a pending request

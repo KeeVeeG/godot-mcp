@@ -12,6 +12,7 @@ const PORT_RANGE_END: int = 6514
 const RECONNECT_INTERVAL: float = 3.0
 const PING_INTERVAL: float = 5.0
 const REQUEST_TIMEOUT: float = 30.0
+const IDLE_TIMEOUT: float = 60.0
 
 ## File IPC paths
 const IPC_REQUEST_PATH: String = "user://mcp_request.json"
