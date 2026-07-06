@@ -84,10 +84,16 @@ func _poll_ipc() -> void:
 	var req_dict: Dictionary = request as Dictionary
 	var method: String = req_dict.get("method", "")
 	var params: Dictionary = req_dict.get("params", {})
+	var request_id: String = req_dict.get("request_id", "")
 
 	_ipc_busy = true
 	var result: Dictionary = await _handle_request(method, params)
 	_ipc_busy = false
+
+	# Echo request_id back for correlation
+	if not request_id.is_empty():
+		result["request_id"] = request_id
+
 	if not _write_response(result):
 		push_warning("[MCP Runtime] Failed to write response for method: %s" % method)
 
@@ -242,19 +248,33 @@ func _set_game_node_property(path: String, property: String, value: Variant) -> 
 
 ## Execute GDScript code in game context.
 func _execute_game_script(code: String) -> Dictionary:
-	var script: GDScript = GDScript.new()
-	script.source_code = "extends Node\n\nfunc _run(root: Node, scene: Node) -> Variant:\n"
+	var source: String = "extends Node\n\nfunc _run(root: Node, scene: Node) -> Variant:\n"
 	var lines: PackedStringArray = code.split("\n")
 	for line: String in lines:
-		script.source_code += "    " + line + "\n"
-	var err: Error = script.reload()
-	if err != OK:
-		return {"error": "Script compilation failed: %s" % error_string(err)}
+		source += "    " + line + "\n"
+
+	# Write to temp file — GDScript compilation via ResourceLoader is reliable
+	var temp_path: String = "user://_mcp_temp_script.gd"
+	var file: FileAccess = FileAccess.open(temp_path, FileAccess.WRITE)
+	if file == null:
+		return {"error": "Failed to write temp script file"}
+	file.store_string(source)
+	file.close()
+
+	var script: GDScript = ResourceLoader.load(temp_path) as GDScript
+	if script == null:
+		DirAccess.remove_absolute(temp_path)
+		return {"error": "Script compilation failed: ResourceLoader.load returned null"}
+
 	var temp_node: Node = Node.new()
 	temp_node.set_script(script)
 	add_child(temp_node)
 	var result: Variant = temp_node._run(get_tree().root, get_tree().current_scene)
 	temp_node.queue_free()
+
+	# Clean up temp file
+	DirAccess.remove_absolute(temp_path)
+
 	if result == null:
 		return {"result": null}
 	return {"result": MCPVariantCodec.serialize_value(result)}
