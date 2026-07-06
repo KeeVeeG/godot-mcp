@@ -9,8 +9,10 @@ import { z } from 'zod';
 // ────────────────────────────────────────────────────────────
 // Primitive field schemas
 // ────────────────────────────────────────────────────────────
-/** Node path in the scene tree (e.g. "Player/Sprite2D") */
-export const NodePath = z.string().describe("Node path in the scene tree (e.g. 'Player/Sprite2D')");
+/** Node path in the scene tree (e.g. "Player/Sprite2D"). Use just the node name for root-level children (e.g. "Player"), or "" for the scene root itself. Paths are relative to the currently open scene — do NOT use full editor paths like "/root/@EditorNode@...". */
+export const NodePath = z
+    .string()
+    .describe("Node path in the scene tree (e.g. 'Player/Sprite2D'). Use just the node name for root-level children (e.g. 'Player'), or empty string '' for the scene root itself. Paths are relative to the currently open scene.");
 /** Scene file path (e.g. "res://scenes/main.tscn") */
 export const ScenePath = z.string().describe("Scene file path (e.g. 'res://scenes/main.tscn')");
 /** Optional scene file path — defaults to current scene */
@@ -35,8 +37,8 @@ export const GDScriptCode = z.string().describe('GDScript code to execute');
 export const SearchQuery = z.string().describe('Search query');
 /** Node type name (e.g. "Sprite2D", "CharacterBody3D") */
 export const NodeType = z.string().describe("Node type name (e.g. 'Sprite2D', 'CharacterBody3D')");
-/** Parent node path */
-export const ParentPath = z.string().describe('Parent node path');
+/** Parent node path — use '' (empty string) for scene root, or node name (e.g. "Player") for direct root children */
+export const ParentPath = z.string().describe("Parent node path. Use '' (empty string) to add at scene root, or a node name/path (e.g. 'Player' or 'Player/Sprites') to add as a child of that node.");
 // ────────────────────────────────────────────────────────────
 // Numeric schemas
 // ────────────────────────────────────────────────────────────
@@ -94,74 +96,74 @@ export const OptionalDimension = z.enum(['2d', '3d']).optional().describe('Dimen
  * Use for tools that take only a path and return info.
  */
 export function pathOnlySchema(pathDescription) {
-  return {
-    path: z.string().describe(pathDescription),
-  };
+    return {
+        path: z.string().describe(pathDescription),
+    };
 }
 /**
  * Schema for a path + optional properties tool.
  * Use for tools that configure something at a path.
  */
 export function pathWithPropertiesSchema(pathDescription, propertiesDescription = 'Property key-value pairs to set') {
-  return {
-    path: z.string().describe(pathDescription),
-    properties: z.record(z.unknown()).optional().describe(propertiesDescription),
-  };
+    return {
+        path: z.string().describe(pathDescription),
+        properties: z.record(z.unknown()).optional().describe(propertiesDescription),
+    };
 }
 /**
  * Schema for a path + required properties tool.
  */
 export function pathWithRequiredPropertiesSchema(pathDescription, propertiesDescription) {
-  return {
-    path: z.string().describe(pathDescription),
-    properties: z.record(z.unknown()).describe(propertiesDescription),
-  };
+    return {
+        path: z.string().describe(pathDescription),
+        properties: z.record(z.unknown()).describe(propertiesDescription),
+    };
 }
 /**
  * Schema for a set-property tool (path + property name + value).
  */
 export function setPropertySchema(pathDescription) {
-  return {
-    path: z.string().describe(pathDescription),
-    property: z.string().describe('Property name to set'),
-    value: z.unknown().describe('New value for the property'),
-  };
+    return {
+        path: z.string().describe(pathDescription),
+        property: z.string().describe('Property name to set'),
+        value: z.unknown().describe('New value for the property'),
+    };
 }
 /**
  * Schema for a get-property tool (path + optional property name).
  */
 export function getPropertySchema(pathDescription) {
-  return {
-    path: z.string().describe(pathDescription),
-  };
+    return {
+        path: z.string().describe(pathDescription),
+    };
 }
 /**
  * Schema for a parent + name + optional properties creation tool.
  */
 export function createChildSchema(parentDescription = 'Parent node path', nameDescription = 'Name for the new node') {
-  return {
-    parent: z.string().describe(parentDescription),
-    name: z.string().describe(nameDescription),
-    properties: z.record(z.unknown()).optional().describe('Initial property values'),
-  };
+    return {
+        parent: z.string().describe(parentDescription),
+        name: z.string().describe(nameDescription),
+        properties: z.record(z.unknown()).optional().describe('Initial property values'),
+    };
 }
 /**
  * Schema for a search/filter tool with optional scene scope.
  */
 export function scopedSearchSchema(queryDescription) {
-  return {
-    query: z.string().describe(queryDescription),
-    scene_path: z.string().optional().describe('Scene path to scope search (defaults to current scene)'),
-  };
+    return {
+        query: z.string().describe(queryDescription),
+        scene_path: z.string().optional().describe('Scene path to scope search (defaults to current scene)'),
+    };
 }
 /** Create a tool result from any serializable data */
 export function toolResult(data) {
-  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-  return { content: [{ type: 'text', text }] };
+    const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+    return { content: [{ type: 'text', text }] };
 }
 /** Create an error tool result */
 export function errorResult(message) {
-  return { content: [{ type: 'text', text: message }], isError: true };
+    return { content: [{ type: 'text', text: message }], isError: true };
 }
 // ────────────────────────────────────────────────────────────
 // Re-export z for convenience (modules can import { z } from here)
