@@ -73,7 +73,8 @@ func _set_theme(params: Dictionary) -> Dictionary:
 	return {"success": true, "theme": theme, "message": "Editor theme set to %s" % theme}
 
 
-## Switch editor layout.
+## Switch the active main screen tab (2D/3D/Script).
+## NOTE: This switches which editor tab is visible, not a full window layout.
 func _set_layout(params: Dictionary) -> Dictionary:
 	var layout: String = params.get("layout", "default")
 	match layout:
@@ -87,7 +88,7 @@ func _set_layout(params: Dictionary) -> Dictionary:
 			EditorInterface.set_main_screen_editor("Script")
 		_:
 			return {"success": false, "error": "Unknown layout: %s (use: default, 2d, 3d, script)" % layout}
-	return {"success": true, "layout": layout, "message": "Editor layout set to %s" % layout}
+	return {"success": true, "layout": layout, "message": "Main screen tab switched to %s. NOTE: This only switches the active editor tab (2D/3D/Script), not a full window layout." % layout}
 
 
 ## Set editor font size.
@@ -114,7 +115,8 @@ func _set_scale(params: Dictionary) -> Dictionary:
 	return {"success": true, "scale": scale, "message": "Editor scale set to %.1f%%" % (scale * 100)}
 
 
-## Save current layout.
+## Save the current main screen tab to a named config file.
+## NOTE: Only saves which main screen tab is active, not a full window layout.
 func _save_layout(params: Dictionary) -> Dictionary:
 	var name: String = params.get("name", "")
 	if name.is_empty():
@@ -126,10 +128,11 @@ func _save_layout(params: Dictionary) -> Dictionary:
 	var err: Error = config.save(layout_path)
 	if err != OK:
 		return {"success": false, "error": "Failed to save layout: %s" % error_string(err)}
-	return {"success": true, "name": name, "path": layout_path, "message": "Layout '%s' saved" % name}
+	return {"success": true, "name": name, "path": layout_path, "message": "Main screen tab config '%s' saved. NOTE: Only the active tab (2D/3D/Script) is stored, not a full window layout." % name}
 
 
-## Load a saved layout.
+## Load a saved main screen tab config.
+## NOTE: Only restores which main screen tab is active, not a full window layout.
 func _load_layout(params: Dictionary) -> Dictionary:
 	var name: String = params.get("name", "")
 	if name.is_empty():
@@ -143,7 +146,7 @@ func _load_layout(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Failed to load layout: %s" % error_string(err)}
 	var main_screen: String = config.get_value("layout", "main_screen", "2D") as String
 	EditorInterface.set_main_screen_editor(main_screen)
-	return {"success": true, "name": name, "message": "Layout '%s' loaded" % name}
+	return {"success": true, "name": name, "message": "Main screen tab config '%s' loaded" % name}
 
 
 ## Reset layout to defaults.

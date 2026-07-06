@@ -213,9 +213,10 @@ func get_object_count(params: Dictionary) -> Dictionary:
 
 
 ## Force garbage collection and report freed memory.
-## NOTE: Godot's GDScript does not expose a direct GC trigger API.
-## This forces frame processing to allow deferred queue_free() calls to complete,
-## but RefCounted objects are freed immediately when references drop — no GC needed.
+## LIMITATION: Godot does not expose a manual GC trigger API. RefCounted objects are freed
+## immediately when references drop. This function only forces a brief pause to allow
+## deferred queue_free() calls to complete. Reported changes reflect natural memory
+## fluctuations, not forced collection.
 func force_garbage_collection(_params: Dictionary) -> Dictionary:
 	var mem_before: float = Performance.get_monitor(Performance.MEMORY_STATIC)
 	var objects_before: int = int(Performance.get_monitor(Performance.OBJECT_COUNT))

@@ -130,6 +130,8 @@ func _set_anti_aliasing(params: Dictionary) -> Dictionary:
 			"2x": msaa_val = 1
 			"4x": msaa_val = 2
 			"8x": msaa_val = 3
+			_:
+				return {"success": false, "error": "Invalid MSAA value: %s (use: 2x, 4x, 8x)" % msaa_str}
 		ProjectSettings.set_setting("rendering/anti_aliasing/quality/msaa_3d", msaa_val)
 		changed["msaa"] = msaa_str
 	if params.has("fxaa"):
@@ -203,6 +205,8 @@ func _set_post_processing(params: Dictionary) -> Dictionary:
 func _set_viewport_size(params: Dictionary) -> Dictionary:
 	var width: int = params.get("width", 1152)
 	var height: int = params.get("height", 648)
+	if width <= 0 or height <= 0:
+		return {"success": false, "error": "Viewport dimensions must be positive (got %dx%d)" % [width, height]}
 	ProjectSettings.set_setting("display/window/size/viewport_width", width)
 	ProjectSettings.set_setting("display/window/size/viewport_height", height)
 	if params.has("stretch_mode"):
@@ -253,6 +257,6 @@ func _get_rendering_info() -> Dictionary:
 		"vendor": RenderingServer.get_video_adapter_vendor(),
 		"rendering_method": ProjectSettings.get_setting("rendering/renderer/rendering_method", "forward_plus"),
 	}
-	# VRAM info from OS
-	info["video_adapter_type"] = OS.get_processor_name()
+	# NOTE: Godot exposes video_adapter_name/vendor/api_version but no separate CPU name API.
+	# OS.get_processor_name() returns CPU, not GPU — omitted to avoid confusion.
 	return {"success": true, "info": info}
