@@ -70,7 +70,7 @@ func _add_node(params: Dictionary) -> Dictionary:
 	if parent == null:
 		return {"success": false, "error": "No scene open"}
 	if parent_path != "":
-		parent = parent.get_node_or_null(parent_path)
+		parent = _resolve_node(parent_path, parent)
 		if parent == null:
 			return {"success": false, "error": "Parent not found: %s" % parent_path}
 
@@ -100,12 +100,10 @@ func _add_node(params: Dictionary) -> Dictionary:
 ## Delete a node from the scene tree with UndoRedo support.
 func _delete_node(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
-	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
 	if node == root:
@@ -121,12 +119,10 @@ func _delete_node(params: Dictionary) -> Dictionary:
 ## Duplicate a node with UndoRedo support.
 func _duplicate_node(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
-	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
 
@@ -149,15 +145,13 @@ func _move_node(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var new_parent_path: String = params.get("new_parent", "")
 	var index: int = params.get("index", -1)
-	if path.is_empty() or new_parent_path.is_empty():
-		return {"success": false, "error": "Both path and new_parent are required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
-	var new_parent: Node = root.get_node_or_null(new_parent_path)
+	var new_parent: Node = _resolve_node(new_parent_path, root)
 	if new_parent == null:
 		return {"success": false, "error": "New parent not found: %s" % new_parent_path}
 
@@ -182,12 +176,12 @@ func _update_property(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var property: String = params.get("property", "")
 	var value: Variant = params.get("value")
-	if path.is_empty() or property.is_empty():
-		return {"success": false, "error": "Path and property are required"}
+	if property.is_empty():
+		return {"success": false, "error": "Property name is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
 
@@ -206,12 +200,10 @@ func _update_property(params: Dictionary) -> Dictionary:
 ## Get all serialized properties of a node.
 func _get_node_properties(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
-	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
 
@@ -236,13 +228,13 @@ func _add_resource(params: Dictionary) -> Dictionary:
 	var path: String = params.get("node_path", params.get("path", ""))
 	var resource_type: String = params.get("resource_type", "")
 	var properties: Dictionary = params.get("properties", {})
-	if path.is_empty() or resource_type.is_empty():
-		return {"success": false, "error": "Path and resource_type are required"}
+	if resource_type.is_empty():
+		return {"success": false, "error": "Resource type is required"}
 
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
 
@@ -334,12 +326,10 @@ func _set_anchor_preset(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var raw_preset = params.get("preset", 0)
 	var preset: int = _resolve_preset(raw_preset)
-	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
 	if not node is Control:
@@ -377,12 +367,12 @@ func _set_anchor_preset(params: Dictionary) -> Dictionary:
 func _rename_node(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var new_name: String = params.get("new_name", "")
-	if path.is_empty() or new_name.is_empty():
-		return {"success": false, "error": "Path and new_name are required"}
+	if new_name.is_empty():
+		return {"success": false, "error": "New name is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
 
@@ -399,16 +389,16 @@ func _connect_signal(params: Dictionary) -> Dictionary:
 	var signal_name: String = params.get("signal", "")
 	var target_path: String = params.get("target", "")
 	var method_name: String = params.get("method", "")
-	if source_path.is_empty() or signal_name.is_empty() or target_path.is_empty() or method_name.is_empty():
-		return {"success": false, "error": "source, signal, target, and method are all required"}
+	if signal_name.is_empty() or method_name.is_empty():
+		return {"success": false, "error": "Signal name and method name are required"}
 
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var source: Node = root.get_node_or_null(source_path)
+	var source: Node = _resolve_node(source_path, root)
 	if source == null:
 		return {"success": false, "error": "Source not found: %s" % source_path}
-	var target: Node = root.get_node_or_null(target_path)
+	var target: Node = _resolve_node(target_path, root)
 	if target == null:
 		return {"success": false, "error": "Target not found: %s" % target_path}
 	if not source.has_signal(signal_name):
@@ -431,16 +421,16 @@ func _disconnect_signal(params: Dictionary) -> Dictionary:
 	var signal_name: String = params.get("signal", "")
 	var target_path: String = params.get("target", "")
 	var method_name: String = params.get("method", "")
-	if source_path.is_empty() or signal_name.is_empty() or target_path.is_empty() or method_name.is_empty():
-		return {"success": false, "error": "source, signal, target, and method are all required"}
+	if signal_name.is_empty() or method_name.is_empty():
+		return {"success": false, "error": "Signal name and method name are required"}
 
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var source: Node = root.get_node_or_null(source_path)
+	var source: Node = _resolve_node(source_path, root)
 	if source == null:
 		return {"success": false, "error": "Source not found: %s" % source_path}
-	var target: Node = root.get_node_or_null(target_path)
+	var target: Node = _resolve_node(target_path, root)
 	if target == null:
 		return {"success": false, "error": "Target not found: %s" % target_path}
 
@@ -460,12 +450,10 @@ func _disconnect_signal(params: Dictionary) -> Dictionary:
 ## Get groups a node belongs to.
 func _get_node_groups(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
-	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
 
@@ -477,12 +465,10 @@ func _get_node_groups(params: Dictionary) -> Dictionary:
 func _set_node_groups(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var groups: Array = params.get("groups", [])
-	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % path}
 
@@ -544,7 +530,7 @@ func _select_nodes(params: Dictionary) -> Dictionary:
 	selection.clear()
 	for p_variant: Variant in paths:
 		var p: String = p_variant as String
-		var node: Node = root.get_node_or_null(p)
+		var node: Node = _resolve_node(p, root)
 		if node:
 			selection.add_node(node)
 	return {"success": true, "message": "Selected %d nodes" % paths.size()}
@@ -562,6 +548,19 @@ func _get_edited_scene_root() -> Node:
 	if _plugin == null:
 		return null
 	return _plugin.get_editor_interface().get_edited_scene_root()
+
+
+## Helper: resolve a path string to a Node in the edited scene.
+## - "" or "." → the scene root node
+## - Bare name matching root's name → the scene root node
+## - Otherwise → root.get_node_or_null(path) for children/descendants
+func _resolve_node(path: String, root: Node) -> Node:
+	if path.is_empty() or path == ".":
+		return root
+	# Bare name (no slashes) that matches the root's own name
+	if not path.contains("/") and root.name == path:
+		return root
+	return root.get_node_or_null(path)
 
 
 ## Helper: create node by type. Tries ClassDB fallback for unknown types.
