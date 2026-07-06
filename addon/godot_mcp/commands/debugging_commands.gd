@@ -645,9 +645,48 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 	return {"segments": segments, "in_tq": in_tq, "in_bc": in_bc}
 
 
-## Helper: Strip leading whitespace from each line and prepend one tab.
+## Helper: Normalize indentation — convert spaces/tabs to consistent tab-based indentation,
+## preserving relative indentation levels. Adds one extra tab for the _run() body context.
 func _strip_and_indent(code: String) -> String:
+	var lines: PackedStringArray = code.split("\n")
+	# First pass: determine minimum indentation (to strip common prefix)
+	var min_indent: int = 999
+	for line in lines:
+		if line.strip_edges().is_empty():
+			continue
+		var leading: int = 0
+		for ch in line:
+			if ch == " ":
+				leading += 1
+			elif ch == "\t":
+				leading += 4  # normalize tab to 4-space equivalent
+			else:
+				break
+		min_indent = min(min_indent, leading)
+
+	if min_indent == 999:
+		min_indent = 0
+
 	var indented: PackedStringArray = []
-	for line in code.split("\n"):
-		indented.append("\t" + line.strip_edges())
+	for line in lines:
+		var stripped: String = line.strip_edges()
+		if stripped.is_empty():
+			indented.append("")
+			continue
+		# Count leading whitespace and subtract common prefix
+		var leading: int = 0
+		for ch in line:
+			if ch == " ":
+				leading += 1
+			elif ch == "\t":
+				leading += 4
+			else:
+				break
+		var relative: int = leading - min_indent
+		# Convert to tabs (4-space = 1 tab), plus one for _run() body
+		var tabs: int = relative / 4 + 1
+		var prefix: String = ""
+		for _t in range(tabs):
+			prefix += "\t"
+		indented.append(prefix + stripped)
 	return "\n".join(indented)
