@@ -84,8 +84,8 @@ func set_breakpoint(params: Dictionary) -> Dictionary:
 		# Set breakpoint via the engine's debugger interface
 		var session: EditorDebuggerSession = _get_active_session(debugger_plugin)
 		if session != null:
-			var msg: Array = [line, script_path, true]
-			session.send_message("breakpoint", msg)
+			var msg: Array = [script_path, line, true]
+			session.send_message("scene:set_breakpoint", msg)
 
 	return {"result": {
 		"success": true,
@@ -117,8 +117,8 @@ func remove_breakpoint(params: Dictionary) -> Dictionary:
 	if debugger_plugin != null:
 		var session: EditorDebuggerSession = _get_active_session(debugger_plugin)
 		if session != null:
-			var msg: Array = [line, script_path, false]
-			session.send_message("breakpoint", msg)
+			var msg: Array = [script_path, line, false]
+			session.send_message("scene:set_breakpoint", msg)
 
 	return {"result": {
 		"success": true,
@@ -148,6 +148,9 @@ func list_breakpoints(_params: Dictionary) -> Dictionary:
 
 ## Get the current call stack when paused at a breakpoint.
 ## Returns stack frames with local variables for each frame.
+## NOTE: The response from the debugger is asynchronous. If the game is paused
+## at a breakpoint, the first call may return empty. Call again after a brief
+## delay to get the actual stack data.
 func get_call_stack(_params: Dictionary) -> Dictionary:
 	var debugger_plugin: EditorDebuggerPlugin = _get_debugger_plugin()
 	if debugger_plugin == null:
@@ -157,14 +160,15 @@ func get_call_stack(_params: Dictionary) -> Dictionary:
 	if session == null:
 		return {"error": "No active debug session. Start the game with debugging enabled."}
 
-	# Request call stack from the running game
+	# Request call stack from the running game (async message)
 	session.send_message("get_stack_dump", [])
-	# The response comes asynchronously; return last known state
+	# The response arrives asynchronously via _on_debugger_message callback.
+	# Return last known state; caller should retry if empty.
 	if _last_call_stack.is_empty():
 		return {"result": {
 			"paused": _is_paused,
 			"frames": [],
-			"message": "No call stack available. The game may not be paused at a breakpoint.",
+			"message": "No call stack available yet. The debugger response is async — if the game is paused at a breakpoint, call again after a short delay.",
 		}}
 
 	return {"result": {
@@ -299,25 +303,25 @@ func _references_singleton(expr: String) -> bool:
 			# Must be a word start (not preceded by dot or identifier char)
 			var before_ok: bool = (idx == 0)
 			if not before_ok:
-		var prev = expr[idx - 1]
-			# prev is a String of length 1. Check if it's an identifier character.
-			before_ok = not (
-				prev == "." or prev == "_" or
-				(prev >= "A" and prev <= "Z") or
-				(prev >= "a" and prev <= "z") or
-				(prev >= "0" and prev <= "9")
-			)
-		# Must be a word end (not followed by identifier char)
-		var end_pos: int = idx + name.length()
-		var after_ok: bool = (end_pos >= expr.length())
-		if not after_ok:
-			var next_ch = expr[end_pos]
-			after_ok = not (
-				next_ch == "_" or
-				(next_ch >= "A" and next_ch <= "Z") or
-				(next_ch >= "a" and next_ch <= "z") or
-				(next_ch >= "0" and next_ch <= "9")
-			)
+				var prev = expr[idx - 1]
+				# prev is a String of length 1. Check if it's an identifier character.
+				before_ok = not (
+					prev == "." or prev == "_" or
+					(prev >= "A" and prev <= "Z") or
+					(prev >= "a" and prev <= "z") or
+					(prev >= "0" and prev <= "9")
+				)
+			# Must be a word end (not followed by identifier char)
+			var end_pos: int = idx + name.length()
+			var after_ok: bool = (end_pos >= expr.length())
+			if not after_ok:
+				var next_ch = expr[end_pos]
+				after_ok = not (
+					next_ch == "_" or
+					(next_ch >= "A" and next_ch <= "Z") or
+					(next_ch >= "a" and next_ch <= "z") or
+					(next_ch >= "0" and next_ch <= "9")
+				)
 			if before_ok and after_ok:
 				return true
 			idx = expr.find(name, idx + 1)
