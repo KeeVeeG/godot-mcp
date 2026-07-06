@@ -10,6 +10,18 @@ func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
 
 
+## Validate path to prevent path traversal attacks.
+## Returns empty string if valid, error message if invalid.
+func _validate_path(path: String) -> String:
+	if path.is_empty():
+		return ""
+	if path.contains(".."):
+		return "Invalid path: path traversal ('..') not allowed"
+	if path.contains("//"):
+		return "Invalid path: double slash '//' not allowed"
+	return ""
+
+
 ## Router compatibility: returns callable map for MCPCommandRouter.
 func get_commands() -> Dictionary:
 	return {
@@ -52,6 +64,10 @@ func _create_project(params: Dictionary) -> Dictionary:
 
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
+
+	var path_err: String = _validate_path(path)
+	if not path_err.is_empty():
+		return {"success": false, "error": path_err}
 
 	# Create project directory
 	var err: Error = DirAccess.make_dir_recursive_absolute(path)
@@ -100,6 +116,13 @@ func _create_project_from_template(params: Dictionary) -> Dictionary:
 	if path.is_empty() or template_path.is_empty():
 		return {"success": false, "error": "Both path and template_path are required"}
 
+	var path_err: String = _validate_path(path)
+	if not path_err.is_empty():
+		return {"success": false, "error": path_err}
+	path_err = _validate_path(template_path)
+	if not path_err.is_empty():
+		return {"success": false, "error": "template: " + path_err}
+
 	if not DirAccess.dir_exists_absolute(template_path):
 		return {"success": false, "error": "Template path not found: %s" % template_path}
 
@@ -132,6 +155,10 @@ func _scaffold_project_structure(params: Dictionary) -> Dictionary:
 
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
+
+	var path_err: String = _validate_path(project_path)
+	if not path_err.is_empty():
+		return {"success": false, "error": path_err}
 
 	if not FileAccess.file_exists(project_path.path_join("project.godot")):
 		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}

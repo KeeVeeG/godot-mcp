@@ -33,6 +33,9 @@ func read_resource(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"error": "Path is required"}
+	var path_err: String = _validate_path(path)
+	if not path_err.is_empty():
+		return {"error": path_err}
 	if not FileAccess.file_exists(path):
 		return {"error": "Resource not found: %s" % path}
 
@@ -91,6 +94,9 @@ func create_resource(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 	if type_name.is_empty() or path.is_empty():
 		return {"error": "type and path are required"}
+	var path_err: String = _validate_path(path)
+	if not path_err.is_empty():
+		return {"error": path_err}
 
 	var res: Resource = null
 	match type_name:
@@ -199,6 +205,12 @@ func duplicate_resource(params: Dictionary) -> Dictionary:
 	var new_path: String = params.get("dest_path", params.get("new_path", ""))
 	if source_path.is_empty() or new_path.is_empty():
 		return {"error": "source_path and new_path are required"}
+	var path_err: String = _validate_path(source_path)
+	if not path_err.is_empty():
+		return {"error": "source: " + path_err}
+	path_err = _validate_path(new_path)
+	if not path_err.is_empty():
+		return {"error": "dest: " + path_err}
 	if not FileAccess.file_exists(source_path):
 		return {"error": "Source resource not found: %s" % source_path}
 	var res: Resource = ResourceLoader.load(source_path)
@@ -278,6 +290,9 @@ func delete_resource_file(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
+	var path_err: String = _validate_path(path)
+	if not path_err.is_empty():
+		return {"success": false, "error": path_err}
 	if not (path.ends_with(".tres") or path.ends_with(".res")):
 		return {"success": false, "error": "Not a valid resource file. Only .tres and .res files can be deleted."}
 	if not FileAccess.file_exists(path):
@@ -340,3 +355,15 @@ func _ensure_dir(path: String) -> void:
 	if path.is_empty() or DirAccess.dir_exists_absolute(path):
 		return
 	DirAccess.make_dir_recursive_absolute(path)
+
+
+## Validate path to prevent path traversal attacks.
+## Returns empty string if valid, error message if invalid.
+func _validate_path(path: String) -> String:
+	if path.is_empty():
+		return ""
+	if path.contains(".."):
+		return "Invalid path: path traversal ('..') not allowed"
+	if path.contains("//") and not path.begins_with("res://"):
+		return "Invalid path: double slash '//' not allowed"
+	return ""
