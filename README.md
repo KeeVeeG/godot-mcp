@@ -166,7 +166,7 @@ Example `opencode.json`:
   "mcp": {
     "godot": {
       "type": "local",
-      "command": ["npx", "-y", "--registry=https://npm.pkg.github.com", "@keeveeg/godot-mcp"]
+      "command": ["npx", "-y", "@keeveeg/godot-mcp"]
     }
   }
 }
