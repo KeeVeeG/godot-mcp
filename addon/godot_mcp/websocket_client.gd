@@ -37,6 +37,21 @@ var _ping_timer: float = 0.0
 ## Config reference
 var _config: MCPConfig
 
+## --- Non-blocking scan state machine ---
+const SCAN_IDLE: int = 0
+const SCAN_CONNECTING: int = 1
+const SCAN_WAITING: int = 2
+const SCAN_SETTLING: int = 3
+var _scan_state: int = SCAN_IDLE
+var _scan_ports: Array[int] = []
+var _scan_port_index: int = 0
+var _scan_test_ws: WebSocketPeer = null
+var _scan_elapsed: float = 0.0
+var _scan_found_port: int = -1
+const SCAN_CONNECT_TIMEOUT: float = 0.5
+const SCAN_SETTLE_DELAY: float = 0.2
+var _scan_settle_timer: float = 0.0
+
 
 func _ready() -> void:
 	_config = MCPConfig.get_instance()
@@ -44,6 +59,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if _scanning:
+		_process_scan(delta)
 		return
 
 	if _is_connected:
@@ -88,34 +104,76 @@ func _process(delta: float) -> void:
 			scan_for_server()
 
 
+## Process the non-blocking scan state machine each frame.
+func _process_scan(delta: float) -> void:
+	match _scan_state:
+		SCAN_CONNECTING:
+			# Try to connect to the current port
+			var port: int = _scan_ports[_scan_port_index]
+			var url: String = "ws://localhost:%d" % port
+			_scan_test_ws = WebSocketPeer.new()
+			var err: Error = _scan_test_ws.connect_to_url(url)
+			if err != OK:
+				# Connection failed immediately, try next port
+				_scan_test_ws.close()
+				_scan_test_ws = null
+				_scan_port_index += 1
+				if _scan_port_index >= _scan_ports.size():
+					_finish_scan(false)
+				return
+			_scan_elapsed = 0.0
+			_scan_state = SCAN_WAITING
+
+		SCAN_WAITING:
+			_scan_elapsed += delta
+			_scan_test_ws.poll()
+			var state: int = _scan_test_ws.get_ready_state()
+			if state == WebSocketPeer.STATE_OPEN:
+				# Found a server — close test socket, enter settle delay
+				_scan_found_port = _scan_ports[_scan_port_index]
+				_scan_test_ws.close()
+				_scan_test_ws = null
+				_scan_settle_timer = SCAN_SETTLE_DELAY
+				_scan_state = SCAN_SETTLING
+			elif state == WebSocketPeer.STATE_CLOSED or _scan_elapsed >= SCAN_CONNECT_TIMEOUT:
+				# Timed out or closed, try next port
+				_scan_test_ws.close()
+				_scan_test_ws = null
+				_scan_port_index += 1
+				if _scan_port_index >= _scan_ports.size():
+					_finish_scan(false)
+				else:
+					_scan_state = SCAN_CONNECTING
+
+		SCAN_SETTLING:
+			# Non-blocking settle delay to let server process the close
+			_scan_settle_timer -= delta
+			if _scan_settle_timer <= 0.0:
+				_connect_to_port(_scan_found_port)
+				_scan_found_port = -1
+				_finish_scan(true)
+
+
+## Finish scanning and reset state.
+func _finish_scan(found: bool) -> void:
+	_scanning = false
+	_scan_state = SCAN_IDLE
+	_scan_test_ws = null
+	if not found:
+		pass  # No server found, will retry on next reconnect cycle
+
+
 ## Scan ports 6505-6514 for an active MCP server.
+## Non-blocking: sets up state machine, returns immediately.
 func scan_for_server() -> void:
 	if _scanning:
 		return
 	_scanning = true
-	var ports: Array[int] = _config.get_port_range()
-	for port in ports:
-		var url: String = "ws://localhost:%d" % port
-		var test_ws: WebSocketPeer = WebSocketPeer.new()
-		test_ws.connect_to_url(url)
-		# Wait up to 0.5 seconds for connection
-		var elapsed: float = 0.0
-		while elapsed < 0.5:
-			test_ws.poll()
-			var state: int = test_ws.get_ready_state()
-			if state == WebSocketPeer.STATE_OPEN:
-				test_ws.close()
-				# Let server process the close before reconnecting
-				OS.delay_msec(200)
-				_connect_to_port(port)
-				_scanning = false
-				return
-			elif state == WebSocketPeer.STATE_CLOSED:
-				break
-			OS.delay_msec(50)
-			elapsed += 0.05
-		test_ws.close()
-	_scanning = false
+	_scan_ports = _config.get_port_range()
+	_scan_port_index = 0
+	_scan_elapsed = 0.0
+	_scan_settle_timer = 0.0
+	_scan_state = SCAN_CONNECTING
 
 
 ## Connect to a specific port.
