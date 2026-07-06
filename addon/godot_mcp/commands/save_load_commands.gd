@@ -283,7 +283,8 @@ func _serialize_node_tree(node: Node) -> Dictionary:
 		if (usage & PROPERTY_USAGE_STORAGE) != 0 and (usage & PROPERTY_USAGE_EDITOR) != 0:
 			var value: Variant = node.get(prop_name)
 			if value != null and _is_serializable(value):
-				data["properties"][prop_name] = value
+				# Use MCPVariantCodec for consistent serialization of complex types
+				data["properties"][prop_name] = MCPVariantCodec.serialize_value(value)
 
 	# Recursively serialize children
 	for child: Node in node.get_children():
@@ -292,15 +293,17 @@ func _serialize_node_tree(node: Node) -> Dictionary:
 	return data
 
 
-## Helper: Restore node properties from saved data.
+## Helper: Restore node properties from saved data with type verification.
 func _restore_node_tree(node: Node, data: Dictionary) -> int:
 	var restored: int = 0
 
-	# Restore properties
+	# Restore properties with type verification
 	var properties: Dictionary = data.get("properties", {})
 	for prop_name: String in properties:
 		if _has_property(node, prop_name):
-			node.set(prop_name, properties[prop_name])
+			var prop_type: int = _get_property_type(node, prop_name)
+			var value: Variant = MCPVariantCodec.parse_for_property(properties[prop_name], prop_type)
+			node.set(prop_name, value)
 			restored += 1
 
 	# Restore children
@@ -334,6 +337,14 @@ func _has_property(obj: Object, prop: String) -> bool:
 		if p["name"] as String == prop:
 			return true
 	return false
+
+
+## Helper: Get the Variant type of a property.
+func _get_property_type(obj: Object, prop: String) -> int:
+	for p: Dictionary in obj.get_property_list():
+		if p["name"] as String == prop:
+			return p["type"] as int
+	return TYPE_NIL
 
 
 ## Helper: Load save data from a slot.
