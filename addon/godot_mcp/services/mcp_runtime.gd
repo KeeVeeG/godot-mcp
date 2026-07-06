@@ -32,6 +32,9 @@ var _replaying: bool = false
 var _monitors: Dictionary = {}
 var _next_monitor_id: int = 1
 
+## IPC busy flag — prevents reentrant _poll_ipc calls during await
+var _ipc_busy: bool = false
+
 
 func _ready() -> void:
 	print("[MCP Runtime] Loaded and ready for IPC")
@@ -53,6 +56,9 @@ func _process(delta: float) -> void:
 
 ## Poll for IPC requests from the editor.
 func _poll_ipc() -> void:
+	# Guard: prevent reentrant calls while awaiting a previous request
+	if _ipc_busy:
+		return
 	if not FileAccess.file_exists(REQUEST_PATH):
 		return
 	var file := FileAccess.open(REQUEST_PATH, FileAccess.READ)
@@ -79,7 +85,9 @@ func _poll_ipc() -> void:
 	var method: String = req_dict.get("method", "")
 	var params: Dictionary = req_dict.get("params", {})
 
+	_ipc_busy = true
 	var result: Dictionary = await _handle_request(method, params)
+	_ipc_busy = false
 	if not _write_response(result):
 		push_warning("[MCP Runtime] Failed to write response for method: %s" % method)
 
@@ -262,7 +270,7 @@ func _capture_frames(count: int, interval: float) -> Dictionary:
 		image.save_png(path)
 		frames.append(path)
 		if i < count - 1 and interval > 0.0:
-			OS.delay_msec(int(interval * 1000.0))
+			await get_tree().create_timer(interval).timeout
 	return {"result": {"frames": frames, "count": frames.size()}}
 
 
