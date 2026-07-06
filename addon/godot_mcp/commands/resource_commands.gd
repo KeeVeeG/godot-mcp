@@ -160,7 +160,8 @@ func add_autoload(params: Dictionary) -> Dictionary:
 	# Strip existing * prefix to avoid double-prefixing
 	if path.begins_with("*"):
 		path = path.substr(1)
-	var value: String = "*" + path
+	var editor_only: bool = params.get("editor_only", false)
+	var value: String = ("*" + path) if editor_only else path
 	ProjectSettings.set_setting("autoload/" + name_str, value)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
