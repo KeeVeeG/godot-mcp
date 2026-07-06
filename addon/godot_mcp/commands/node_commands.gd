@@ -530,7 +530,7 @@ func _get_editor_selection() -> Dictionary:
 			"name": str(node.name),
 			"type": node.get_class(),
 		})
-	return {"success": true, "count": results.size(), "nodes": results}
+	return {"result": {"count": results.size(), "nodes": results}}
 
 
 ## Select specific nodes in the editor.
@@ -552,10 +552,10 @@ func _select_nodes(params: Dictionary) -> Dictionary:
 			selected_count += 1
 		else:
 			not_found.append(p)
-	var result: Dictionary = {"success": true, "message": "Selected %d of %d nodes" % [selected_count, paths.size()], "selected": selected_count}
+	var result: Dictionary = {"result": {"message": "Selected %d of %d nodes" % [selected_count, paths.size()], "selected": selected_count}}
 	if not_found.size() > 0:
-		result["not_found"] = not_found
-		result["warning"] = "%d path(s) not found: %s" % [not_found.size(), ", ".join(not_found)]
+		result["result"]["not_found"] = not_found
+		result["result"]["warning"] = "%d path(s) not found: %s" % [not_found.size(), ", ".join(not_found)]
 	return result
 
 

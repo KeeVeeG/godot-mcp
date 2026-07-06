@@ -37,7 +37,7 @@ func execute(command: String, params: Dictionary) -> Dictionary:
 
 
 func _get_root() -> Node:
-	return _plugin.get_editor_interface().get_edited_scene_root()
+	return MCPCommandHelpers.get_edited_scene_root(_plugin)
 
 
 func _get_node(path: String) -> Node:
@@ -48,10 +48,7 @@ func _get_node(path: String) -> Node:
 
 
 func _has_property(obj: Object, prop: String) -> bool:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return true
-	return false
+	return MCPCommandHelpers.has_property(obj, prop)
 
 
 ## Setup a NavigationRegion2D or NavigationRegion3D. Configures an existing node
@@ -622,18 +619,18 @@ func find_navigation_path(params: Dictionary) -> Dictionary:
 func _remove_navigation_node(params: Dictionary, expected_class: String) -> Dictionary:
 	var node_path: String = params.get("node_path", params.get("path", ""))
 	if node_path.is_empty():
-		return {"success": false, "error": "node_path is required"}
+		return {"error": "node_path is required"}
 	
 	var root: Node = _get_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	
 	var node: Node = root.get_node_or_null(node_path)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % node_path}
+		return {"error": "Node not found: %s" % node_path}
 	
 	if node == root:
-		return {"success": false, "error": "Cannot remove scene root"}
+		return {"error": "Cannot remove scene root"}
 	
 	# Use `is` operator for proper type inheritance checking.
 	# Note: In Godot 4.x, there is no NavigationRegion/NavigationAgent/NavigationLink
@@ -648,15 +645,15 @@ func _remove_navigation_node(params: Dictionary, expected_class: String) -> Dict
 		"NavigationLink":
 			is_valid_type = node is NavigationLink2D or node is NavigationLink3D
 	if not is_valid_type:
-		return {"success": false, "error": "Node is not a %s: %s" % [expected_class, node.get_class()]}
+		return {"error": "Node is not a %s: %s" % [expected_class, node.get_class()]}
 	
 	var parent: Node = node.get_parent()
 	if parent == null:
-		return {"success": false, "error": "Node has no parent"}
+		return {"error": "Node has no parent"}
 	
 	if _undo_helper:
 		_undo_helper.remove_node_with_undo(node)
 	else:
 		parent.remove_child(node)
 	
-	return {"success": true, "removed": node_path, "type": node.get_class()}
+	return {"result": {"removed": node_path, "type": node.get_class()}}

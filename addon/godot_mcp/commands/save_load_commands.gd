@@ -333,18 +333,12 @@ func _is_serializable(value: Variant) -> bool:
 
 ## Helper: Check if object has a property.
 func _has_property(obj: Object, prop: String) -> bool:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return true
-	return false
+	return MCPCommandHelpers.has_property(obj, prop)
 
 
 ## Helper: Get the Variant type of a property.
 func _get_property_type(obj: Object, prop: String) -> int:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return p["type"] as int
-	return TYPE_NIL
+	return MCPCommandHelpers.get_property_type(obj, prop)
 
 
 ## Helper: Load save data from a slot.

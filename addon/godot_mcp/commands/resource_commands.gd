@@ -289,27 +289,27 @@ func _collect_resource_files(dir_path: String, results: Array) -> void:
 func delete_resource_file(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
+		return {"error": "Path is required"}
 	var path_err: String = _validate_path(path)
 	if not path_err.is_empty():
-		return {"success": false, "error": path_err}
+		return {"error": path_err}
 	if not (path.ends_with(".tres") or path.ends_with(".res")):
-		return {"success": false, "error": "Not a valid resource file. Only .tres and .res files can be deleted."}
+		return {"error": "Not a valid resource file. Only .tres and .res files can be deleted."}
 	if not FileAccess.file_exists(path):
-		return {"success": false, "error": "Resource not found: %s" % path}
+		return {"error": "Resource not found: %s" % path}
 	
 	# Check if resource is used in the current scene
 	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
 	if root:
 		var refs: Array = _find_resource_refs_in_scene(root, path, 0, 20)
 		if not refs.is_empty():
-			return {"success": false, "error": "Resource is used by nodes: %s. Remove references first." % str(refs)}
+			return {"error": "Resource is used by nodes: %s. Remove references first." % str(refs)}
 	
 	# Convert res:// to global path for DirAccess
 	var global_path: String = ProjectSettings.globalize_path(path)
 	var err: Error = DirAccess.remove_absolute(global_path)
 	if err != OK:
-		return {"success": false, "error": "Failed to delete resource: %s" % error_string(err)}
+		return {"error": "Failed to delete resource: %s" % error_string(err)}
 	
 	# Also delete .import file if exists
 	var import_path: String = global_path + ".import"
@@ -322,7 +322,7 @@ func delete_resource_file(params: Dictionary) -> Dictionary:
 		DirAccess.remove_absolute(uid_path)
 	
 	_plugin.safe_scan_filesystem()
-	return {"success": true, "deleted": path}
+	return {"result": {"deleted": path}}
 
 
 ## Helper: find nodes that reference a specific resource path.
@@ -345,16 +345,11 @@ func _find_resource_refs_in_scene(node: Node, resource_path: String, depth: int 
 
 
 func _has_property(obj: Object, prop: String) -> bool:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return true
-	return false
+	return MCPCommandHelpers.has_property(obj, prop)
 
 
 func _ensure_dir(path: String) -> void:
-	if path.is_empty() or DirAccess.dir_exists_absolute(path):
-		return
-	DirAccess.make_dir_recursive_absolute(path)
+	MCPCommandHelpers.ensure_dir(path)
 
 
 ## Validate path to prevent path traversal attacks.

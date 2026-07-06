@@ -26,7 +26,7 @@ func get_commands() -> Dictionary:
 
 
 func _get_root() -> Node:
-	return _plugin.get_editor_interface().get_edited_scene_root()
+	return MCPCommandHelpers.get_edited_scene_root(_plugin)
 
 
 ## Create a new theme resource.
@@ -45,22 +45,22 @@ func create_theme(params: Dictionary) -> Dictionary:
 func _delete_theme(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
-		return {"success": false, "error": "Path is required"}
+		return {"error": "Path is required"}
 	if not FileAccess.file_exists(path):
-		return {"success": false, "error": "Theme not found: %s" % path}
+		return {"error": "Theme not found: %s" % path}
 	
 	# Check if theme is used by any Control node in the current scene
-	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
 	if root:
 		var refs: Array = _find_theme_refs_in_scene(root, path, 0, 20)
 		if not refs.is_empty():
-			return {"success": false, "error": "Theme is used by nodes: %s. Remove references first." % str(refs)}
+			return {"error": "Theme is used by nodes: %s. Remove references first." % str(refs)}
 	
 	# Convert res:// to global path for DirAccess
 	var global_path: String = ProjectSettings.globalize_path(path)
 	var err: Error = DirAccess.remove_absolute(global_path)
 	if err != OK:
-		return {"success": false, "error": "Failed to delete theme: %s" % error_string(err)}
+		return {"error": "Failed to delete theme: %s" % error_string(err)}
 	
 	# Also delete .import file if exists
 	var import_path: String = global_path + ".import"
@@ -73,7 +73,7 @@ func _delete_theme(params: Dictionary) -> Dictionary:
 		DirAccess.remove_absolute(uid_path)
 	
 	_plugin.safe_scan_filesystem()
-	return {"success": true, "deleted": path}
+	return {"result": {"deleted": path}}
 
 
 ## Helper: find nodes that reference a specific theme path.
@@ -264,6 +264,4 @@ func get_theme_info(params: Dictionary) -> Dictionary:
 
 
 func _ensure_dir(path: String) -> void:
-	if path.is_empty() or DirAccess.dir_exists_absolute(path):
-		return
-	DirAccess.make_dir_recursive_absolute(path)
+	MCPCommandHelpers.ensure_dir(path)

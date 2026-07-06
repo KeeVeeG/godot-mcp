@@ -24,9 +24,7 @@ func get_commands() -> Dictionary:
 
 
 func _get_edited_scene_root() -> Node:
-	if _plugin == null:
-		return null
-	return _plugin.get_editor_interface().get_edited_scene_root()
+	return MCPCommandHelpers.get_edited_scene_root(_plugin)
 
 
 ## Recursively walk the scene tree and find all nodes matching a given type.
@@ -467,15 +465,9 @@ func _serialize_for_tscn(value: Variant) -> String:
 
 ## Helper: check if object has property.
 func _has_property(obj: Object, prop: String) -> bool:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return true
-	return false
+	return MCPCommandHelpers.has_property(obj, prop)
 
 
 ## Helper: get property type.
 func _get_property_type(obj: Object, prop: String) -> int:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return p["type"] as int
-	return TYPE_NIL
+	return MCPCommandHelpers.get_property_type(obj, prop)

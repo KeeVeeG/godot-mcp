@@ -25,7 +25,7 @@ func get_commands() -> Dictionary:
 
 
 func _get_root() -> Node:
-	return _plugin.get_editor_interface().get_edited_scene_root()
+	return MCPCommandHelpers.get_edited_scene_root(_plugin)
 
 
 func _get_node(path: String) -> Node:

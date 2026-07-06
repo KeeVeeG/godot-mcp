@@ -27,7 +27,7 @@ func get_commands() -> Dictionary:
 
 
 func _get_root() -> Node:
-	return _plugin.get_editor_interface().get_edited_scene_root()
+	return MCPCommandHelpers.get_edited_scene_root(_plugin)
 
 
 func _get_node(path: String) -> Node:
@@ -399,25 +399,25 @@ func set_particle_velocity_curve(params: Dictionary) -> Dictionary:
 func _delete_particles(params: Dictionary) -> Dictionary:
 	var node_path: String = params.get("node_path", params.get("path", ""))
 	if node_path.is_empty():
-		return {"success": false, "error": "node_path is required"}
+		return {"error": "node_path is required"}
 
-	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 
 	var node: Node = root.get_node_or_null(node_path)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % node_path}
+		return {"error": "Node not found: %s" % node_path}
 
 	if node == root:
-		return {"success": false, "error": "Cannot delete scene root"}
+		return {"error": "Cannot delete scene root"}
 
 	if not (node is GPUParticles2D or node is GPUParticles3D):
-		return {"success": false, "error": "Node is not a particle system: %s" % node.get_class()}
+		return {"error": "Node is not a particle system: %s" % node.get_class()}
 
 	var parent: Node = node.get_parent()
 	if parent == null:
-		return {"success": false, "error": "Node has no parent"}
+		return {"error": "Node has no parent"}
 
 	if _undo_helper:
 		_undo_helper.remove_node_with_undo(node)
@@ -430,4 +430,4 @@ func _delete_particles(params: Dictionary) -> Dictionary:
 		ur.add_undo_method(node, "set_owner", root)
 		ur.commit_action()
 
-	return {"success": true, "deleted": node_path, "type": node.get_class()}
+	return {"result": {"deleted": node_path, "type": node.get_class()}}

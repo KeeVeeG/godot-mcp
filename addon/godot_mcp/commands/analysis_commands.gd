@@ -21,9 +21,7 @@ func get_commands() -> Dictionary:
 
 
 func _get_edited_scene_root() -> Node:
-	if _plugin == null:
-		return null
-	return _plugin.get_editor_interface().get_edited_scene_root()
+	return MCPCommandHelpers.get_edited_scene_root(_plugin)
 
 
 ## Analyze the current scene's complexity: node count, type breakdown,

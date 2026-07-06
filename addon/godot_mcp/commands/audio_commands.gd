@@ -23,9 +23,7 @@ func get_commands() -> Dictionary:
 
 
 func _get_edited_scene_root() -> Node:
-	if _plugin == null:
-		return null
-	return _plugin.get_editor_interface().get_edited_scene_root()
+	return MCPCommandHelpers.get_edited_scene_root(_plugin)
 
 
 ## Add an AudioStreamPlayer, AudioStreamPlayer2D, or AudioStreamPlayer3D node.
@@ -93,25 +91,25 @@ func add_audio_player(params: Dictionary) -> Dictionary:
 func _remove_audio_player(params: Dictionary) -> Dictionary:
 	var node_path: String = params.get("node_path", params.get("path", ""))
 	if node_path.is_empty():
-		return {"success": false, "error": "node_path is required"}
+		return {"error": "node_path is required"}
 	
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	
 	var node: Node = root.get_node_or_null(node_path)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % node_path}
+		return {"error": "Node not found: %s" % node_path}
 	
 	if node == root:
-		return {"success": false, "error": "Cannot remove scene root"}
+		return {"error": "Cannot remove scene root"}
 	
 	if not (node is AudioStreamPlayer or node is AudioStreamPlayer2D or node is AudioStreamPlayer3D):
-		return {"success": false, "error": "Node is not an audio player: %s" % node.get_class()}
+		return {"error": "Node is not an audio player: %s" % node.get_class()}
 	
 	var parent: Node = node.get_parent()
 	if parent == null:
-		return {"success": false, "error": "Node has no parent"}
+		return {"error": "Node has no parent"}
 	
 	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
 	ur.create_action("MCP: Remove audio player %s" % node_path)
@@ -121,7 +119,7 @@ func _remove_audio_player(params: Dictionary) -> Dictionary:
 	ur.add_undo_method(node, "set_owner", root)
 	ur.commit_action()
 	
-	return {"success": true, "removed": node_path, "type": node.get_class()}
+	return {"result": {"removed": node_path, "type": node.get_class()}}
 
 
 ## Add a new audio bus to the AudioServer.
@@ -385,15 +383,9 @@ func _create_audio_effect(effect_type: String) -> AudioEffect:
 
 ## Helper: check if object has property.
 func _has_property(obj: Object, prop: String) -> bool:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return true
-	return false
+	return MCPCommandHelpers.has_property(obj, prop)
 
 
 ## Helper: get property type.
 func _get_property_type(obj: Object, prop: String) -> int:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return p["type"] as int
-	return TYPE_NIL
+	return MCPCommandHelpers.get_property_type(obj, prop)
