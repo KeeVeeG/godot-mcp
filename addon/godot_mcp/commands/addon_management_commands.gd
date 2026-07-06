@@ -81,7 +81,7 @@ func list_addons(_params: Dictionary) -> Dictionary:
 				addon["author"] = plugin_cfg.get_value("plugin", "author", "unknown")
 				addon["script"] = plugin_cfg.get_value("plugin", "script", "")
 				# Check if active
-				var is_active: bool = EditorInterface.is_plugin_enabled(addon["name"])
+				var is_active: bool = _plugin.get_editor_interface().is_plugin_enabled(addon["name"])
 				addon["active"] = is_active
 			else:
 				addon["version"] = "unknown"
