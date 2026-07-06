@@ -492,6 +492,18 @@ static func serialize_value(value: Variant) -> Variant:
 			var result: Dictionary = {"type": "Resource", "class": res.get_class()}
 			if res.resource_path != "":
 				result["path"] = res.resource_path
+			# Include shape/material sub-properties for visibility
+			if res is Shape3D or res is Shape2D or res is Material:
+				var sub: Dictionary = {}
+				for p in res.get_property_list():
+					var pname: String = p["name"] as String
+					var usage: int = p["usage"] as int
+					if usage & PROPERTY_USAGE_STORAGE == 0:
+						continue
+					if pname.begins_with("_"):
+						continue
+					sub[pname] = serialize_value(res.get(pname))
+				result["properties"] = sub
 			return result
 		return {"type": value.get_class()}
 	elif value is Callable:
@@ -579,6 +591,11 @@ static func parse_for_property(value: Variant, expected_type: int) -> Variant:
 							if p != "type" and p in res:
 								res.set(p, parse_for_property(value[p], typeof(res.get(p))))
 						return res
+			# Load existing resource from {path: "res://file.tres"}
+			if value is Dictionary and value.has("path"):
+				var p: String = value["path"]
+				if ResourceLoader.exists(p):
+					return ResourceLoader.load(p)
 			return value
 		_:
 			return value
