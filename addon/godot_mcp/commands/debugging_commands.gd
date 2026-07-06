@@ -179,17 +179,19 @@ func evaluate_expression(params: Dictionary) -> Dictionary:
 	var expr := Expression.new()
 	var parse_err: Error = expr.parse(expression)
 	if parse_err == OK:
-		var result: Variant = expr.execute([], null)
-		if expr.has_execute_failed():
-			return {"error": "Execution failed: %s" % expr.get_error_text()}
-		return {"result": {"expression": expression, "context": context, "value": result}}
+		# Pass editor root as base so engine singletons are accessible
+		var base_obj: Object = Engine.get_main_loop() if Engine.get_main_loop() else _plugin.get_tree().root
+		var result: Variant = expr.execute([], base_obj)
+		if not expr.has_execute_failed():
+			return {"result": {"expression": expression, "context": context, "value": result}}
+		# Expression failed — silently fall back to GDScript
 
 	# Fall back to GDScript eval for complex expressions
-	var script_text: String = "return " + expression
-	var result: Variant = _execute_in_editor(script_text)
+	# Try without 'return' first (handles void methods)
+	var result: Variant = _execute_in_editor(expression)
 	if result is Dictionary and result.has("error"):
-		# Try without return for void methods
-		result = _execute_in_editor(expression)
+		# Try with 'return' for value-returning expressions
+		result = _execute_in_editor("return " + expression)
 	return {"result": {"expression": expression, "context": context, "value": result}}
 
 
