@@ -4,10 +4,13 @@ class_name MCPSceneConfigCommands
 extends RefCounted
 
 var _plugin: EditorPlugin
+var _undo_helper: MCUndoHelper
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
+	if _plugin.has_method("get_undo_helper"):
+		_undo_helper = _plugin.get_undo_helper()
 
 
 ## Router compatibility: returns callable map for MCPCommandRouter.
@@ -81,7 +84,15 @@ func _set_unique_name(params: Dictionary) -> Dictionary:
 	var node: Node = root.get_node_or_null(node_path)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % node_path}
-	node.unique_name_in_owner = unique
+	var old_unique: bool = node.unique_name_in_owner
+	if _undo_helper:
+		var ur: EditorUndoRedoManager = _undo_helper.get_undo_redo_manager()
+		ur.create_action("MCP: Set unique name on %s" % node_path)
+		ur.add_do_property(node, "unique_name_in_owner", unique)
+		ur.add_undo_property(node, "unique_name_in_owner", old_unique)
+		ur.commit_action()
+	else:
+		node.unique_name_in_owner = unique
 	# Mark scene as modified
 	_plugin.get_editor_interface().mark_scene_as_unsaved()
 	return {"success": true, "node": node_path, "unique": unique, "message": "Unique name %s" % ("enabled" if unique else "disabled")}
@@ -128,10 +139,21 @@ func _set_group(params: Dictionary) -> Dictionary:
 	var node: Node = root.get_node_or_null(node_path)
 	if node == null:
 		return {"success": false, "error": "Node not found: %s" % node_path}
-	if add:
-		node.add_to_group(group)
+	if _undo_helper:
+		var ur: EditorUndoRedoManager = _undo_helper.get_undo_redo_manager()
+		ur.create_action("MCP: %s node %s %s group '%s'" % ["Add" if add else "Remove", node_path, "to" if add else "from", group])
+		if add:
+			ur.add_do_method(node, "add_to_group", group)
+			ur.add_undo_method(node, "remove_from_group", group)
+		else:
+			ur.add_do_method(node, "remove_from_group", group)
+			ur.add_undo_method(node, "add_to_group", group)
+		ur.commit_action()
 	else:
-		node.remove_from_group(group)
+		if add:
+			node.add_to_group(group)
+		else:
+			node.remove_from_group(group)
 	_plugin.get_editor_interface().mark_scene_as_unsaved()
 	return {"success": true, "node": node_path, "group": group, "action": "added" if add else "removed"}
 
@@ -173,7 +195,19 @@ func _set_meta(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Setting meta on non-current scenes is not supported (leave scene_path empty for current scene)"}
 	if root == null:
 		return {"success": false, "error": "No scene open"}
-	root.set_meta(key, value)
+	var old_val: Variant = root.get_meta(key, null) if root.has_meta(key) else null
+	var had_meta: bool = root.has_meta(key)
+	if _undo_helper:
+		var ur: EditorUndoRedoManager = _undo_helper.get_undo_redo_manager()
+		ur.create_action("MCP: Set meta '%s' on scene root" % key)
+		ur.add_do_method(root, "set_meta", key, value)
+		if had_meta:
+			ur.add_undo_method(root, "set_meta", key, old_val)
+		else:
+			ur.add_undo_method(root, "remove_meta", key)
+		ur.commit_action()
+	else:
+		root.set_meta(key, value)
 	_plugin.get_editor_interface().mark_scene_as_unsaved()
 	return {"success": true, "key": key, "message": "Metadata set"}
 
