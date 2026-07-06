@@ -25,9 +25,6 @@ var _scanning: bool = false
 ## Pending requests keyed by id
 var _pending_requests: Dictionary = {}
 
-## Request ID counter
-var _next_request_id: int = 1
-
 ## Reconnect timer
 var _reconnect_timer: float = 0.0
 
@@ -212,54 +209,6 @@ func disconnect_from_server() -> void:
 	if _is_connected:
 		_ws.close()
 		_handle_disconnect()
-
-
-## Send a JSON-RPC 2.0 request and wait for the response.
-func send_request(method_name: String, params: Dictionary = {}) -> Dictionary:
-	if not _is_connected:
-		return {"error": {"code": -1, "message": "Not connected"}}
-
-	var req_id: int = _next_request_id
-	_next_request_id += 1
-
-	var message: Dictionary = {
-		"jsonrpc": "2.0",
-		"id": req_id,
-		"method": method_name,
-		"params": params,
-	}
-
-	var json_text: String = JSON.stringify(message)
-	_ws.send_text(json_text)
-
-	# Create a semaphore to wait for the response
-	var result: Dictionary = {}
-	var received: bool = false
-
-	var callback: Callable = func(response: Dictionary) -> void:
-		result = response
-		received = true
-
-	_pending_requests[req_id] = {
-		"time": Time.get_unix_time_from_system(),
-		"callback": callback,
-	}
-
-	# Wait for the response (blocking, with timeout)
-	var start_time: float = Time.get_unix_time_from_system()
-	while not received:
-		OS.delay_msec(10)
-		# Process the WebSocket manually since we're blocking _process
-		_ws.poll()
-		while _ws.get_available_packet_count() > 0:
-			var packet: PackedByteArray = _ws.get_packet()
-			var text: String = packet.get_string_from_utf8()
-			_handle_message(text)
-		var elapsed: float = Time.get_unix_time_from_system() - start_time
-		if elapsed > MCPConfig.REQUEST_TIMEOUT:
-			_pending_requests.erase(req_id)
-			return {"error": {"code": -1, "message": "Request timed out"}}
-	return result
 
 
 ## Handle an incoming message.
