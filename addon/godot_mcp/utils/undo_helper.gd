@@ -122,9 +122,8 @@ func batch_set_properties(obj: Object, properties: Dictionary) -> void:
 
 ## Commit a pending action. Call this after using create_action + add_do_*
 ## methods directly on the EditorUndoRedoManager.
-func commit_action(action_name: String) -> void:
+func commit_action(_action_name: String) -> void:
 	var ur: EditorUndoRedoManager = _undo_redo_manager
-	ur.create_action(action_name)
 	ur.commit_action()
 
 
