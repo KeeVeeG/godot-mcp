@@ -20,6 +20,9 @@ var _signal_watchers: Dictionary = {}
 ## Connected watcher callables: {node_path: {signal_name: callable}} for cleanup
 var _signal_watcher_callables: Dictionary = {}
 
+## Active signal watcher cleanup timers — stored so they can be cancelled on exit
+var _signal_watcher_timers: Array[SceneTreeTimer] = []
+
 ## Input recording state
 var _recording: bool = false
 var _recorded_events: Array = []
@@ -38,6 +41,22 @@ var _ipc_busy: bool = false
 
 func _ready() -> void:
 	print("[MCP Runtime] Loaded and ready for IPC")
+
+
+func _exit_tree() -> void:
+	# Cancel all pending signal watcher cleanup timers to avoid freed-memory access
+	_signal_watcher_timers.clear()
+	# Disconnect all tracked callables immediately
+	for path: String in _signal_watcher_callables:
+		if _signal_watcher_callables.has(path):
+			for sig_name: String in _signal_watcher_callables[path]:
+				var entry: Dictionary = _signal_watcher_callables[path][sig_name]
+				var n: Node = entry["node"] as Node
+				var c: Callable = entry["callable"] as Callable
+				if is_instance_valid(n) and n.has_signal(sig_name) and n.is_connected(sig_name, c):
+					n.disconnect(sig_name, c)
+	_signal_watcher_callables.clear()
+	_signal_watchers.clear()
 
 
 func _process(delta: float) -> void:
@@ -269,7 +288,14 @@ func _execute_game_script(code: String) -> Dictionary:
 	var temp_node: Node = Node.new()
 	temp_node.set_script(script)
 	add_child(temp_node)
-	var result: Variant = temp_node._run(get_tree().root, get_tree().current_scene)
+
+	# Check that the compiled script exposes _run before calling
+	if not temp_node.has_method("_run"):
+		temp_node.queue_free()
+		DirAccess.remove_absolute(temp_path)
+		return {"error": "Script compiled but does not define a _run(root, scene) method"}
+
+	var result: Variant = temp_node.call("_run", get_tree().root, get_tree().current_scene)
 	temp_node.queue_free()
 
 	# Clean up temp file
@@ -516,7 +542,10 @@ func _click_button_by_text(text: String, timeout: float) -> Dictionary:
 		_find_buttons_recursive(get_tree().root, text, buttons)
 		if not buttons.is_empty():
 			var btn: Button = buttons[0] as Button
+			# Simulate realistic button press sequence
+			btn.emit_signal("button_down")
 			btn.emit_signal("pressed")
+			btn.emit_signal("button_up")
 			return {"result": "Clicked button '%s' at %s" % [text, str(btn.get_path())]}
 		if Time.get_unix_time_from_system() - start_time >= timeout:
 			return {"error": "No button found with text: %s (timed out after %.1f seconds)" % [text, timeout]}
@@ -602,6 +631,11 @@ func _navigate_to(path: String, target: Variant) -> Dictionary:
 			return {"error": "Target not found: %s" % target}
 		if target_node is Node3D:
 			target_pos = (target_node as Node3D).global_position
+		elif target_node is Node2D:
+			var n2d_pos: Vector2 = (target_node as Node2D).global_position
+			target_pos = Vector3(n2d_pos.x, n2d_pos.y, 0.0)
+		else:
+			return {"error": "Target node is not a Node2D or Node3D: %s" % target}
 	elif target is Dictionary:
 		target_pos = Vector3(target.get("x", 0.0) as float, target.get("y", 0.0) as float, target.get("z", 0.0) as float)
 	# Check for NavigationAgent
@@ -661,8 +695,13 @@ func _watch_signals(path: String, signals: Array, duration: float) -> Dictionary
 		if node.has_signal(sig_name):
 			node.connect(sig_name, callback)
 			_signal_watcher_callables[path][sig_name] = {"callable": callback, "node": node}
-	# Schedule cleanup
-	get_tree().create_timer(duration).timeout.connect(func() -> void:
+	# Schedule cleanup with stored timer ref so it can be cancelled in _exit_tree
+	var timer: SceneTreeTimer = get_tree().create_timer(duration)
+	_signal_watcher_timers.append(timer)
+	timer.timeout.connect(func() -> void:
+		_signal_watcher_timers.erase(timer)
+		if not is_instance_valid(self):
+			return
 		# Disconnect all tracked callables before erasing watcher data
 		if _signal_watcher_callables.has(path):
 			for sig_name: String in _signal_watcher_callables[path]:
