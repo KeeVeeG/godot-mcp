@@ -77,6 +77,7 @@ export function registerBatchTools(server: McpServer, bridge: GodotBridge): void
         type_name: NodeType,
         property: PropertyName,
         value: PropertyValue,
+        confirm_no_undo: z.boolean().optional().default(false).describe('Set to true to acknowledge this is destructive and cannot be undone'),
       },
     },
     async (args) => callGodot(bridge, 'batch/cross_scene_set', args as Record<string, unknown>),
