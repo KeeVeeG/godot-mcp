@@ -54,7 +54,26 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 		}
 
 	var handler: Callable = _handlers[method_name] as Callable
+
+	# Guard: check that the handler callable is still valid (object not freed)
+	if not handler.is_valid():
+		return {
+			"error": {
+				"code": -32603,
+				"message": "Handler for '%s' is no longer valid (object may have been freed)" % method_name,
+			}
+		}
+
 	var result: Variant = handler.call(params)
+
+	# Guard: if handler returned null, it likely hit a runtime error
+	if result == null:
+		return {
+			"error": {
+				"code": -32603,
+				"message": "Handler for '%s' returned null — possible runtime error in handler" % method_name,
+			}
+		}
 
 	if result is Dictionary:
 		var dict: Dictionary = result as Dictionary
