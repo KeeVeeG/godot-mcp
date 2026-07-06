@@ -93,12 +93,14 @@ func setup_collision(params: Dictionary) -> Dictionary:
 			shape = cs2
 		"box", "BoxShape3D":
 			var bs: BoxShape3D = BoxShape3D.new()
-			var bsize: Vector3 = Vector3(
-				properties.get("width", 1.0) as float,
-				properties.get("height", 1.0) as float,
-				properties.get("depth", 1.0) as float
-			)
-			bs.size = bsize
+			if properties.has("size"):
+				bs.size = MCPVariantCodec._parse_vector3(properties["size"])
+			else:
+				bs.size = Vector3(
+					properties.get("width", 1.0) as float,
+					properties.get("height", 1.0) as float,
+					properties.get("depth", 1.0) as float
+				)
 			shape3d = bs
 		"sphere", "SphereShape3D":
 			var ss: SphereShape3D = SphereShape3D.new()
