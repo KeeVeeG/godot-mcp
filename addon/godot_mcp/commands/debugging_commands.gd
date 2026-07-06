@@ -299,26 +299,26 @@ func _references_singleton(expr: String) -> bool:
 			# Must be a word start (not preceded by dot or identifier char)
 			var before_ok: bool = (idx == 0)
 			if not before_ok:
-				var prev: int = expr[idx - 1]
-				# 46 = '.', 48-57 = digits, 65-90 = A-Z, 95 = _, 97-122 = a-z
-				before_ok = not (
-					prev == 46 or
-					(prev >= 48 and prev <= 57) or
-					(prev >= 65 and prev <= 90) or
-					prev == 95 or
-					(prev >= 97 and prev <= 122)
-				)
-			# Must be a word end (not followed by identifier char)
-			var end_pos: int = idx + name.length()
-			var after_ok: bool = (end_pos >= expr.length())
-			if not after_ok:
-				var next_ch: int = expr[end_pos]
-				after_ok = not (
-					(next_ch >= 48 and next_ch <= 57) or
-					(next_ch >= 65 and next_ch <= 90) or
-					next_ch == 95 or
-					(next_ch >= 97 and next_ch <= 122)
-				)
+		var prev = expr[idx - 1]
+			# Check [a-zA-Z0-9_.] preceding characters
+			before_ok = not (
+				prev == "." or
+				(prev >= "0" and prev <= "9") or
+				(prev >= "A" and prev <= "Z") or
+				prev == "_" or
+				(prev >= "a" and prev <= "z")
+			)
+		# Must be a word end (not followed by identifier char)
+		var end_pos: int = idx + name.length()
+		var after_ok: bool = (end_pos >= expr.length())
+		if not after_ok:
+			var next_ch = expr[end_pos]
+			after_ok = not (
+				(next_ch >= "0" and next_ch <= "9") or
+				(next_ch >= "A" and next_ch <= "Z") or
+				next_ch == "_" or
+				(next_ch >= "a" and next_ch <= "z")
+			)
 			if before_ok and after_ok:
 				return true
 			idx = expr.find(name, idx + 1)
@@ -431,11 +431,11 @@ func _is_statement(line: String) -> bool:
 	# Keywords that can be standalone or followed by expression
 	for kw in ["return", "break", "continue", "pass", "assert"]:
 		if t.begins_with(kw) and t.length() > kw.length():
-			var next: int = t[kw.length()]
-			if next == 32 or next == 9: # space or tab
-				return true
-			# Handle return(value) without space — statement, not property access
-			if next == 40: # open parenthesis
+			var next = t[kw.length()]
+				if next == " " or next == "\t":
+					return true
+				# Handle return(value) without space — statement, not property access
+				if next == "(":
 				return true
 	# Comments
 	if t.begins_with("#"):
@@ -464,9 +464,9 @@ func _build_capture_script(code: String) -> String:
 	# Preserve leading whitespace of the original last line
 	var leading_ws: String = ""
 	for j in range(last_line_raw.length()):
-		var cp: int = last_line_raw[j]
-		if cp == 32 or cp == 9: # space or tab
-			leading_ws += char(cp)
+		var ch = last_line_raw[j]
+		if ch == " " or ch == "\t":
+			leading_ws += ch
 		else:
 			break
 
@@ -546,34 +546,34 @@ func _contains_await_keyword(code: String) -> bool:
 		var line_len: int = line.length()
 		while i < line_len:
 			if in_block_comment:
-				if i + 1 < line_len and line[i] == 42 and line[i + 1] == 47:
+				if i + 1 < line_len and line[i] == "*" and line[i + 1] == "/":
 					in_block_comment = false
 					i += 2
 					continue
 				i += 1
 				continue
 			if in_triple_quote:
-				if i + 2 < line_len and line[i] == 34 and line[i + 1] == 34 and line[i + 2] == 34:
+				if i + 2 < line_len and line[i] == "\"" and line[i + 1] == "\"" and line[i + 2] == "\"":
 					in_triple_quote = false
 					i += 3
 					continue
 				i += 1
 				continue
-			if i + 1 < line_len and line[i] == 47 and line[i + 1] == 47:
+			if i + 1 < line_len and line[i] == "/" and line[i + 1] == "/":
 				break
-			if i + 1 < line_len and line[i] == 47 and line[i + 1] == 42:
+			if i + 1 < line_len and line[i] == "/" and line[i + 1] == "*":
 				in_block_comment = true
 				i += 2
 				continue
-			if i + 2 < line_len and line[i] == 34 and line[i + 1] == 34 and line[i + 2] == 34:
+			if i + 2 < line_len and line[i] == "\"" and line[i + 1] == "\"" and line[i + 2] == "\"":
 				in_triple_quote = true
 				i += 3
 				continue
-			if line[i] == 34 or line[i] == 39:
-				var q: int = line[i]
+			if line[i] == "\"" or line[i] == "'":
+				var q = line[i]
 				i += 1
 				while i < line_len:
-					if line[i] == 92:
+					if line[i] == "\\":
 						i += 2
 						continue
 					if line[i] == q:
@@ -581,19 +581,19 @@ func _contains_await_keyword(code: String) -> bool:
 						break
 					i += 1
 				continue
-			if line[i] == 35:
+			if line[i] == "#":
 				break
 			# Check for 'await' keyword at code position
 			if i + 5 <= line_len and line.substr(i, 5) == "await":
 				var after_ok: bool = (i + 5 >= line_len)
 				if not after_ok:
-					var next_ch: int = line[i + 5]
-					after_ok = (next_ch == 32 or next_ch == 9 or next_ch == 40 or next_ch == 44 or next_ch == 61)
+					var next_ch = line[i + 5]
+					after_ok = (next_ch == " " or next_ch == "\t" or next_ch == "(" or next_ch == "," or next_ch == "=")
 				if after_ok:
 					var before_ok: bool = (i == 0)
 					if not before_ok:
-						var prev_ch: int = line[i - 1]
-						before_ok = (prev_ch == 32 or prev_ch == 9 or prev_ch == 61 or prev_ch == 40 or prev_ch == 44)
+						var prev_ch = line[i - 1]
+						before_ok = (prev_ch == " " or prev_ch == "\t" or prev_ch == "=" or prev_ch == "(" or prev_ch == ",")
 					if before_ok:
 						return true
 			i += 1
@@ -604,11 +604,11 @@ func _contains_await_keyword(code: String) -> bool:
 ## Returns the index after the closing quote, or line.length() if unterminated.
 ## pos must point at the opening quote character.
 func _find_string_end(line: String, pos: int) -> int:
-	var q: int = line[pos]
+	var q = line[pos]
 	var i: int = pos + 1
 	var line_len: int = line.length()
 	while i < line_len:
-		if line[i] == 92: # backslash
+		if line[i] == "\\":
 			i += 2
 			continue
 		if line[i] == q:
@@ -629,7 +629,7 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 	while i < line_len:
 		# Inside triple-quoted string - scan for closing """
 		if in_tq:
-			if i + 2 < line_len and line[i] == 34 and line[i + 1] == 34 and line[i + 2] == 34:
+			if i + 2 < line_len and line[i] == "\"" and line[i + 1] == "\"" and line[i + 2] == "\"":
 				in_tq = false
 				i += 3
 				if seg_start >= 0:
@@ -640,7 +640,7 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 			continue
 
 		# Triple-quoted string """
-		if i + 2 < line_len and line[i] == 34 and line[i + 1] == 34 and line[i + 2] == 34:
+		if i + 2 < line_len and line[i] == "\"" and line[i + 1] == "\"" and line[i + 2] == "\"":
 			in_tq = true
 			if seg_start >= 0:
 				segments.append([seg_start, i])
@@ -649,7 +649,7 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 			continue
 
 		# Single/double-quoted string
-		if line[i] == 34 or line[i] == 39:
+		if line[i] == "\"" or line[i] == "'":
 			if seg_start >= 0:
 				segments.append([seg_start, i])
 				seg_start = -1
@@ -657,7 +657,7 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 			continue
 
 		# Hash comment
-		if line[i] == 35:
+		if line[i] == "#":
 			if seg_start >= 0:
 				segments.append([seg_start, i])
 			return {"segments": segments, "in_tq": in_tq, "in_bc": in_bc}
