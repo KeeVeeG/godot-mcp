@@ -431,10 +431,10 @@ func _is_statement(line: String) -> bool:
 	for kw in ["return", "break", "continue", "pass", "assert"]:
 		if t.begins_with(kw) and t.length() > kw.length():
 			var next = t[kw.length()]
-				if next == " " or next == "\t":
-					return true
-				# Handle return(value) without space — statement, not property access
-				if next == "(":
+			if next == " " or next == "\t":
+				return true
+			# Handle return(value) without space — statement, not property access
+			if next == "(":
 				return true
 	# Comments
 	if t.begins_with("#"):
