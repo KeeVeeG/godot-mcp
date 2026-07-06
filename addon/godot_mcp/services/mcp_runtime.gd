@@ -255,7 +255,7 @@ func _capture_frames(count: int, interval: float) -> Dictionary:
 	var frames: Array = []
 	for i: int in range(count):
 		# Capture frame synchronously
-		var image: Image = get_viewport().get_texture().get_image()
+		var image: Image = get_tree().root.get_texture().get_image()
 		var path: String = "user://mcp_frame_%d_%d.png" % [Time.get_ticks_msec(), i]
 		image.save_png(path)
 		frames.append(path)

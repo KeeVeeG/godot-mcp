@@ -86,10 +86,11 @@ func _get_game_screenshot(params: Dictionary) -> Dictionary:
 	var save_path: String = params.get("path", "user://mcp_game_screenshot.png")
 	if not _plugin.get_editor_interface().is_playing_scene():
 		return {"success": false, "error": "Game is not running"}
-	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
-	if root == null:
-		return {"success": false, "error": "No scene open"}
-	var viewport: Viewport = root.get_viewport()
+	# Get the running game's viewport, not the editor's
+	var main_loop = Engine.get_main_loop()
+	if not main_loop is SceneTree:
+		return {"success": false, "error": "No game scene tree available"}
+	var viewport: Viewport = (main_loop as SceneTree).root
 	if viewport == null:
 		return {"success": false, "error": "No viewport available"}
 	var img: Image = viewport.get_texture().get_image()
