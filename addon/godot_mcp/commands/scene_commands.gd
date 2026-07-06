@@ -130,12 +130,7 @@ func _create_scene(params: Dictionary) -> Dictionary:
 	root_node.queue_free()
 
 	# Ensure parent directory exists
-	var dir: String = path.get_base_dir()
-	if not dir.is_empty() and not DirAccess.dir_exists_absolute(dir):
-		var mkdir_err: Error = DirAccess.make_dir_recursive_absolute(dir)
-		if mkdir_err != OK:
-			root_node.queue_free()
-			return {"success": false, "error": "Failed to create directory %s" % dir}
+	_ensure_dir(path.get_base_dir())
 
 	# Save to disk
 	err = ResourceSaver.save(scene, path)
@@ -405,3 +400,9 @@ func _create_node_by_type(type_name: String) -> Node:
 				if obj is Node:
 					node = obj as Node
 	return node
+
+
+func _ensure_dir(path: String) -> void:
+	if path.is_empty() or DirAccess.dir_exists_absolute(path):
+		return
+	DirAccess.make_dir_recursive_absolute(path)

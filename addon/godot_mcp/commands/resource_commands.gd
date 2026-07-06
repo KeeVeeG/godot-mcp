@@ -71,6 +71,7 @@ func edit_resource(params: Dictionary) -> Dictionary:
 				break
 		res.set(prop, val)
 
+	_ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(res, path)
 	if err != OK:
 		return {"error": "Failed to save resource: %s" % error_string(err)}
@@ -121,6 +122,7 @@ func create_resource(params: Dictionary) -> Dictionary:
 
 	if not path.ends_with(".tres"):
 		path += ".tres"
+	_ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(res, path)
 	if err != OK:
 		return {"error": "Failed to save resource: %s" % error_string(err)}
@@ -198,6 +200,7 @@ func duplicate_resource(params: Dictionary) -> Dictionary:
 	var dup: Resource = res.duplicate()
 	if dup == null:
 		return {"error": "Failed to duplicate resource"}
+	_ensure_dir(new_path.get_base_dir())
 	var err: Error = ResourceSaver.save(dup, new_path)
 	if err != OK:
 		return {"error": "Failed to save duplicate: %s" % error_string(err)}
@@ -323,3 +326,9 @@ func _has_property(obj: Object, prop: String) -> bool:
 		if p["name"] as String == prop:
 			return true
 	return false
+
+
+func _ensure_dir(path: String) -> void:
+	if path.is_empty() or DirAccess.dir_exists_absolute(path):
+		return
+	DirAccess.make_dir_recursive_absolute(path)

@@ -56,6 +56,7 @@ func create_shader(params: Dictionary) -> Dictionary:
 
 	var shader: Shader = Shader.new()
 	shader.code = content
+	_ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(shader, path)
 	if err != OK:
 		return {"error": "Cannot create shader: %s — %s" % [path, error_string(err)]}
@@ -305,7 +306,13 @@ func _delete_shader(params: Dictionary) -> Dictionary:
 func _find_shader_refs_in_scene(node: Node, shader_path: String, depth: int = 0, max_depth: int = 20) -> Array:
 	var result: Array = []
 	if depth >= max_depth:
-		return result
+	return result
+
+
+func _ensure_dir(path: String) -> void:
+	if path.is_empty() or DirAccess.dir_exists_absolute(path):
+		return
+	DirAccess.make_dir_recursive_absolute(path)
 	# Check all properties for ShaderMaterial references
 	for p: Dictionary in node.get_property_list():
 		var usage: int = p["usage"] as int

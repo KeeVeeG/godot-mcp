@@ -94,6 +94,7 @@ func _create_from_template(params: Dictionary) -> Dictionary:
 		res = ClassDB.instantiate(type) as Resource
 	if res == null:
 		return {"success": false, "error": "Failed to create resource of type: %s" % type}
+	_ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(res, path)
 	if err != OK:
 		return {"success": false, "error": "Failed to save resource: %s" % error_string(err)}

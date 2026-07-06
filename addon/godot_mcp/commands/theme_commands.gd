@@ -33,6 +33,7 @@ func _get_root() -> Node:
 func create_theme(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "res://theme.tres")
 	var theme: Theme = Theme.new()
+	_ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(theme, path)
 	if err != OK:
 		return {"error": "Failed to save theme: %s" % error_string(err)}
@@ -260,3 +261,9 @@ func get_theme_info(params: Dictionary) -> Dictionary:
 			type_info["styleboxes"] = Array(styleboxes)
 		result["types"].append(type_info)
 	return {"result": result}
+
+
+func _ensure_dir(path: String) -> void:
+	if path.is_empty() or DirAccess.dir_exists_absolute(path):
+		return
+	DirAccess.make_dir_recursive_absolute(path)
