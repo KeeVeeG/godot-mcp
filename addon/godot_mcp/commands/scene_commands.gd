@@ -129,6 +129,14 @@ func _create_scene(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Failed to pack scene: %s" % error_string(err)}
 	root_node.queue_free()
 
+	# Ensure parent directory exists
+	var dir: String = path.get_base_dir()
+	if not dir.is_empty() and not DirAccess.dir_exists_absolute(dir):
+		var mkdir_err: Error = DirAccess.make_dir_recursive_absolute(dir)
+		if mkdir_err != OK:
+			root_node.queue_free()
+			return {"success": false, "error": "Failed to create directory %s" % dir}
+
 	# Save to disk
 	err = ResourceSaver.save(scene, path)
 	if err != OK:
