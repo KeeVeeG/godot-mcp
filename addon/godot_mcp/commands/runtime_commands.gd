@@ -7,7 +7,7 @@ var _plugin: EditorPlugin
 
 const REQUEST_PATH: String = "user://mcp_runtime_request.json"
 const RESPONSE_PATH: String = "user://mcp_runtime_response.json"
-const IPC_TIMEOUT: float = 30.0
+const IPC_TIMEOUT: float = 5.0
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
@@ -63,6 +63,8 @@ func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	# Wait for response with timeout
 	var start: float = Time.get_unix_time_from_system()
 	while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
+		if not _ensure_game_running():
+			return {"error": "Game stopped while waiting for runtime response"}
 		if FileAccess.file_exists(RESPONSE_PATH):
 			var resp_file := FileAccess.open(RESPONSE_PATH, FileAccess.READ)
 			if resp_file:
@@ -74,7 +76,7 @@ func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 				if err == OK and json.data is Dictionary:
 					return json.data as Dictionary
 				return {"error": "Failed to parse IPC response"}
-		OS.delay_msec(50)
+		OS.delay_msec(10)
 	return {"error": "IPC request timed out (%.1fs)" % IPC_TIMEOUT}
 
 
