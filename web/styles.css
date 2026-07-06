@@ -1426,7 +1426,8 @@ footer::before {
   color: var(--accent-cyan);
   white-space: nowrap;
   flex-shrink: 0;
-  min-width: 180px;
+  min-width: 260px;
+  width: 260px;
 }
 
 .tool-desc {
