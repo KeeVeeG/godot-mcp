@@ -134,7 +134,7 @@ Add the following to your MCP client's configuration file:
   "mcpServers": {
     "godot": {
       "command": "npx",
-      "args": ["-y", "--registry=https://npm.pkg.github.com", "@keeveeg/godot-mcp"]
+      "args": ["-y", "@keeveeg/godot-mcp"]
     }
   }
 }
