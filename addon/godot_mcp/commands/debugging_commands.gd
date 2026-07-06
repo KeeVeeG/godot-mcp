@@ -175,6 +175,13 @@ func evaluate_expression(params: Dictionary) -> Dictionary:
 	if expression.is_empty():
 		return {"error": "expression is required"}
 
+	# Pre-process: rewrite $NodePath / $"path" to edited_scene_root.get_node(...)
+	expression = _rewrite_dollar_syntax(expression)
+
+	# Pre-process: detect unsupported await keyword
+	if _contains_await_keyword(expression):
+		return {"error": "'await' is not supported in expression evaluation. For async operations, run the scene first and use context='game'."}
+
 	# Try Expression class first (handles void methods correctly)
 	var expr := Expression.new()
 	var parse_err: Error = expr.parse(expression)
@@ -274,25 +281,163 @@ func _get_active_session(debugger: EditorDebuggerPlugin) -> EditorDebuggerSessio
 
 
 ## Helper: Execute a GDScript expression in the editor context.
+## Three-step fallback: EditorScript with capture → EditorScript void → RefCounted.
 func _execute_in_editor(code: String) -> Variant:
-	# Wrap as EditorScript._run() for full editor API access (use this for void/multi-statement)
+	var is_multi: bool = _is_multistatement(code)
+
+	# Step 1: For multi-statement code, try EditorScript with result capture.
+	# This stores the last expression's value in _mcp_eval_result so it isn't discarded.
+	if is_multi:
+		var capture_src: String = _build_capture_script(code)
+		if not capture_src.is_empty():
+			var script: GDScript = GDScript.new()
+			script.source_code = capture_src
+			var err: Error = script.reload()
+			if err == OK:
+				var instance: Object = script.new()
+				if instance.has_method("_run"):
+					instance._run()
+					var val: Variant = instance.get("_mcp_eval_result")
+					if val != null:
+						return val
+					return "ok"
+
+	# Step 2: EditorScript void wrapper (handles both single and multi-statement).
+	var preamble: String = _build_editor_script_preamble(code)
 	var script: GDScript = GDScript.new()
-	script.source_code = "extends EditorScript\n\nfunc _run() -> void:\n\t%s" % code.replace("\n", "\n\t")
+	script.source_code = "extends EditorScript\n\nfunc _run() -> void:\n\t%s%s" % [preamble, code.replace("\n", "\n\t")]
 	var err: Error = script.reload()
-	if err != OK:
-		# Fall back to RefCounted+return for value-returning expressions
-		var s2: GDScript = GDScript.new()
-		s2.source_code = "extends RefCounted\n\nfunc eval():\n\treturn %s" % code
-		err = s2.reload()
-		if err != OK:
-			return {"error": "Failed to compile expression"}
-		var inst2: Object = s2.new()
-		if inst2.has_method("eval"):
-			return inst2.eval()
+	if err == OK:
+		var instance: Object = script.new()
+		if instance.has_method("_run"):
+			instance._run()
+			return "ok"
 		return null
-	var instance: Object = script.new()
-	if instance.has_method("_run"):
-		instance._run()
-		# Return success for void executions
-		return "ok"
+
+	# Step 3: RefCounted+return for value-returning single expressions.
+	var s2: GDScript = GDScript.new()
+	s2.source_code = "extends RefCounted\n\nfunc eval():\n\treturn %s" % code
+	err = s2.reload()
+	if err != OK:
+		return {"error": "Failed to compile expression"}
+	var inst2: Object = s2.new()
+	if inst2.has_method("eval"):
+		return inst2.eval()
 	return null
+
+
+## Helper: Check if code has multiple non-empty, non-comment lines.
+func _is_multistatement(code: String) -> bool:
+	var count: int = 0
+	for line in code.split("\n"):
+		var stripped: String = line.strip_edges()
+		if stripped.length() > 0 and not stripped.begins_with("#"):
+			count += 1
+			if count > 1:
+				return true
+	return false
+
+
+## Helper: Check if a GDScript line is a statement (not a capturable expression).
+func _is_statement(line: String) -> bool:
+	var t: String = line.strip_edges()
+	if t.is_empty():
+		return true
+	# Keywords always followed by space/identifier/etc.
+	var prefixes: PackedStringArray = [
+		"var ", "const ", "for ", "while ", "if ", "elif ",
+		"func ", "class ", "match ", "signal ", "enum ",
+		"await ", "yield ", "@",
+	]
+	for p in prefixes:
+		if t.begins_with(p):
+			return true
+	# Standalone keywords or keywords followed by colon
+	if t == "pass" or t == "return" or t == "break" or t == "continue" or t == "else":
+		return true
+	if t.begins_with("else:"):
+		return true
+	# Keywords that can be standalone or followed by expression
+	for kw in ["return", "break", "continue", "pass"]:
+		if t.begins_with(kw) and t.length() > kw.length():
+			var next: int = t[kw.length()]
+			if next == 32 or next == 9: # space or tab
+				return true
+	# Comments
+	if t.begins_with("#"):
+		return true
+	return false
+
+
+## Helper: Build an EditorScript that captures the last expression's value.
+## Returns empty string if the last line is a statement (can't capture).
+func _build_capture_script(code: String) -> String:
+	var lines: PackedStringArray = code.split("\n")
+	var last_nonempty_idx: int = -1
+	for i in range(lines.size() - 1, -1, -1):
+		if lines[i].strip_edges().length() > 0:
+			last_nonempty_idx = i
+			break
+	if last_nonempty_idx < 0:
+		return ""
+
+	var last_line_raw: String = lines[last_nonempty_idx]
+	var last_line_stripped: String = last_line_raw.strip_edges()
+	if _is_statement(last_line_stripped):
+		return ""
+
+	# Preserve leading whitespace of the original last line
+	var leading_ws: String = ""
+	for j in range(last_line_raw.length()):
+		var cp: int = last_line_raw[j]
+		if cp == 32 or cp == 9: # space or tab
+			leading_ws += char(cp)
+		else:
+			break
+
+	# Replace last line with capture assignment
+	lines[last_nonempty_idx] = leading_ws + "_mcp_eval_result = " + last_line_stripped
+	var modified_code: String = "\n".join(lines)
+
+	var preamble: String = _build_editor_script_preamble(code)
+	return "extends EditorScript\n\nvar _mcp_eval_result = null\n\nfunc _run() -> void:\n\t%s%s" % [preamble, modified_code.replace("\n", "\n\t")]
+
+
+## Helper: Build preamble lines for EditorScript (e.g. edited_scene_root alias).
+func _build_editor_script_preamble(code: String) -> String:
+	var preamble: String = ""
+	# Make edited_scene_root available in EditorScript context via get_scene()
+	if "edited_scene_root" in code and not "var edited_scene_root" in code:
+		preamble = "var edited_scene_root = get_scene()\n\t"
+	return preamble
+
+
+## Helper: Rewrite $NodePath / $"path" syntax to edited_scene_root.get_node(...).
+func _rewrite_dollar_syntax(code: String) -> String:
+	var result: String = code
+	# $"path with spaces" pattern
+	var regex_quoted: RegEx = RegEx.new()
+	regex_quoted.compile('\\$"([^"]+)"')
+	result = regex_quoted.sub(result, 'edited_scene_root.get_node("$1")', true)
+	# $identifier/Path pattern (unquoted)
+	var regex_unquoted: RegEx = RegEx.new()
+	regex_unquoted.compile('\\$([A-Za-z_][A-Za-z0-9_/]*)')
+	result = regex_unquoted.sub(result, 'edited_scene_root.get_node("$1")', true)
+	return result
+
+
+## Helper: Detect 'await' keyword usage (not supported in sync eval context).
+func _contains_await_keyword(code: String) -> bool:
+	for line in code.split("\n"):
+		var stripped: String = line.strip_edges()
+		if stripped.begins_with("#"):
+			continue
+		if stripped.begins_with("await ") or stripped.begins_with("await(") or stripped == "await":
+			return true
+		# Check for await after assignment or other operators
+		var pos: int = stripped.find("await ")
+		if pos > 0:
+			var before: int = stripped[pos - 1]
+			if before == 32 or before == 61 or before == 40 or before == 44 or before == 9:
+				return true
+	return false
