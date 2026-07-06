@@ -367,7 +367,7 @@ func _execute_in_editor(code: String) -> Variant:
 		if lines[li].strip_edges().length() > 0:
 			last_nonempty = lines[li].strip_edges()
 			break
-	var skip_void: bool = not last_nonempty.is_empty() and not _is_statement(last_nonempty)
+	var skip_void: bool = not _is_multistatement(code) and not last_nonempty.is_empty() and not _is_statement(last_nonempty)
 	if not skip_void:
 		var preamble: String = _build_editor_script_preamble(code)
 		var script: GDScript = GDScript.new()
