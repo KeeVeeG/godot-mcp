@@ -183,6 +183,8 @@ func get_input_actions(params: Dictionary) -> Dictionary:
 
 
 ## Create or modify an input action.
+## If the action exists, updates events in place (preserves running references).
+## If it doesn't exist, creates a new action.
 func set_input_action(params: Dictionary) -> Dictionary:
 	var action: String = params.get("action", "")
 	var events: Array = params.get("events", [])
@@ -191,8 +193,13 @@ func set_input_action(params: Dictionary) -> Dictionary:
 		return {"error": "Action name is required"}
 
 	if InputMap.has_action(action):
-		InputMap.erase_action(action)
-	InputMap.add_action(action, deadzone)
+		# Update existing action in place — remove old events, add new ones
+		# This preserves the action itself so references in running code remain valid
+		for old_event: InputEvent in InputMap.action_get_events(action):
+			InputMap.action_erase_event(action, old_event)
+		InputMap.action_set_deadzone(action, deadzone)
+	else:
+		InputMap.add_action(action, deadzone)
 
 	for event_variant: Variant in events:
 		var ev: Dictionary = event_variant as Dictionary
