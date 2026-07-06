@@ -177,15 +177,15 @@ func set_physics_layers(params: Dictionary) -> Dictionary:
 	if node is CollisionObject2D:
 		var co: CollisionObject2D = node as CollisionObject2D
 		if layer > 0 and layer <= 32:
-			co.collision_layer = 1 << (layer - 1)
+			co.collision_layer |= 1 << (layer - 1)
 		if mask > 0 and mask <= 32:
-			co.collision_mask = 1 << (mask - 1)
+			co.collision_mask |= 1 << (mask - 1)
 	elif node is CollisionObject3D:
 		var co3: CollisionObject3D = node as CollisionObject3D
 		if layer > 0 and layer <= 32:
-			co3.collision_layer = 1 << (layer - 1)
+			co3.collision_layer |= 1 << (layer - 1)
 		if mask > 0 and mask <= 32:
-			co3.collision_mask = 1 << (mask - 1)
+			co3.collision_mask |= 1 << (mask - 1)
 	else:
 		return {"error": "Node is not a CollisionObject: %s" % node.get_class()}
 	return {"result": "Physics layers set on %s (layer=%d, mask=%d)" % [path, layer, mask]}

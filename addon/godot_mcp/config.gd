@@ -38,6 +38,12 @@ static func get_instance() -> MCPConfig:
 	return _instance
 
 
+## Force a fresh config read. Call after _instance = null reset.
+static func reload() -> MCPConfig:
+	_instance = null
+	return get_instance()
+
+
 func _load_config() -> void:
 	if not FileAccess.file_exists(config_path):
 		return
