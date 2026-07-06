@@ -313,15 +313,17 @@ func bake_navigation_mesh(params: Dictionary) -> Dictionary:
 		if properties.has("agent_max_slope"):
 			nav_mesh.agent_max_slope = properties["agent_max_slope"] as float
 
-		# Use NavigationServer to bake from source geometry
+		# Use NavigationServer to bake from source geometry (async to avoid editor freeze)
 		var source_geom: NavigationMeshSourceGeometryData3D = NavigationMeshSourceGeometryData3D.new()
 		var root_node: Node = _get_root()
 		if root_node:
+			var bake_done: Array = [false]
+			var bake_callback: Callable = func() -> void: bake_done[0] = true
 			NavigationServer3D.parse_source_geometry_data(nav_mesh, source_geom, root_node)
-			NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source_geom)
+			NavigationServer3D.bake_from_source_geometry_data_async(nav_mesh, source_geom, bake_callback)
 
 		nr.navigation_mesh = nav_mesh
-		return {"result": "Navigation mesh baked for 3D region: %s" % path}
+		return {"result": "Navigation mesh bake started for 3D region: %s (async — check region for completion)" % path}
 
 	elif node is NavigationRegion2D:
 		var nr2: NavigationRegion2D = node as NavigationRegion2D
@@ -332,15 +334,17 @@ func bake_navigation_mesh(params: Dictionary) -> Dictionary:
 		if properties.has("agent_radius"):
 			nav_poly.agent_radius = properties["agent_radius"] as float
 
-		# Use NavigationServer to bake from source geometry
+		# Use NavigationServer to bake from source geometry (async to avoid editor freeze)
 		var source_geom2d: NavigationMeshSourceGeometryData2D = NavigationMeshSourceGeometryData2D.new()
 		var root_node2d: Node = _get_root()
 		if root_node2d:
+			var bake_done_2d: Array = [false]
+			var bake_callback_2d: Callable = func() -> void: bake_done_2d[0] = true
 			NavigationServer2D.parse_source_geometry_data(nav_poly, source_geom2d, root_node2d)
-			NavigationServer2D.bake_from_source_geometry_data(nav_poly, source_geom2d)
+			NavigationServer2D.bake_from_source_geometry_data_async(nav_poly, source_geom2d, bake_callback_2d)
 
 		nr2.navigation_polygon = nav_poly
-		return {"result": "Navigation polygon baked for 2D region: %s" % path}
+		return {"result": "Navigation polygon bake started for 2D region: %s (async — check region for completion)" % path}
 
 	else:
 		return {"error": "Node is not a NavigationRegion: %s" % node.get_class()}
@@ -561,10 +565,12 @@ func setup_navigation_link(params: Dictionary) -> Dictionary:
 
 
 ## Find a navigation path between two points using NavigationServer.
+## Optional "map" parameter specifies a NavigationRegion path to use its map.
 func find_navigation_path(params: Dictionary) -> Dictionary:
 	var start: Array = params.get("start", [])
 	var end: Array = params.get("end", [])
 	var dimension: String = params.get("dimension", "2d")
+	var map_region_path: String = params.get("map", "")
 	if start.size() < 2 or end.size() < 2:
 		return {"error": "start and end must be arrays with at least 2 elements [x, y]"}
 	var path: PackedVector2Array = PackedVector2Array()
@@ -573,7 +579,15 @@ func find_navigation_path(params: Dictionary) -> Dictionary:
 		"2d":
 			var start_vec: Vector2 = Vector2(start[0] as float, start[1] as float)
 			var end_vec: Vector2 = Vector2(end[0] as float, end[1] as float)
-			var map_rid: RID = NavigationServer2D.get_maps()[0] if NavigationServer2D.get_maps().size() > 0 else RID()
+			var map_rid: RID = RID()
+			# Use specified region's map if provided
+			if not map_region_path.is_empty():
+				var region_node: Node = _get_node(map_region_path)
+				if region_node != null and region_node is NavigationRegion2D:
+					map_rid = NavigationServer2D.region_get_map((region_node as NavigationRegion2D).get_rid())
+			if map_rid == RID():
+				var maps: Array = NavigationServer2D.get_maps()
+				map_rid = maps[0] if maps.size() > 0 else RID()
 			if map_rid == RID():
 				return {"error": "No navigation map available"}
 			path = NavigationServer2D.map_get_path(map_rid, start_vec, end_vec, true)
@@ -584,7 +598,15 @@ func find_navigation_path(params: Dictionary) -> Dictionary:
 		"3d":
 			var start_vec3: Vector3 = Vector3(start[0] as float, start[1] as float, start[2] as float if start.size() > 2 else 0.0)
 			var end_vec3: Vector3 = Vector3(end[0] as float, end[1] as float, end[2] as float if end.size() > 2 else 0.0)
-			var map_rid3: RID = NavigationServer3D.get_maps()[0] if NavigationServer3D.get_maps().size() > 0 else RID()
+			var map_rid3: RID = RID()
+			# Use specified region's map if provided
+			if not map_region_path.is_empty():
+				var region_node3: Node = _get_node(map_region_path)
+				if region_node3 != null and region_node3 is NavigationRegion3D:
+					map_rid3 = NavigationServer3D.region_get_map((region_node3 as NavigationRegion3D).get_rid())
+			if map_rid3 == RID():
+				var maps3: Array = NavigationServer3D.get_maps()
+				map_rid3 = maps3[0] if maps3.size() > 0 else RID()
 			if map_rid3 == RID():
 				return {"error": "No navigation map available"}
 			path3d = NavigationServer3D.map_get_path(map_rid3, start_vec3, end_vec3, true)

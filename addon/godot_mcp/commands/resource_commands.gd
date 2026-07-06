@@ -4,10 +4,13 @@ class_name MCPResourceCommands
 extends RefCounted
 
 var _plugin: EditorPlugin
+var _undo_helper: MCUndoHelper
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
+	if _plugin.has_method("get_undo_helper"):
+		_undo_helper = _plugin.get_undo_helper()
 
 
 func get_commands() -> Dictionary:
@@ -69,7 +72,10 @@ func edit_resource(params: Dictionary) -> Dictionary:
 			if p["name"] as String == prop:
 				val = MCPVariantCodec.parse_for_property(val, p["type"] as int)
 				break
-		res.set(prop, val)
+		if _undo_helper:
+			_undo_helper.set_property_with_undo(res, prop, val)
+		else:
+			res.set(prop, val)
 
 	_ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(res, path)
