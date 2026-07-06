@@ -300,13 +300,12 @@ func _references_singleton(expr: String) -> bool:
 			var before_ok: bool = (idx == 0)
 			if not before_ok:
 		var prev = expr[idx - 1]
-			# Check [a-zA-Z0-9_.] preceding characters
+			# prev is a String of length 1. Check if it's an identifier character.
 			before_ok = not (
-				prev == "." or
-				(prev >= "0" and prev <= "9") or
+				prev == "." or prev == "_" or
 				(prev >= "A" and prev <= "Z") or
-				prev == "_" or
-				(prev >= "a" and prev <= "z")
+				(prev >= "a" and prev <= "z") or
+				(prev >= "0" and prev <= "9")
 			)
 		# Must be a word end (not followed by identifier char)
 		var end_pos: int = idx + name.length()
@@ -314,10 +313,10 @@ func _references_singleton(expr: String) -> bool:
 		if not after_ok:
 			var next_ch = expr[end_pos]
 			after_ok = not (
-				(next_ch >= "0" and next_ch <= "9") or
-				(next_ch >= "A" and next_ch <= "Z") or
 				next_ch == "_" or
-				(next_ch >= "a" and next_ch <= "z")
+				(next_ch >= "A" and next_ch <= "Z") or
+				(next_ch >= "a" and next_ch <= "z") or
+				(next_ch >= "0" and next_ch <= "9")
 			)
 			if before_ok and after_ok:
 				return true
