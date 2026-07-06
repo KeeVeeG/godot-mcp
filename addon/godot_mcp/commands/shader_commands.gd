@@ -303,16 +303,14 @@ func _delete_shader(params: Dictionary) -> Dictionary:
 
 
 ## Helper: find nodes that reference a specific shader path.
+
+
+
 func _find_shader_refs_in_scene(node: Node, shader_path: String, depth: int = 0, max_depth: int = 20) -> Array:
 	var result: Array = []
 	if depth >= max_depth:
-	return result
+		return result
 
-
-func _ensure_dir(path: String) -> void:
-	if path.is_empty() or DirAccess.dir_exists_absolute(path):
-		return
-	DirAccess.make_dir_recursive_absolute(path)
 	# Check all properties for ShaderMaterial references
 	for p: Dictionary in node.get_property_list():
 		var usage: int = p["usage"] as int
@@ -327,3 +325,9 @@ func _ensure_dir(path: String) -> void:
 	for child in node.get_children():
 		result.append_array(_find_shader_refs_in_scene(child, shader_path, depth + 1, max_depth))
 	return result
+
+
+func _ensure_dir(path: String) -> void:
+	if path.is_empty() or DirAccess.dir_exists_absolute(path):
+		return
+	DirAccess.make_dir_recursive_absolute(path)

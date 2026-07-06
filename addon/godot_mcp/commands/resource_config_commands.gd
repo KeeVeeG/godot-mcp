@@ -169,3 +169,9 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 	if fs:
 		fs.reimport_files(PackedStringArray([path]))
 	return {"success": true, "path": path, "message": "Import settings updated and reimport triggered"}
+
+
+func _ensure_dir(path: String) -> void:
+	if path.is_empty() or DirAccess.dir_exists_absolute(path):
+		return
+	DirAccess.make_dir_recursive_absolute(path)
