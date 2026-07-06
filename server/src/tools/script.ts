@@ -79,7 +79,7 @@ export function registerScriptTools(server: McpServer, bridge: GodotBridge): voi
       description: 'Attach a GDScript to a node in the scene',
       inputSchema: {
         script_path: ScriptPath.describe('Script file path to attach'),
-        node_path: NodePath,
+        node_path: NodePath.describe("Node to attach script to (e.g. 'Player' or '' for scene root)"),
       },
     },
     async (args) => callGodot(bridge, 'script/attach', args as Record<string, unknown>),

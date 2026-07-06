@@ -12,8 +12,12 @@ import { z } from 'zod';
 // Primitive field schemas
 // ────────────────────────────────────────────────────────────
 
-/** Node path in the scene tree (e.g. "Player/Sprite2D") */
-export const NodePath = z.string().describe("Node path in the scene tree (e.g. 'Player/Sprite2D')");
+/** Node path in the scene tree (e.g. "Player/Sprite2D"). Use just the node name for root-level children (e.g. "Player"), or "" for the scene root itself. Paths are relative to the currently open scene — do NOT use full editor paths like "/root/@EditorNode@...". */
+export const NodePath = z
+  .string()
+  .describe(
+    "Node path in the scene tree (e.g. 'Player/Sprite2D'). Use just the node name for root-level children (e.g. 'Player'), or empty string '' for the scene root itself. Paths are relative to the currently open scene.",
+  );
 
 /** Scene file path (e.g. "res://scenes/main.tscn") */
 export const ScenePath = z.string().describe("Scene file path (e.g. 'res://scenes/main.tscn')");
@@ -51,8 +55,8 @@ export const SearchQuery = z.string().describe('Search query');
 /** Node type name (e.g. "Sprite2D", "CharacterBody3D") */
 export const NodeType = z.string().describe("Node type name (e.g. 'Sprite2D', 'CharacterBody3D')");
 
-/** Parent node path */
-export const ParentPath = z.string().describe('Parent node path');
+/** Parent node path — use '' (empty string) for scene root, or node name (e.g. "Player") for direct root children */
+export const ParentPath = z.string().describe("Parent node path. Use '' (empty string) to add at scene root, or a node name/path (e.g. 'Player' or 'Player/Sprites') to add as a child of that node.");
 
 // ────────────────────────────────────────────────────────────
 // Numeric schemas

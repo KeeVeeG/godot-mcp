@@ -79,7 +79,7 @@ export function registerPhysicsTools(server: McpServer, bridge: GodotBridge): vo
     {
       description: 'Add a RayCast2D or RayCast3D node',
       inputSchema: {
-        parent_path: ParentPath,
+        parent_path: ParentPath.describe("Parent node — '' for scene root"),
         properties: OptionalProperties.describe('Raycast properties (target, enabled, collide_with_areas, etc.)'),
       },
     },

@@ -12,7 +12,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'get_game_scene_tree',
     {
-      description: 'Get the scene tree of the running game (runtime state)',
+      description: '🔴 Game must be running. Get the scene tree of the running game (runtime state)',
       inputSchema: {},
     },
     async () => callGodot(bridge, 'runtime/get_scene_tree'),
@@ -22,7 +22,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'get_game_node_properties',
     {
-      description: 'Get all properties of a node in the running game',
+      description: '🔴 Game must be running. Get all properties of a node in the running game',
       inputSchema: {
         path: NodePath.describe('Node path in the game tree'),
         properties: z.array(z.string()).optional().describe('Specific property names to return (defaults to common properties)'),
@@ -35,7 +35,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'set_game_node_property',
     {
-      description: 'Set a property on a node in the running game',
+      description: '🔴 Game must be running. Set a property on a node in the running game',
       inputSchema: {
         path: NodePath.describe('Node path in the game tree'),
         property: z.string().describe('Property name to set'),
@@ -49,7 +49,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'execute_game_script',
     {
-      description: 'Execute a GDScript snippet in the running game context',
+      description: '🔴 Game must be running. Execute a GDScript snippet in the running game context',
       inputSchema: {
         code: GDScriptCode,
       },
@@ -61,7 +61,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'capture_frames',
     {
-      description: 'Capture frames from the running game viewport',
+      description: '🔴 Game must be running. Capture frames from the running game viewport as PNG files',
       inputSchema: {
         count: z.number().int().min(1).max(60).optional().default(1).describe('Number of frames to capture (default: 1)'),
         interval: z.number().optional().describe('Interval between captures in seconds'),
@@ -74,7 +74,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'monitor_properties',
     {
-      description: 'Monitor specific properties on a game node for changes over time',
+      description: '🔴 Game must be running. Monitor specific properties on a game node for changes over time',
       inputSchema: {
         path: NodePath.describe('Node path to monitor'),
         properties: z.array(z.string()).describe('Property names to monitor'),
@@ -88,7 +88,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'start_recording',
     {
-      description: 'Start recording game state changes',
+      description: '🔴 Game must be running. Start recording game state changes',
       inputSchema: {},
     },
     async () => callGodot(bridge, 'runtime/start_recording'),
@@ -98,7 +98,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'stop_recording',
     {
-      description: 'Stop recording and return the recorded game state data',
+      description: '🔴 Game must be running. Stop recording and return the recorded game state data',
       inputSchema: {},
     },
     async () => callGodot(bridge, 'runtime/stop_recording'),
@@ -108,7 +108,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'replay_recording',
     {
-      description: 'Replay a previously recorded game session',
+      description: '🔴 Game must be running. Replay a previously recorded game session',
       inputSchema: {
         speed: PositiveNumber.optional().default(1.0).describe('Playback speed multiplier (default: 1.0)'),
       },
@@ -120,7 +120,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'find_nodes_by_script',
     {
-      description: 'Find all nodes in the game that use a specific script',
+      description: '🔴 Game must be running. Find all nodes in the game that use a specific script',
       inputSchema: {
         script_path: ScriptPath.describe("Script file path to search for (e.g. 'res://scripts/enemy.gd')"),
       },
@@ -132,7 +132,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'get_autoload',
     {
-      description: 'Get properties of an autoload singleton from the running game',
+      description: '🔴 Game must be running. Get properties of an autoload singleton from the running game',
       inputSchema: {
         name: z.string().describe('Autoload singleton name'),
       },
@@ -144,7 +144,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'batch_get_properties',
     {
-      description: 'Get multiple properties from multiple nodes in one call',
+      description: '🔴 Game must be running. Get multiple properties from multiple nodes in one call',
       inputSchema: {
         paths: z.array(z.string()).describe('List of node paths to query'),
         properties: z.array(z.string()).describe('Property names to read from each node'),
@@ -157,7 +157,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'find_ui_elements',
     {
-      description: 'Find UI elements in the running game by type, text, or name',
+      description: '🔴 Game must be running. Find UI elements in the running game by type, text, or name',
       inputSchema: {
         filter: z
           .object({
@@ -175,7 +175,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'click_button_by_text',
     {
-      description: 'Find and click a button by its text content',
+      description: '🔴 Game must be running. Find and click a button by its text content',
       inputSchema: {
         text: z.string().describe('Button text to find and click'),
         timeout: Timeout,
@@ -188,7 +188,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'wait_for_node',
     {
-      description: 'Wait for a node to appear in the running game tree',
+      description: '🔴 Game must be running. Wait for a node to appear in the running game tree',
       inputSchema: {
         path: NodePath.describe('Node path to wait for'),
         timeout: Timeout.default(5.0).describe('Timeout in seconds (default: 5.0)'),
@@ -201,7 +201,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'find_nearby_nodes',
     {
-      description: 'Find nodes within a radius of a world position',
+      description: '🔴 Game must be running. Find nodes within a radius of a world position',
       inputSchema: {
         position: Position3D,
         radius: PositiveNumber.describe('Search radius'),
@@ -214,7 +214,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'navigate_to',
     {
-      description: 'Navigate a node to a target position using pathfinding',
+      description: '🔴 Game must be running. Navigate a node to a target position using pathfinding',
       inputSchema: {
         path: NodePath.describe('Node path to navigate (must have NavigationAgent3D)'),
         target: Position3D.describe('Target position [x, y, z]'),
@@ -227,7 +227,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'move_to',
     {
-      description: 'Directly move a node to a target position',
+      description: '🔴 Game must be running. Directly move a node to a target position',
       inputSchema: {
         path: NodePath.describe('Node path to move'),
         target: Position3D.describe('Target position [x, y, z]'),
@@ -240,7 +240,7 @@ export function registerRuntimeTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'watch_signals',
     {
-      description: 'Watch for signal emissions from a game node',
+      description: '🔴 Game must be running. Watch for signal emissions from a game node',
       inputSchema: {
         path: NodePath.describe('Node path to watch'),
         signals: z.array(z.string()).describe('Signal names to watch for'),

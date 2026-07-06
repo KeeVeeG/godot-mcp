@@ -14,7 +14,7 @@ export function registerAudioTools(server: McpServer, bridge: GodotBridge): void
     {
       description: 'Add an AudioStreamPlayer, AudioStreamPlayer2D, or AudioStreamPlayer3D node',
       inputSchema: {
-        parent: ParentPath,
+        parent: ParentPath.describe("Parent node — '' for scene root"),
         player_type: z.enum(['AudioStreamPlayer', 'AudioStreamPlayer2D', 'AudioStreamPlayer3D']).optional().default('AudioStreamPlayer').describe('Audio player type'),
         name: z.string().optional().describe('Custom node name'),
         stream_path: z.string().optional().describe("Audio stream resource path (e.g. 'res://sounds/music.ogg')"),

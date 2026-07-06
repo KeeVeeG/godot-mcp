@@ -93,7 +93,7 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     {
       description: 'Add a resource (material, texture, etc.) to a node property',
       inputSchema: {
-        node_path: NodePath,
+        node_path: NodePath.describe("Node to add resource to (e.g. 'Player' or 'Player/Cube')"),
         resource_type: z.string().describe("Resource type (e.g. 'Material', 'Texture2D')"),
         properties: OptionalProperties,
       },

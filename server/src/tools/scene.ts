@@ -87,9 +87,9 @@ export function registerSceneTools(server: McpServer, bridge: GodotBridge): void
   server.registerTool(
     'play_scene',
     {
-      description: 'Start playing the current or specified scene',
+      description: 'Start playing the current or specified scene. Required before using any runtime tools (get_game_*, capture_frames, etc.)',
       inputSchema: {
-        mode: z.enum(['main', 'current', 'custom']).optional().describe("Play mode: 'main', 'current', or 'custom'"),
+        mode: z.enum(['main', 'current', 'custom']).optional().describe("Play mode: 'main' (main scene), 'current' (open scene), or 'custom' (specified by scene_path)"),
         scene_path: z.string().optional().describe("Scene to play when mode is 'custom'"),
       },
     },
