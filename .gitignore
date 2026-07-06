@@ -60,5 +60,3 @@ mcp-srv-out.txt
 # Test project addon (synced copy from addon/)
 test_project/addons/godot_mcp/
 
-# Generated catalog (tools-catalog.js is the canonical file for the site)
-web/tools-catalog.json

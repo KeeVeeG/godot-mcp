@@ -147,12 +147,9 @@ function main() {
   const json = JSON.stringify(catalog, null, 2);
   const jsContent = 'const TOOLS_CATALOG = ' + json + ';';
 
-  const webJsonPath = path.join(ROOT, 'web', 'tools-catalog.json');
   const webJsPath = path.join(ROOT, 'web', 'tools-catalog.js');
 
-  fs.writeFileSync(webJsonPath, json);
   fs.writeFileSync(webJsPath, jsContent);
-  console.log(`Wrote ${catalog.length} tools to ${webJsonPath}`);
   console.log(`Wrote ${catalog.length} tools to ${webJsPath}`);
 
   // Stats
