@@ -136,32 +136,50 @@ func compare_screenshots(params: Dictionary) -> Dictionary:
 			img_a.get_width(), img_a.get_height(), img_b.get_width(), img_b.get_height()
 		]}
 
-	# Compare pixels
+	# Convert to RGBA8 for consistent byte layout
+	img_a.convert(Image.FORMAT_RGBA8)
+	img_b.convert(Image.FORMAT_RGBA8)
+
+	# Bulk byte comparison via get_data() instead of per-pixel get_pixel()/set_pixel()
 	var width: int = img_a.get_width()
 	var height: int = img_a.get_height()
 	var total_pixels: int = width * height
 	var different_pixels: int = 0
 	var max_diff: float = 0.0
 
-	var diff_image: Image = Image.create_empty(width, height, false, Image.FORMAT_RGBA8)
+	var data_a: PackedByteArray = img_a.get_data()
+	var data_b: PackedByteArray = img_b.get_data()
+	var diff_data: PackedByteArray = PackedByteArray()
+	diff_data.resize(data_a.size())
 
-	for y: int in range(height):
-		for x: int in range(width):
-			var color_a: Color = img_a.get_pixel(x, y)
-			var color_b: Color = img_b.get_pixel(x, y)
-			var diff_r: float = absf(color_a.r - color_b.r)
-			var diff_g: float = absf(color_a.g - color_b.g)
-			var diff_b: float = absf(color_a.b - color_b.b)
-			var diff_a: float = absf(color_a.a - color_b.a)
-			var pixel_diff: float = (diff_r + diff_g + diff_b + diff_a) / 4.0
-			if pixel_diff > max_diff:
-				max_diff = pixel_diff
-			if pixel_diff > 0.0:
-				different_pixels += 1
-				# Highlight differences in red
-				diff_image.set_pixel(x, y, Color(1.0, 0.0, 0.0, min(pixel_diff * 4.0, 1.0)))
-			else:
-				diff_image.set_pixel(x, y, color_a)
+	for i: int in range(total_pixels):
+		var offset: int = i * 4
+		var r_a: int = data_a[offset]
+		var g_a: int = data_a[offset + 1]
+		var b_a: int = data_a[offset + 2]
+		var a_a: int = data_a[offset + 3]
+		var r_b: int = data_b[offset]
+		var g_b: int = data_b[offset + 1]
+		var b_b: int = data_b[offset + 2]
+		var a_b: int = data_b[offset + 3]
+
+		var pixel_diff: float = (absf(float(r_a - r_b)) + absf(float(g_a - g_b)) + absf(float(b_a - b_b)) + absf(float(a_a - a_b))) / (4.0 * 255.0)
+		if pixel_diff > max_diff:
+			max_diff = pixel_diff
+		if pixel_diff > 0.0:
+			different_pixels += 1
+			# Highlight differences in red
+			diff_data[offset] = 255
+			diff_data[offset + 1] = 0
+			diff_data[offset + 2] = 0
+			diff_data[offset + 3] = int(min(pixel_diff * 4.0, 1.0) * 255.0)
+		else:
+			diff_data[offset] = r_a
+			diff_data[offset + 1] = g_a
+			diff_data[offset + 2] = b_a
+			diff_data[offset + 3] = a_a
+
+	var diff_image: Image = Image.create_from_data(width, height, false, Image.FORMAT_RGBA8, diff_data)
 
 	var mismatch_ratio: float = float(different_pixels) / float(total_pixels)
 	var matches: bool = mismatch_ratio <= threshold
