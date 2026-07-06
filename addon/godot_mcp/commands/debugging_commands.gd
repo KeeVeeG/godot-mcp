@@ -184,14 +184,10 @@ func evaluate_expression(params: Dictionary) -> Dictionary:
 		var result: Variant = expr.execute([], base_obj)
 		if not expr.has_execute_failed():
 			return {"result": {"expression": expression, "context": context, "value": result}}
-		# Expression failed — silently fall back to GDScript
+		# Expression execution failed — fall through to GDScript
 
-	# Fall back to GDScript eval for complex expressions
-	# Try without 'return' first (handles void methods)
+	# Fall back to GDScript (EditorScript for multi-statement, RefCounted for values)
 	var result: Variant = _execute_in_editor(expression)
-	if result is Dictionary and result.has("error"):
-		# Try with 'return' for value-returning expressions
-		result = _execute_in_editor("return " + expression)
 	return {"result": {"expression": expression, "context": context, "value": result}}
 
 
@@ -279,12 +275,24 @@ func _get_active_session(debugger: EditorDebuggerPlugin) -> EditorDebuggerSessio
 
 ## Helper: Execute a GDScript expression in the editor context.
 func _execute_in_editor(code: String) -> Variant:
+	# Wrap as EditorScript._run() for full editor API access (use this for void/multi-statement)
 	var script: GDScript = GDScript.new()
-	script.source_code = "extends RefCounted\n\nfunc eval():\n\t%s" % code
+	script.source_code = "extends EditorScript\n\nfunc _run() -> void:\n\t%s" % code.replace("\n", "\n\t")
 	var err: Error = script.reload()
 	if err != OK:
-		return {"error": "Failed to compile expression"}
+		# Fall back to RefCounted+return for value-returning expressions
+		var s2: GDScript = GDScript.new()
+		s2.source_code = "extends RefCounted\n\nfunc eval():\n\treturn %s" % code
+		err = s2.reload()
+		if err != OK:
+			return {"error": "Failed to compile expression"}
+		var inst2: Object = s2.new()
+		if inst2.has_method("eval"):
+			return inst2.eval()
+		return null
 	var instance: Object = script.new()
-	if instance.has_method("eval"):
-		return instance.eval()
+	if instance.has_method("_run"):
+		instance._run()
+		# Return success for void executions
+		return "ok"
 	return null
