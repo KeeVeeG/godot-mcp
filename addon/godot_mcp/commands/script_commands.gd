@@ -70,10 +70,8 @@ func _scan_scripts(path: String, results: Array, depth: int, max_depth: int) -> 
 					"path": full_path,
 					"name": file_name,
 				}
-				var scr: GDScript = ResourceLoader.load(full_path) as GDScript
-				if scr:
-					script_info["base_class"] = scr.get_instance_base_type()
-					script_info["class_name_str"] = scr.get_global_name()
+				# Note: base_class and class_name_str omitted during scan
+				# to avoid loading every .gd file. Use read_script for details.
 				results.append(script_info)
 		file_name = dir.get_next()
 	dir.list_dir_end()
