@@ -172,15 +172,19 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 			return {"error": "Unknown runtime method: %s" % method}
 
 
-## Write a response to the IPC file. Returns true on success.
+## Write a response to the IPC file using atomic write-then-rename.
+## Returns true on success.
 func _write_response(data: Dictionary) -> bool:
 	var json_text: String = JSON.stringify(data)
-	var file := FileAccess.open(RESPONSE_PATH, FileAccess.WRITE)
+	var tmp_path: String = RESPONSE_PATH + ".tmp"
+	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if file == null:
 		push_warning("[MCP Runtime] Failed to write response file")
 		return false
 	file.store_string(json_text)
 	file.close()
+	# Atomic rename: the editor will only see complete files
+	DirAccess.rename_absolute(tmp_path, RESPONSE_PATH)
 	return true
 
 

@@ -294,8 +294,8 @@ func _on_ws_message(message: Dictionary) -> void:
 	if _status_panel:
 		_status_panel.log_activity("Tool: %s" % method_name, "info")
 
-	# Route to handler
-	var result: Dictionary = _router.route_request(method_name, params)
+	# Route to handler (may be async for IPC-based runtime commands)
+	var result: Dictionary = await _router.route_request(method_name, params)
 
 	# Log result to status panel
 	if result.has("error"):

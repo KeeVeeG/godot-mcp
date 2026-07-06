@@ -66,6 +66,10 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 
 	var result: Variant = handler.call(params)
 
+	# If handler used await internally, result is a GDScriptFunctionState — resume it
+	if result is GDScriptFunctionState:
+		result = await result
+
 	# Guard: if handler returned null, it likely hit a runtime error
 	if result == null:
 		return {

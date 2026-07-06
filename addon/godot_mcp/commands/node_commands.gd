@@ -56,7 +56,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"get_editor_selection": return _get_editor_selection()
 		"select_nodes": return _select_nodes(params)
 		"clear_editor_selection": return _clear_editor_selection()
-	return {"success": false, "error": "Unknown method: " + method}
+	return {"error": "Unknown method: " + method}
 
 
 ## Add a node to the scene tree with UndoRedo support.
@@ -68,16 +68,16 @@ func _add_node(params: Dictionary) -> Dictionary:
 
 	var parent: Node = _get_edited_scene_root()
 	if parent == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	if parent_path != "":
 		parent = _resolve_node(parent_path, parent)
 		if parent == null:
-			return {"success": false, "error": "Parent not found: %s" % parent_path}
+			return {"error": "Parent not found: %s" % parent_path}
 
 	# Create node
 	var node: Node = _create_node_by_type(type_name)
 	if node == null:
-		return {"success": false, "error": "Unknown type: %s" % type_name}
+		return {"error": "Unknown type: %s" % type_name}
 	node.name = node_name
 
 	# Apply properties before adding to tree (for position, etc.)
@@ -94,7 +94,7 @@ func _add_node(params: Dictionary) -> Dictionary:
 		parent.add_child(node)
 		node.set_owner(_get_edited_scene_root())
 
-	return {"success": true, "name": str(node.name), "path": str(node.get_path()), "type": type_name}
+	return {"result": {"name": str(node.name), "path": str(node.get_path()), "type": type_name}}
 
 
 ## Delete a node from the scene tree with UndoRedo support.
@@ -102,18 +102,18 @@ func _delete_node(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % path}
+		return {"error": "Node not found: %s" % path}
 	if node == root:
-		return {"success": false, "error": "Cannot delete scene root"}
+		return {"error": "Cannot delete scene root"}
 
 	if _undo_helper:
 		_undo_helper.remove_node_with_undo(node)
 	else:
 		node.queue_free()
-	return {"success": true, "message": "Node deleted: %s" % path}
+	return {"result": {"message": "Node deleted: %s" % path}}
 
 
 ## Duplicate a node with UndoRedo support.
@@ -121,23 +121,23 @@ func _duplicate_node(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % path}
+		return {"error": "Node not found: %s" % path}
 
 	if _undo_helper:
 		var dupe: Node = _undo_helper.duplicate_node_with_undo(node)
 		if dupe:
-			return {"success": true, "original": path, "duplicate": str(dupe.get_path()), "name": str(dupe.name)}
-		return {"success": false, "error": "Duplication failed"}
+			return {"result": {"original": path, "duplicate": str(dupe.get_path()), "name": str(dupe.name)}}
+		return {"error": "Duplication failed"}
 	else:
 		var dupe2: Node = node.duplicate()
 		if dupe2 == null:
-			return {"success": false, "error": "Duplication failed"}
+			return {"error": "Duplication failed"}
 		node.get_parent().add_child(dupe2)
 		dupe2.set_owner(_get_edited_scene_root())
-		return {"success": true, "original": path, "duplicate": str(dupe2.get_path()), "name": str(dupe2.name)}
+		return {"result": {"original": path, "duplicate": str(dupe2.get_path()), "name": str(dupe2.name)}}
 
 
 ## Move a node to a new parent with UndoRedo support.
@@ -147,13 +147,13 @@ func _move_node(params: Dictionary) -> Dictionary:
 	var index: int = params.get("index", -1)
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % path}
+		return {"error": "Node not found: %s" % path}
 	var new_parent: Node = _resolve_node(new_parent_path, root)
 	if new_parent == null:
-		return {"success": false, "error": "New parent not found: %s" % new_parent_path}
+		return {"error": "New parent not found: %s" % new_parent_path}
 
 	if _undo_helper:
 		_undo_helper.move_node_with_undo(node, new_parent, index)
@@ -167,7 +167,7 @@ func _move_node(params: Dictionary) -> Dictionary:
 	var display_parent: String = new_parent_path
 	if display_parent == "." or display_parent == "/":
 		display_parent = "root (.)"
-	return {"success": true, "message": "Node moved to %s" % display_parent}
+	return {"result": {"message": "Node moved to %s" % display_parent}}
 
 
 ## Update a property on a node with UndoRedo support.
@@ -177,13 +177,13 @@ func _update_property(params: Dictionary) -> Dictionary:
 	var property: String = params.get("property", "")
 	var value: Variant = params.get("value")
 	if property.is_empty():
-		return {"success": false, "error": "Property name is required"}
+		return {"error": "Property name is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % path}
+		return {"error": "Node not found: %s" % path}
 
 	# Parse value for the expected type
 	if _has_property(node, property):
@@ -194,7 +194,7 @@ func _update_property(params: Dictionary) -> Dictionary:
 		_undo_helper.set_property_with_undo(node, property, value)
 	else:
 		node.set(property, value)
-	return {"success": true, "message": "Property %s updated on %s" % [property, path]}
+	return {"result": {"message": "Property %s updated on %s" % [property, path]}}
 
 
 ## Get serialized properties of a node.
@@ -204,10 +204,10 @@ func _get_node_properties(params: Dictionary) -> Dictionary:
 	var filter_props: Array = params.get("properties", [])
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % path}
+		return {"error": "Node not found: %s" % path}
 
 	var props: Dictionary = {}
 
@@ -233,7 +233,7 @@ func _get_node_properties(params: Dictionary) -> Dictionary:
 			var val: Variant = node.get(pname)
 			props[pname] = MCPVariantCodec.serialize_value(val)
 
-	return {"success": true, "path": path, "type": node.get_class(), "properties": props}
+	return {"result": {"path": path, "type": node.get_class(), "properties": props}}
 
 
 ## Create a resource and assign it to a node's appropriate property.
@@ -242,14 +242,14 @@ func _add_resource(params: Dictionary) -> Dictionary:
 	var resource_type: String = params.get("resource_type", "")
 	var properties: Dictionary = params.get("properties", {})
 	if resource_type.is_empty():
-		return {"success": false, "error": "Resource type is required"}
+		return {"error": "Resource type is required"}
 
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % path}
+		return {"error": "Node not found: %s" % path}
 
 	# Create resource by type
 	var res: Resource = null
@@ -288,7 +288,7 @@ func _add_resource(params: Dictionary) -> Dictionary:
 				if obj is Resource:
 					res = obj as Resource
 	if res == null:
-		return {"success": false, "error": "Unknown resource type: %s" % resource_type}
+		return {"error": "Unknown resource type: %s" % resource_type}
 
 	# Apply properties to the resource
 	for prop: String in properties:
@@ -329,9 +329,9 @@ func _add_resource(params: Dictionary) -> Dictionary:
 				assigned = true
 				break
 		if not assigned:
-			return {"success": false, "error": "Cannot auto-assign %s to %s (no matching property)" % [resource_type, node.get_class()]}
+			return {"error": "Cannot auto-assign %s to %s (no matching property)" % [resource_type, node.get_class()]}
 
-	return {"success": true, "resource_type": resource_type, "node": path}
+	return {"result": {"resource_type": resource_type, "node": path}}
 
 
 ## Set anchor preset on a Control node.
@@ -341,12 +341,12 @@ func _set_anchor_preset(params: Dictionary) -> Dictionary:
 	var preset: int = _resolve_preset(raw_preset)
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % path}
+		return {"error": "Node not found: %s" % path}
 	if not node is Control:
-		return {"success": false, "error": "Node is not a Control: %s" % path}
+		return {"error": "Node is not a Control: %s" % path}
 
 	var ctrl: Control = node as Control
 	var preset_enum: Control.LayoutPreset = preset as Control.LayoutPreset
@@ -373,7 +373,7 @@ func _set_anchor_preset(params: Dictionary) -> Dictionary:
 		ur.commit_action()
 	else:
 		ctrl.set_anchors_preset(preset_enum)
-	return {"success": true, "message": "Anchor preset %d set on %s" % [preset, path]}
+	return {"result": {"message": "Anchor preset %d set on %s" % [preset, path]}}
 
 
 ## Rename a node with UndoRedo support.
@@ -381,19 +381,19 @@ func _rename_node(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var new_name: String = params.get("new_name", "")
 	if new_name.is_empty():
-		return {"success": false, "error": "New name is required"}
+		return {"error": "New name is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % path}
+		return {"error": "Node not found: %s" % path}
 
 	if _undo_helper:
 		_undo_helper.rename_node_with_undo(node, new_name)
 	else:
 		node.name = new_name
-	return {"success": true, "old_path": path, "new_name": new_name, "new_path": str(node.get_path())}
+	return {"result": {"old_path": path, "new_name": new_name, "new_path": str(node.get_path())}}
 
 
 ## Connect a signal between two nodes with UndoRedo support.
@@ -403,21 +403,21 @@ func _connect_signal(params: Dictionary) -> Dictionary:
 	var target_path: String = params.get("target", "")
 	var method_name: String = params.get("method", "")
 	if signal_name.is_empty() or method_name.is_empty():
-		return {"success": false, "error": "Signal name and method name are required"}
+		return {"error": "Signal name and method name are required"}
 
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var source: Node = _resolve_node(source_path, root)
 	if source == null:
-		return {"success": false, "error": "Source not found: %s" % source_path}
+		return {"error": "Source not found: %s" % source_path}
 	var target: Node = _resolve_node(target_path, root)
 	if target == null:
-		return {"success": false, "error": "Target not found: %s" % target_path}
+		return {"error": "Target not found: %s" % target_path}
 	if not source.has_signal(signal_name):
-		return {"success": false, "error": "Signal '%s' not found on %s" % [signal_name, source_path]}
+		return {"error": "Signal '%s' not found on %s" % [signal_name, source_path]}
 	if not target.has_method(method_name):
-		return {"success": false, "error": "Method '%s' not found on %s" % [method_name, target_path]}
+		return {"error": "Method '%s' not found on %s" % [method_name, target_path]}
 
 	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
 	ur.create_action("MCP: Connect signal %s.%s -> %s.%s" % [source_path, signal_name, target_path, method_name])
@@ -425,7 +425,7 @@ func _connect_signal(params: Dictionary) -> Dictionary:
 	ur.add_undo_method(source, "disconnect", signal_name, Callable(target, method_name))
 	ur.commit_action()
 
-	return {"success": true, "message": "Connected %s.%s -> %s.%s" % [source_path, signal_name, target_path, method_name]}
+	return {"result": {"message": "Connected %s.%s -> %s.%s" % [source_path, signal_name, target_path, method_name]}}
 
 
 ## Disconnect a signal between two nodes with UndoRedo support.
@@ -435,21 +435,21 @@ func _disconnect_signal(params: Dictionary) -> Dictionary:
 	var target_path: String = params.get("target", "")
 	var method_name: String = params.get("method", "")
 	if signal_name.is_empty() or method_name.is_empty():
-		return {"success": false, "error": "Signal name and method name are required"}
+		return {"error": "Signal name and method name are required"}
 
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var source: Node = _resolve_node(source_path, root)
 	if source == null:
-		return {"success": false, "error": "Source not found: %s" % source_path}
+		return {"error": "Source not found: %s" % source_path}
 	var target: Node = _resolve_node(target_path, root)
 	if target == null:
-		return {"success": false, "error": "Target not found: %s" % target_path}
+		return {"error": "Target not found: %s" % target_path}
 
 	var callable: Callable = Callable(target, method_name)
 	if not source.is_connected(signal_name, callable):
-		return {"success": false, "error": "Signal not connected: %s.%s -> %s.%s" % [source_path, signal_name, target_path, method_name]}
+		return {"error": "Signal not connected: %s.%s -> %s.%s" % [source_path, signal_name, target_path, method_name]}
 
 	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
 	ur.create_action("MCP: Disconnect signal")
@@ -457,7 +457,7 @@ func _disconnect_signal(params: Dictionary) -> Dictionary:
 	ur.add_undo_method(source, "connect", signal_name, callable)
 	ur.commit_action()
 
-	return {"success": true, "message": "Disconnected %s.%s -> %s.%s" % [source_path, signal_name, target_path, method_name]}
+	return {"result": {"message": "Disconnected %s.%s -> %s.%s" % [source_path, signal_name, target_path, method_name]}}
 
 
 ## Get groups a node belongs to.
@@ -465,13 +465,13 @@ func _get_node_groups(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % path}
+		return {"error": "Node not found: %s" % path}
 
 	var groups: Array = node.get_groups()
-	return {"success": true, "path": path, "groups": groups}
+	return {"result": {"path": path, "groups": groups}}
 
 
 ## Set groups on a node (replaces user-added groups, preserves engine-managed ones).
@@ -480,10 +480,10 @@ func _set_node_groups(params: Dictionary) -> Dictionary:
 	var groups: Array = params.get("groups", [])
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
 	if node == null:
-		return {"success": false, "error": "Node not found: %s" % path}
+		return {"error": "Node not found: %s" % path}
 
 	# Remove only user-added groups (preserve engine-managed ones starting with "__")
 	var current_groups: Array = node.get_groups()
@@ -496,17 +496,17 @@ func _set_node_groups(params: Dictionary) -> Dictionary:
 		var g: String = g_variant as String
 		node.add_to_group(g, true)
 
-	return {"success": true, "message": "Groups set on %s" % path, "groups": groups}
+	return {"result": {"message": "Groups set on %s" % path, "groups": groups}}
 
 
 ## Find all nodes belonging to a specific group.
 func _find_nodes_in_group(params: Dictionary) -> Dictionary:
 	var group: String = params.get("group", "")
 	if group.is_empty():
-		return {"success": false, "error": "Group name is required"}
+		return {"error": "Group name is required"}
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 
 	var nodes: Array = root.get_tree().get_nodes_in_group(group)
 	var results: Array = []
@@ -516,7 +516,7 @@ func _find_nodes_in_group(params: Dictionary) -> Dictionary:
 			"name": str(n.name),
 			"type": n.get_class(),
 		})
-	return {"success": true, "group": group, "count": results.size(), "nodes": results}
+	return {"result": {"group": group, "count": results.size(), "nodes": results}}
 
 
 ## Get the current editor selection.
@@ -538,7 +538,7 @@ func _select_nodes(params: Dictionary) -> Dictionary:
 	var paths: Array = params.get("paths", [])
 	var root: Node = _get_edited_scene_root()
 	if root == null:
-		return {"success": false, "error": "No scene open"}
+		return {"error": "No scene open"}
 
 	var selection: EditorSelection = _plugin.get_editor_interface().get_selection()
 	selection.clear()
@@ -563,14 +563,12 @@ func _select_nodes(params: Dictionary) -> Dictionary:
 func _clear_editor_selection() -> Dictionary:
 	var selection: EditorSelection = _plugin.get_editor_interface().get_selection()
 	selection.clear()
-	return {"success": true, "message": "Selection cleared"}
+	return {"result": {"message": "Selection cleared"}}
 
 
 ## Helper: get edited scene root.
 func _get_edited_scene_root() -> Node:
-	if _plugin == null:
-		return null
-	return _plugin.get_editor_interface().get_edited_scene_root()
+	return MCPCommandHelpers.get_edited_scene_root(_plugin)
 
 
 ## Helper: resolve a path string to a Node in the edited scene.
@@ -586,129 +584,19 @@ func _resolve_node(path: String, root: Node) -> Node:
 	return root.get_node_or_null(path)
 
 
-## Helper: create node by type. Tries ClassDB fallback for unknown types.
+## Helper: create node by type. Uses shared MCPNodeFactory.
 func _create_node_by_type(type_name: String) -> Node:
-	match type_name:
-		"Node":
-			return Node.new()
-		"Node2D":
-			return Node2D.new()
-		"Node3D":
-			return Node3D.new()
-		"Control":
-			return Control.new()
-		"Sprite2D":
-			return Sprite2D.new()
-		"Sprite3D":
-			return Sprite3D.new()
-		"MeshInstance3D":
-			return MeshInstance3D.new()
-		"MeshInstance2D":
-			return MeshInstance2D.new()
-		"Camera2D":
-			return Camera2D.new()
-		"Camera3D":
-			return Camera3D.new()
-		"StaticBody2D":
-			return StaticBody2D.new()
-		"StaticBody3D":
-			return StaticBody3D.new()
-		"CharacterBody2D":
-			return CharacterBody2D.new()
-		"CharacterBody3D":
-			return CharacterBody3D.new()
-		"RigidBody2D":
-			return RigidBody2D.new()
-		"RigidBody3D":
-			return RigidBody3D.new()
-		"Area2D":
-			return Area2D.new()
-		"Area3D":
-			return Area3D.new()
-		"Label":
-			return Label.new()
-		"Button":
-			return Button.new()
-		"TextureRect":
-			return TextureRect.new()
-		"ColorRect":
-			return ColorRect.new()
-		"VBoxContainer":
-			return VBoxContainer.new()
-		"HBoxContainer":
-			return HBoxContainer.new()
-		"MarginContainer":
-			return MarginContainer.new()
-		"Panel":
-			return Panel.new()
-		"PanelContainer":
-			return PanelContainer.new()
-		"CollisionShape2D":
-			return CollisionShape2D.new()
-		"CollisionShape3D":
-			return CollisionShape3D.new()
-		"AnimationPlayer":
-			return AnimationPlayer.new()
-		"AnimationTree":
-			return AnimationTree.new()
-		"TileMap":
-			return TileMap.new()
-		"GPUParticles2D":
-			return GPUParticles2D.new()
-		"GPUParticles3D":
-			return GPUParticles3D.new()
-		"AudioStreamPlayer":
-			return AudioStreamPlayer.new()
-		"AudioStreamPlayer2D":
-			return AudioStreamPlayer2D.new()
-		"AudioStreamPlayer3D":
-			return AudioStreamPlayer3D.new()
-		"DirectionalLight3D":
-			return DirectionalLight3D.new()
-		"OmniLight3D":
-			return OmniLight3D.new()
-		"SpotLight3D":
-			return SpotLight3D.new()
-		"SubViewport":
-			return SubViewport.new()
-		"SubViewportContainer":
-			return SubViewportContainer.new()
-		"NavigationRegion2D":
-			return NavigationRegion2D.new()
-		"NavigationRegion3D":
-			return NavigationRegion3D.new()
-		"NavigationAgent2D":
-			return NavigationAgent2D.new()
-		"NavigationAgent3D":
-			return NavigationAgent3D.new()
-		"CSGBox3D":
-			return CSGBox3D.new()
-		"CSGSphere3D":
-			return CSGSphere3D.new()
-		"CSGCylinder3D":
-			return CSGCylinder3D.new()
-		_:
-			if ClassDB.can_instantiate(type_name):
-				var obj: Object = ClassDB.instantiate(type_name)
-				if obj is Node:
-					return obj as Node
-			return null
+	return MCPNodeFactory.create_node(type_name)
 
 
 ## Helper: check if object has a property by name.
 func _has_property(obj: Object, prop: String) -> bool:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return true
-	return false
+	return MCPCommandHelpers.has_property(obj, prop)
 
 
 ## Helper: get the Variant type of a property.
 func _get_property_type(obj: Object, prop: String) -> int:
-	for p: Dictionary in obj.get_property_list():
-		if p["name"] as String == prop:
-			return p["type"] as int
-	return TYPE_NIL
+	return MCPCommandHelpers.get_property_type(obj, prop)
 
 
 ## Helper: resolve a preset value (string name or int) to Control.LayoutPreset int.

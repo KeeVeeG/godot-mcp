@@ -45,24 +45,30 @@ func _ensure_game_running() -> bool:
 
 
 ## Send a request to the runtime via IPC and wait for response.
+## Uses non-blocking await instead of OS.delay_msec to keep the editor responsive.
 func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	if not _ensure_game_running():
 		return {"error": "Game is not running. Start the scene before using runtime commands."}
 
-	# Clean stale response file from previous requests
+	# Clean stale response files from previous requests
 	if FileAccess.file_exists(RESPONSE_PATH):
 		DirAccess.remove_absolute(RESPONSE_PATH)
+	if FileAccess.file_exists(RESPONSE_PATH + ".tmp"):
+		DirAccess.remove_absolute(RESPONSE_PATH + ".tmp")
 
 	var request_id: String = "mcp_%d" % _next_request_id
 	_next_request_id += 1
 
 	var request: Dictionary = {"method": method, "params": params, "request_id": request_id}
 	var json_text: String = JSON.stringify(request)
-	var file := FileAccess.open(REQUEST_PATH, FileAccess.WRITE)
+	# Atomic write: write to .tmp then rename to prevent partial reads
+	var tmp_path: String = REQUEST_PATH + ".tmp"
+	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if file == null:
 		return {"error": "Failed to write IPC request"}
 	file.store_string(json_text)
 	file.close()
+	DirAccess.rename_absolute(tmp_path, REQUEST_PATH)
 
 	# Wait for response with timeout
 	var start: float = Time.get_unix_time_from_system()
@@ -86,100 +92,101 @@ func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 						continue
 					return resp_data
 				return {"error": "Failed to parse IPC response"}
-		OS.delay_msec(10)
+		# Non-blocking: yield one frame instead of blocking with OS.delay_msec
+		await _plugin.get_tree().process_frame
 	return {"error": "IPC request timed out (%.1fs)" % IPC_TIMEOUT}
 
 
 ## Get the game scene tree.
 func get_game_scene_tree(params: Dictionary) -> Dictionary:
-	return _ipc_request("get_game_scene_tree", params)
+	return await _ipc_request("get_game_scene_tree", params)
 
 
 ## Get game node properties.
 func get_game_node_properties(params: Dictionary) -> Dictionary:
-	return _ipc_request("get_game_node_properties", params)
+	return await _ipc_request("get_game_node_properties", params)
 
 
 ## Set a game node property.
 func set_game_node_property(params: Dictionary) -> Dictionary:
-	return _ipc_request("set_game_node_property", params)
+	return await _ipc_request("set_game_node_property", params)
 
 
 ## Execute GDScript code in the game context.
 func execute_game_script(params: Dictionary) -> Dictionary:
-	return _ipc_request("execute_game_script", params)
+	return await _ipc_request("execute_game_script", params)
 
 
 ## Capture multiple frames from the game.
 func capture_frames(params: Dictionary) -> Dictionary:
-	return _ipc_request("capture_frames", params)
+	return await _ipc_request("capture_frames", params)
 
 
 ## Monitor properties over time.
 func monitor_properties(params: Dictionary) -> Dictionary:
-	return _ipc_request("monitor_properties", params)
+	return await _ipc_request("monitor_properties", params)
 
 
 ## Start recording input.
 func start_recording(params: Dictionary) -> Dictionary:
-	return _ipc_request("start_recording", params)
+	return await _ipc_request("start_recording", params)
 
 
 ## Stop recording input.
 func stop_recording(params: Dictionary) -> Dictionary:
-	return _ipc_request("stop_recording", params)
+	return await _ipc_request("stop_recording", params)
 
 
 ## Replay recorded input.
 func replay_recording(params: Dictionary) -> Dictionary:
-	return _ipc_request("replay_recording", params)
+	return await _ipc_request("replay_recording", params)
 
 
 ## Find nodes by script path.
 func find_nodes_by_script(params: Dictionary) -> Dictionary:
-	return _ipc_request("find_nodes_by_script", params)
+	return await _ipc_request("find_nodes_by_script", params)
 
 
 ## Get autoload node info.
 func get_autoload(params: Dictionary) -> Dictionary:
-	return _ipc_request("get_autoload", params)
+	return await _ipc_request("get_autoload", params)
 
 
 ## Batch get properties from multiple nodes.
 func batch_get_properties(params: Dictionary) -> Dictionary:
-	return _ipc_request("batch_get_properties", params)
+	return await _ipc_request("batch_get_properties", params)
 
 
 ## Find UI elements matching a filter.
 func find_ui_elements(params: Dictionary) -> Dictionary:
-	return _ipc_request("find_ui_elements", params)
+	return await _ipc_request("find_ui_elements", params)
 
 
 ## Click a button by its text.
 func click_button_by_text(params: Dictionary) -> Dictionary:
-	return _ipc_request("click_button_by_text", params)
+	return await _ipc_request("click_button_by_text", params)
 
 
 ## Wait for a node to appear.
 func wait_for_node(params: Dictionary) -> Dictionary:
-	return _ipc_request("wait_for_node", params)
+	return await _ipc_request("wait_for_node", params)
 
 
 ## Find nodes near a position.
 func find_nearby_nodes(params: Dictionary) -> Dictionary:
-	return _ipc_request("find_nearby_nodes", params)
+	return await _ipc_request("find_nearby_nodes", params)
 
 
 ## Navigate a node to a target.
 func navigate_to(params: Dictionary) -> Dictionary:
-	return _ipc_request("navigate_to", params)
+	return await _ipc_request("navigate_to", params)
 
 
 ## Move a node to a position.
 func move_to(params: Dictionary) -> Dictionary:
-	return _ipc_request("move_to", params)
+	return await _ipc_request("move_to", params)
 
 
 ## Watch signals on a node.
 func watch_signals(params: Dictionary) -> Dictionary:
-	return _ipc_request("watch_signals", params)
+	return await _ipc_request("watch_signals", params)

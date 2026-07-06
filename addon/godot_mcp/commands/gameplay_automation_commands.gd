@@ -78,7 +78,7 @@ func simulate_gameplay_scenario(params: Dictionary) -> Dictionary:
 			failed += 1
 
 		if wait_ms > 0:
-			_non_blocking_wait(wait_ms)
+			await _non_blocking_wait(wait_ms)
 
 	var total_duration: float = Time.get_ticks_msec() - start_time
 
@@ -133,8 +133,8 @@ func record_gameplay(params: Dictionary) -> Dictionary:
 			})
 			next_sample = now + sample_interval
 
-		# Non-blocking 16ms wait (~60fps polling) — keeps editor responsive
-		_non_blocking_wait(16)
+		# Non-blocking 16ms wait (~60fps polling) — uses scene tree timer
+		await _non_blocking_wait(16)
 
 	_is_recording = false
 
@@ -207,7 +207,7 @@ func replay_gameplay(params: Dictionary) -> Dictionary:
 		var event_time: float = event.get("time", 0.0) / speed
 		var wait_ms: int = int(event_time - last_event_time)
 		if wait_ms > 0:
-			_non_blocking_wait(wait_ms)
+			await _non_blocking_wait(wait_ms)
 		last_event_time = event_time
 
 		var event_type: String = event.get("type", "")
@@ -641,12 +641,10 @@ func _find_buttons_recursive(node: Node, text: String, results: Array) -> void:
 		_find_buttons_recursive(child, text, results)
 
 
-## Helper: Non-blocking wait that processes editor events between 1ms sleeps.
-## Keeps the editor responsive during long waits instead of freezing.
+## Helper: Non-blocking wait using scene tree timer.
+## Keeps the editor fully responsive during the wait instead of freezing.
 func _non_blocking_wait(total_ms: int) -> void:
-	var elapsed: int = 0
-	while elapsed < total_ms:
-		var chunk: int = min(1, total_ms - elapsed)
-		OS.delay_msec(chunk)
-		elapsed += chunk
-		DisplayServer.process_events()
+	if total_ms <= 0:
+		return
+	var seconds: float = total_ms / 1000.0
+	await _plugin.get_tree().create_timer(seconds).timeout
