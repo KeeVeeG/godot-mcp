@@ -701,9 +701,9 @@ func _simulate_mouse_click(params: Dictionary) -> Dictionary:
 	else:
 		pos = Vector2.ZERO
 	
-	var button: int = params.get("button", MOUSE_BUTTON_LEFT)
+	var button = params.get("button", MOUSE_BUTTON_LEFT)
 	if button is String:
-		match button.to_lower():
+		match (button as String).to_lower():
 			"left": button = MOUSE_BUTTON_LEFT
 			"right": button = MOUSE_BUTTON_RIGHT
 			"middle": button = MOUSE_BUTTON_MIDDLE
