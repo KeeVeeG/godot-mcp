@@ -128,18 +128,21 @@ func _build_file_tree(path: String, filters: Array, depth: int, max_depth: int) 
 	return result
 
 
-## Search files by name/content query.
+## Search files by name or content query.
+## Set "search_content": true to search inside file contents (text files only).
 func _search_files(params: Dictionary) -> Dictionary:
 	var query: String = params.get("query", "").to_lower()
 	if query.is_empty():
 		return {"success": false, "error": "Query cannot be empty"}
+	var search_content: bool = params.get("search_content", false)
+	var max_content_results: int = params.get("max_results", 50)
 	var results: Array = []
-	_search_recursive("res://", query, results, 0, 8)
-	return {"success": true, "matches": results, "count": results.size()}
+	_search_recursive("res://", query, results, 0, 8, search_content, max_content_results)
+	return {"success": true, "matches": results, "count": results.size(), "search_content": search_content}
 
 
-func _search_recursive(path: String, query: String, results: Array, depth: int, max_depth: int) -> void:
-	if depth >= max_depth:
+func _search_recursive(path: String, query: String, results: Array, depth: int, max_depth: int, search_content: bool = false, max_results: int = 50) -> void:
+	if depth >= max_depth or results.size() >= max_results:
 		return
 	var dir: DirAccess = DirAccess.open(path)
 	if dir == null:
@@ -147,6 +150,8 @@ func _search_recursive(path: String, query: String, results: Array, depth: int, 
 	dir.list_dir_begin()
 	var file_name: String = dir.get_next()
 	while file_name != "":
+		if results.size() >= max_results:
+			break
 		if file_name.begins_with("."):
 			file_name = dir.get_next()
 			continue
@@ -154,18 +159,43 @@ func _search_recursive(path: String, query: String, results: Array, depth: int, 
 		if dir.current_is_dir():
 			if file_name.to_lower().find(query) != -1:
 				results.append({"path": full_path, "type": "directory"})
-			_search_recursive(full_path, query, results, depth + 1, max_depth)
+			_search_recursive(full_path, query, results, depth + 1, max_depth, search_content, max_results)
 		else:
-			if file_name.to_lower().find(query) != -1:
-				results.append({"path": full_path, "type": "file", "name": file_name})
+			var name_match: bool = file_name.to_lower().find(query) != -1
+			var content_match: bool = false
+			if search_content and not name_match:
+				content_match = _file_content_matches(full_path, query)
+			if name_match or content_match:
+				var entry: Dictionary = {"path": full_path, "type": "file", "name": file_name}
+				if content_match and not name_match:
+					entry["match_type"] = "content"
+				results.append(entry)
 		file_name = dir.get_next()
 	dir.list_dir_end()
 
 
+## Helper: Check if a text file's content contains the query string.
+func _file_content_matches(file_path: String, query: String) -> bool:
+	var ext: String = file_path.get_extension().to_lower()
+	# Only search text-based files
+	if ext not in ["gd", "tscn", "tres", "cfg", "json", "txt", "md", "cs", "shader", "gdshader", "import"]:
+		return false
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
+	if file == null:
+		return false
+	var content: String = file.get_as_text().to_lower()
+	file.close()
+	return content.find(query) != -1
+
+
 ## Get all project settings, optionally filtered by prefix.
+## When no filter is provided, limits results to prevent oversized payloads.
 func _get_project_settings(params: Dictionary) -> Dictionary:
 	var filter_prefix: String = params.get("filter", "")
+	var max_results: int = params.get("max_results", 200)
 	var settings: Dictionary = {}
+	var count: int = 0
+	var truncated: bool = false
 	var props: Array = ProjectSettings.get_property_list()
 	for p: Dictionary in props:
 		var name: String = p["name"] as String
@@ -176,7 +206,15 @@ func _get_project_settings(params: Dictionary) -> Dictionary:
 		var value: Variant = ProjectSettings.get_setting(name)
 		if value != null:
 			settings[name] = MCPVariantCodec.serialize_value(value)
-	return {"success": true, "settings": settings}
+			count += 1
+			if filter_prefix.is_empty() and count >= max_results:
+				truncated = true
+				break
+	var result: Dictionary = {"success": true, "settings": settings}
+	if truncated:
+		result["truncated"] = true
+		result["message"] = "Results limited to %d entries. Use 'filter' param to narrow results." % max_results
+	return result
 
 
 ## Set a project setting and save.
