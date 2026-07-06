@@ -542,12 +542,21 @@ func _select_nodes(params: Dictionary) -> Dictionary:
 
 	var selection: EditorSelection = _plugin.get_editor_interface().get_selection()
 	selection.clear()
+	var selected_count: int = 0
+	var not_found: Array = []
 	for p_variant: Variant in paths:
 		var p: String = p_variant as String
 		var node: Node = _resolve_node(p, root)
 		if node:
 			selection.add_node(node)
-	return {"success": true, "message": "Selected %d nodes" % paths.size()}
+			selected_count += 1
+		else:
+			not_found.append(p)
+	var result: Dictionary = {"success": true, "message": "Selected %d of %d nodes" % [selected_count, paths.size()], "selected": selected_count}
+	if not_found.size() > 0:
+		result["not_found"] = not_found
+		result["warning"] = "%d path(s) not found: %s" % [not_found.size(), ", ".join(not_found)]
+	return result
 
 
 ## Clear the editor selection.
