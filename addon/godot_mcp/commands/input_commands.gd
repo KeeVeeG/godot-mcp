@@ -42,7 +42,7 @@ func simulate_key(params: Dictionary) -> Dictionary:
 
 	# Write to runtime IPC if game is running
 	if _plugin.get_editor_interface().is_playing_scene():
-		_write_runtime_command("simulate_input", {"event": "key", "keycode": keycode, "pressed": pressed, "echo": echo})
+		_write_runtime_command("simulate_input", {"type": "key", "keycode": keycode, "pressed": pressed, "echo": echo})
 		return {"result": "Key event sent to game: %s (pressed=%s)" % [key_str, str(pressed)]}
 	else:
 		return {"result": "Key event created: %s (game not running, event not dispatched)" % key_str}
@@ -75,7 +75,7 @@ func simulate_mouse_click(params: Dictionary) -> Dictionary:
 
 	if _plugin.get_editor_interface().is_playing_scene():
 		_write_runtime_command("simulate_input", {
-			"event": "mouse_click",
+			"type": "mouse_click",
 			"x": pos.x, "y": pos.y,
 			"button": button,
 			"pressed": pressed,
@@ -112,7 +112,7 @@ func simulate_mouse_move(params: Dictionary) -> Dictionary:
 
 	if _plugin.get_editor_interface().is_playing_scene():
 		_write_runtime_command("simulate_input", {
-			"event": "mouse_move",
+			"type": "mouse_move",
 			"x": pos.x, "y": pos.y,
 			"rel_x": rel.x, "rel_y": rel.y,
 		})
@@ -131,7 +131,7 @@ func simulate_action(params: Dictionary) -> Dictionary:
 
 	if _plugin.get_editor_interface().is_playing_scene():
 		_write_runtime_command("simulate_input", {
-			"event": "action",
+			"type": "action",
 			"action": action,
 			"pressed": pressed,
 		})
@@ -158,7 +158,7 @@ func simulate_sequence(params: Dictionary) -> Dictionary:
 			var delay_ms: int = step.get("delay", 1)
 			delay_frames = max(1, delay_ms * 60 / 1000)
 		commands.append({
-			"event": step.get("type", ""),
+			"type": step.get("type", ""),
 			"delay_frames": delay_frames,
 			"data": step,
 		})
