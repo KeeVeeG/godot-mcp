@@ -239,8 +239,9 @@ func list_resources(params: Dictionary) -> Dictionary:
 	if not type_filter.is_empty():
 		var filtered: Array = []
 		for f: String in files:
-			var res: Resource = ResourceLoader.load(f)
-			if res != null and res.is_class(type_filter):
+			# Use ResourceLoader.get_resource_type() to check type without loading
+			var res_type: String = ResourceLoader.get_resource_type(f)
+			if res_type != "" and (res_type == type_filter or ClassDB.is_parent_class(res_type, type_filter)):
 				filtered.append(f)
 		files = filtered
 	return {"result": {"resources": files, "count": files.size(), "type_filter": type_filter}}
