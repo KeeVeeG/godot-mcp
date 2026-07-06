@@ -107,7 +107,7 @@
    COPY CODE
    ═══════════════════════════════════════════════════════════ */
 function copyCode() {
-  const code = '{\n  "mcpServers": {\n    "godot": {\n      "command": "node",\n      "args": ["/path/to/godot-mcp/server/dist/index.js"]\n    }\n  }\n}';
+  const code = '{\n  "mcpServers": {\n    "godot": {\n      "command": "npx",\n      "args": ["-y", "@keeveeg/godot-mcp"]\n    }\n  }\n}';
   const btn = document.getElementById('copyBtn');
   navigator.clipboard
     .writeText(code)

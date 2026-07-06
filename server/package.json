@@ -1,7 +1,7 @@
 {
-  "name": "godot-mcp-server",
+  "name": "@keeveeg/godot-mcp",
   "version": "1.0.0",
-  "description": "MCP server for Godot Engine editor integration",
+  "description": "MCP server for Godot Engine — 300+ AI-powered tools for game development",
   "author": "KeeVeeG",
   "license": "MIT",
   "repository": {
@@ -9,11 +9,24 @@
     "url": "https://github.com/KeeVeeG/godot-mcp",
     "directory": "server"
   },
+  "homepage": "https://keeveeg.github.io/godot-mcp",
+  "keywords": [
+    "godot",
+    "mcp",
+    "model-context-protocol",
+    "game-development",
+    "ai",
+    "godot-engine",
+    "gamedev"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "godot-mcp": "dist/index.js"
   },
+  "files": [
+    "dist/"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",

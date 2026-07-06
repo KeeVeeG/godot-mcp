@@ -133,8 +133,21 @@ Add the following to your MCP client's configuration file:
 {
   "mcpServers": {
     "godot": {
+      "command": "npx",
+      "args": ["-y", "@keeveeg/godot-mcp"]
+    }
+  }
+}
+```
+
+For local development, use the full path:
+
+```json
+{
+  "mcpServers": {
+    "godot": {
       "command": "node",
-      "args": ["/absolute/path/to/godot-mcp/server/dist/index.js"]
+      "args": ["/path/to/godot-mcp/server/dist/index.js"]
     }
   }
 }
@@ -150,10 +163,10 @@ Example `opencode.json`:
 
 ```json
 {
-  "mcpServers": {
+  "mcp": {
     "godot": {
-      "command": "node",
-      "args": ["C:/path/to/godot-mcp/server/dist/index.js"]
+      "type": "local",
+      "command": ["npx", "-y", "@keeveeg/godot-mcp"]
     }
   }
 }
