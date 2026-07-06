@@ -64,9 +64,6 @@ func _load_config() -> void:
 		var config_dict: Dictionary = data as Dictionary
 		if config_dict.has("enabled_tools") and config_dict["enabled_tools"] is Dictionary:
 			enabled_tools = config_dict["enabled_tools"] as Dictionary
-		if config_dict.has("port_start") and config_dict["port_start"] is int:
-			# Override port range start if configured
-			pass
 
 
 func is_tool_enabled(tool_name: String) -> bool:

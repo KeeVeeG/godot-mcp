@@ -162,6 +162,8 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 			return _simulate_input(params)
 		"simulate_sequence":
 			return await _simulate_sequence(params)
+		"get_monitor_results":
+			return _get_monitor_results(params.get("monitor_id", 0))
 		"capture_screenshot":
 			return _capture_screenshot(params.get("path", "user://mcp_game_screenshot.png"))
 		"ping":
@@ -363,7 +365,35 @@ func _update_monitors(_delta: float) -> void:
 		(monitor["data"] as Array).append(entry)
 
 	for monitor_id: int in completed:
-		pass  # Monitor results can be fetched via get_test_report
+		# Mark as completed — results retrievable via get_monitor_results
+		_monitors[monitor_id]["completed"] = true
+		_monitors[monitor_id]["completion_time"] = now
+
+	# Auto-cleanup completed monitors after 60 seconds
+	var stale: Array = []
+	for monitor_id: int in _monitors:
+		var m: Dictionary = _monitors[monitor_id]
+		if m.get("completed", false):
+			var since_complete: float = now - (m.get("completion_time", now) as float)
+			if since_complete > 60.0:
+				stale.append(monitor_id)
+	for monitor_id: int in stale:
+		_monitors.erase(monitor_id)
+
+
+## Get results for a completed monitor.
+func _get_monitor_results(monitor_id: int) -> Dictionary:
+	if not _monitors.has(monitor_id):
+		return {"error": "Monitor not found: %d" % monitor_id}
+	var monitor: Dictionary = _monitors[monitor_id]
+	return {"result": {
+		"monitor_id": monitor_id,
+		"path": monitor["path"],
+		"properties": monitor["props"],
+		"data": monitor["data"],
+		"sample_count": (monitor["data"] as Array).size(),
+		"completed": monitor.get("completed", false),
+	}}
 
 
 ## Start recording input events.
@@ -384,9 +414,8 @@ func _stop_recording() -> Dictionary:
 func _record_input_frame(_delta: float) -> void:
 	var frame_events: Dictionary = {"time": Time.get_unix_time_from_system() - _record_start_time}
 	var keys: Array = []
-	for key: int in range(KEY_SPACE, KEY_Z + 1):
-		if Input.is_key_pressed(key):
-			keys.append(OS.get_keycode_string(key))
+	for keycode: int in Input.get_pressed_keys():
+		keys.append(OS.get_keycode_string(keycode))
 	if keys.size() > 0:
 		frame_events["keys"] = keys
 	var mouse_pos: Vector2 = get_viewport().get_mouse_position()
@@ -577,6 +606,8 @@ func _wait_for_node(path: String, timeout: float) -> Dictionary:
 
 
 ## Find nodes near a position.
+## NOTE: 2D positions are converted to Vector3 (z=0) for uniform distance calculation.
+## Both 2D and 3D nodes are included in results with distances in 3D space.
 func _find_nearby_nodes(pos: Variant, radius: float) -> Dictionary:
 	var center: Vector3
 	if pos is Array:
@@ -853,8 +884,8 @@ func _simulate_sequence(params: Dictionary) -> Dictionary:
 		evt_params["type"] = evt_type
 		_simulate_input(evt_params)
 		
-		var delay_ms: float = float(evt_dict.get("delay", 0.0))
-		if delay_ms > 0.0:
-			await get_tree().create_timer(delay_ms / 1000.0).timeout
+		var delay_sec: float = float(evt_dict.get("delay", 0.0))
+		if delay_sec > 0.0:
+			await get_tree().create_timer(delay_sec).timeout
 	
 	return {"result": "Replayed %d input events" % events.size()}
