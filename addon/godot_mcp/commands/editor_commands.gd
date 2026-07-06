@@ -193,10 +193,12 @@ func _get_signals(params: Dictionary) -> Dictionary:
 
 ## Reload the MCP plugin by toggling it off and on.
 func _reload_plugin() -> Dictionary:
-	# Note: this will destroy the current plugin instance and reinitialize it.
-	# The WebSocket connection will be torn down and re-established.
-	_plugin.get_editor_interface().set_plugin_enabled("godot_mcp", false)
-	_plugin.get_editor_interface().set_plugin_enabled("godot_mcp", true)
+	# Schedule reload for next frame so the response dict can be sent first.
+	# Without call_deferred, set_plugin_enabled(false) tears down the plugin
+	# (and its WebSocket) before the response reaches the client.
+	var ei: EditorInterface = _plugin.get_editor_interface()
+	ei.call_deferred("set_plugin_enabled", "godot_mcp", false)
+	ei.call_deferred("set_plugin_enabled", "godot_mcp", true)
 	return {"success": true, "message": "Plugin reloaded - connection will be re-established"}
 
 
