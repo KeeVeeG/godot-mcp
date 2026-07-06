@@ -73,32 +73,42 @@ func _set_remote_debug(params: Dictionary) -> Dictionary:
 		editor_settings.set_setting("network/debug/remote_port", port)
 	else:
 		editor_settings.set_setting("network/debug/remote_host", "")
-	editor_settings.set_setting("network/debug/remote_port", port)
+		# Don't set port when disabling — it's irrelevant when remote debug is off
 	return {"success": true, "enabled": enabled, "host": host, "port": port}
 
 
 ## Enable/disable profilers.
+## Profiler toggles (cpu/gpu/memory/network) are editor debugger UI controls
+## and cannot be set via ProjectSettings. Only profiler limits are configurable.
 func _set_profilers(params: Dictionary) -> Dictionary:
 	var changed: Dictionary = {}
-	if params.has("cpu"):
-		var cpu: bool = params["cpu"] as bool
-		changed["cpu"] = cpu
-		changed["cpu_note"] = "CPU profiler is controlled by the editor debugger"
-	if params.has("gpu"):
-		var gpu: bool = params["gpu"] as bool
-		changed["gpu"] = gpu
-		changed["gpu_note"] = "GPU profiler is controlled by the editor debugger"
-	if params.has("memory"):
-		var mem: bool = params["memory"] as bool
-		changed["memory"] = mem
-		changed["memory_note"] = "Memory profiler is controlled by the editor debugger"
-	if params.has("network"):
-		var net: bool = params["network"] as bool
-		changed["network"] = net
-		changed["note"] = "Network profiler is controlled by the editor"
-	if changed.is_empty():
-		return {"success": false, "error": "No profiler settings provided"}
-	return {"success": true, "changed": changed}
+	var warnings: Array = []
+	var has_savable: bool = false
+
+	# Configurable profiler limits (actual ProjectSettings)
+	if params.has("max_functions"):
+		ProjectSettings.set_setting("debug/settings/profiler/max_functions", params["max_functions"] as int)
+		changed["max_functions"] = params["max_functions"] as int
+		has_savable = true
+	if params.has("max_timestamp_query_elements"):
+		ProjectSettings.set_setting("debug/settings/profiler/max_timestamp_query_elements", params["max_timestamp_query_elements"] as int)
+		changed["max_timestamp_query_elements"] = params["max_timestamp_query_elements"] as int
+		has_savable = true
+
+	# UI-only toggles — report as warnings
+	for toggle: String in ["cpu", "gpu", "memory", "network"]:
+		if params.has(toggle):
+			warnings.append("%s profiler toggle is controlled by the editor debugger panel, not ProjectSettings" % toggle)
+
+	if changed.is_empty() and warnings.is_empty():
+		return {"success": false, "error": "No profiler settings provided. Configurable: max_functions, max_timestamp_query_elements"}
+
+	if has_savable:
+		var err: Error = ProjectSettings.save()
+		if err != OK:
+			return {"success": false, "error": "Failed to save: %s" % error_string(err)}
+
+	return {"success": true, "changed": changed, "warnings": warnings}
 
 
 ## Configure error handling behavior.

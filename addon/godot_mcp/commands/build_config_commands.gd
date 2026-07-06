@@ -80,19 +80,22 @@ func _set_configuration(params: Dictionary) -> Dictionary:
 
 
 ## Set scripting backend.
+## Note: The scripting backend is determined at project creation and cannot be
+## changed at runtime. This function validates the backend and reports availability.
 func _set_scripting_backend(params: Dictionary) -> Dictionary:
 	var backend: String = params.get("backend", "gdscript")
-	# Note: Changing scripting backend requires project reload
 	match backend:
 		"gdscript":
-			pass  # Default, no special setting needed
+			return {"success": true, "backend": "gdscript", "available": true, "message": "GDScript is the default backend"}
 		"csharp":
-			pass  # Requires .NET build support
+			var has_csharp: bool = DirAccess.dir_exists_absolute("res://.godot/mono")
+			if has_csharp:
+				return {"success": true, "backend": "csharp", "available": true, "message": "C# backend is available"}
+			return {"success": false, "backend": "csharp", "available": false, "error": "C# backend not available — requires .NET build support. Create a new project with C# enabled."}
 		"visual_script":
-			pass  # Deprecated in Godot 4
+			return {"success": false, "backend": "visual_script", "available": false, "error": "VisualScript was removed in Godot 4.0"}
 		_:
-			return {"success": false, "error": "Unknown backend: %s" % backend}
-	return {"success": true, "backend": backend, "message": "Scripting backend set to %s (requires project reload)" % backend}
+			return {"success": false, "error": "Unknown backend: %s (available: gdscript, csharp)" % backend}
 
 
 ## Set export resource filter.
@@ -164,15 +167,15 @@ func _validate() -> Dictionary:
 	var vh: int = ProjectSettings.get_setting("display/window/size/viewport_height", 648)
 	if vw <= 0 or vh <= 0:
 		errors.append("Invalid viewport size: %dx%d" % [vw, vh])
-	# Check autoloads
-	for i: int in range(1, 128):
-		var key: String = "autoload/%d" % i
-		if not ProjectSettings.has_setting(key):
-			break
-		var val: String = ProjectSettings.get_setting(key, "") as String
-		var path: String = val.substr(1) if val.begins_with("*") else val
-		if not FileAccess.file_exists(path) and not ResourceLoader.exists(path):
-			warnings.append("Autoload resource not found: %s" % path)
+	# Check autoloads — iterate all autoload/ entries via property list
+	var props: Array = ProjectSettings.get_property_list()
+	for prop: Dictionary in props:
+		var prop_name: String = prop.get("name", "")
+		if prop_name.begins_with("autoload/"):
+			var val: String = ProjectSettings.get_setting(prop_name, "") as String
+			var path: String = val.substr(1) if val.begins_with("*") else val
+			if not FileAccess.file_exists(path) and not ResourceLoader.exists(path):
+				warnings.append("Autoload resource not found: %s" % path)
 	return {"success": true, "errors": errors, "warnings": warnings, "error_count": errors.size(), "warning_count": warnings.size()}
 
 

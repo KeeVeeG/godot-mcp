@@ -93,8 +93,10 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 			if err_val is String:
 				return {"error": {"code": -1, "message": err_val}}
 			return {"error": err_val}
-		# Legacy format: pass through directly
-		return dict
+		# Legacy format: normalize to {result: ...} for consistent response shape
+		if dict.has("result"):
+			return dict
+		return {"result": dict}
 	elif result is String:
 		return {"result": result}
 	else:

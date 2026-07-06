@@ -388,9 +388,8 @@ func set_particle_velocity_curve(params: Dictionary) -> Dictionary:
 			var x: float = pt_dict.get("offset", pt_dict.get("x", 0.0)) as float
 			var y: float = pt_dict.get("value", pt_dict.get("y", 0.0)) as float
 			curve.add_point(Vector2(x, y))
-	var tex: CurveTexture = CurveTexture.new()
-	tex.curve = curve
-	process_mat.velocity_limit_curve = tex
+	# Assign Curve directly — velocity_limit_curve expects a Curve, not CurveTexture
+	process_mat.velocity_limit_curve = curve
 	return {"result": "Velocity curve set on %s" % path}
 
 

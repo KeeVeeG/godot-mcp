@@ -128,6 +128,8 @@ func _ensure_runtime_autoload() -> void:
 
 	if not FileAccess.file_exists(config_path):
 		push_warning("[MCP] project.godot not found, cannot register autoload")
+		if _status_panel:
+			_status_panel.log_activity("project.godot not found — cannot register autoload", "error")
 		return
 
 	# Check if already registered (autoloads are stored under numeric keys)
@@ -135,6 +137,8 @@ func _ensure_runtime_autoload() -> void:
 	var err: Error = config.load(config_path)
 	if err != OK:
 		push_warning("[MCP] Failed to load project.godot")
+		if _status_panel:
+			_status_panel.log_activity("Failed to load project.godot: %s" % error_string(err), "error")
 		return
 
 	# Scan existing autoload entries for mcp_runtime to avoid duplicates
@@ -157,6 +161,8 @@ func _ensure_runtime_autoload() -> void:
 	var save_err: Error = config.save(config_path)
 	if save_err != OK:
 		push_warning("[MCP] Failed to save autoload to project.godot")
+		if _status_panel:
+			_status_panel.log_activity("Failed to save autoload to project.godot: %s" % error_string(save_err), "error")
 		return
 	print("[MCP] Registered runtime autoload MCPRuntime in project.godot")
 
@@ -291,14 +297,8 @@ func _on_ws_message(message: Dictionary) -> void:
 	# Route to handler
 	var result: Dictionary = _router.route_request(method_name, params)
 
-	# Send response back
-	var response: Dictionary = {
-		"jsonrpc": "2.0",
-		"method": method_name,
-		"id": msg_id,
-	}
+	# Log result to status panel
 	if result.has("error"):
-		response["error"] = result["error"]
 		if _status_panel:
 			var err_msg: String = "Unknown"
 			if result["error"] is Dictionary:
@@ -307,7 +307,6 @@ func _on_ws_message(message: Dictionary) -> void:
 				err_msg = result["error"]
 			_status_panel.log_activity("Error in %s: %s" % [method_name, err_msg], "error")
 	else:
-		response["result"] = result.get("result", result)
 		if _status_panel:
 			_status_panel.log_activity("OK: %s" % method_name, "success")
 

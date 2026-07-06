@@ -34,6 +34,10 @@ var _ping_timer: float = 0.0
 ## Timestamp of last received message (for idle timeout detection)
 var _last_received_time: float = 0.0
 
+## Handshake timeout tracking
+var _connect_start_time: float = 0.0
+const HANDSHAKE_TIMEOUT: float = 2.0
+
 ## Config reference
 var _config: MCPConfig
 
@@ -66,6 +70,14 @@ func _process(delta: float) -> void:
 		_ws.poll()
 		var state: int = _ws.get_ready_state()
 
+		# Handshake timeout: if still connecting after HANDSHAKE_TIMEOUT, force reconnect
+		if state == WebSocketPeer.STATE_CONNECTING:
+			var connect_elapsed: float = Time.get_unix_time_from_system() - _connect_start_time
+			if connect_elapsed > HANDSHAKE_TIMEOUT:
+				push_warning("[MCP] WebSocket handshake timed out after %.1fs — reconnecting" % HANDSHAKE_TIMEOUT)
+				_handle_disconnect()
+				return
+
 		if state == WebSocketPeer.STATE_CLOSING:
 			# Wait for the close handshake
 			pass
@@ -94,11 +106,11 @@ func _process(delta: float) -> void:
 		# Check request timeouts
 		var now: float = Time.get_unix_time_from_system()
 		var timed_out_ids: Array = []
-		for req_id: int in _pending_requests:
+		for req_id: Variant in _pending_requests:
 			var req: Dictionary = _pending_requests[req_id] as Dictionary
 			if now - req["time"] as float > MCPConfig.REQUEST_TIMEOUT:
 				timed_out_ids.append(req_id)
-		for req_id: int in timed_out_ids:
+		for req_id: Variant in timed_out_ids:
 			var req: Dictionary = _pending_requests[req_id] as Dictionary
 			var deferred: Callable = req["callback"] as Callable
 			_pending_requests.erase(req_id)
@@ -198,6 +210,7 @@ func _connect_to_port(port: int) -> void:
 	_connected_port = port
 	_config.connected_port = port
 	_is_connected = true
+	_connect_start_time = Time.get_unix_time_from_system()
 	_ping_timer = 0.0
 	_reconnect_timer = 0.0
 	_last_received_time = Time.get_unix_time_from_system()
@@ -241,13 +254,13 @@ func _handle_message(text: String) -> void:
 	_last_received_time = Time.get_unix_time_from_system()
 	message_received.emit(msg_dict)
 
-	# Check if it's a response to a pending request
+	# Check if it's a response to a pending request (accept any id type per JSON-RPC 2.0)
 	if msg_dict.has("id"):
 		var msg_id: Variant = msg_dict["id"]
-		if msg_id is int and _pending_requests.has(msg_id as int):
-			var req: Dictionary = _pending_requests[msg_id as int] as Dictionary
+		if _pending_requests.has(msg_id):
+			var req: Dictionary = _pending_requests[msg_id] as Dictionary
 			var callback: Callable = req["callback"] as Callable
-			_pending_requests.erase(msg_id as int)
+			_pending_requests.erase(msg_id)
 			callback.call(msg_dict)
 
 

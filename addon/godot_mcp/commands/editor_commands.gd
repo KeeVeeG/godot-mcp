@@ -121,14 +121,18 @@ func _execute_editor_script(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Code cannot be empty"}
 
 	var script: GDScript = GDScript.new()
-	# Always use void — wrap "return X" lines in print() to avoid signature mismatch
+	# Use a class member to capture return values from user code
 	var lines: PackedStringArray = code.split("\n")
-	var wrapped_code: String = "extends EditorScript\n\nfunc _run() -> void:\n"
+	var wrapped_code: String = "extends EditorScript\n\nvar _mcp_return_value = null\n\nfunc _run() -> void:\n"
 	for line: String in lines:
 		var trimmed: String = line.strip_edges()
-		if trimmed.begins_with("return "):
-			# Convert "return X" to "print(X)" so void _run() works
-			wrapped_code += "    print(" + trimmed.substr(7) + ")\n"
+		if trimmed == "return":
+			# Bare return — valid in void function
+			wrapped_code += "    return\n"
+		elif trimmed.begins_with("return ") and trimmed.length() > 7:
+			# Capture return value via class member, then return
+			wrapped_code += "    _mcp_return_value = " + trimmed.substr(7) + "\n"
+			wrapped_code += "    return\n"
 		else:
 			wrapped_code += "    " + line + "\n"
 	script.source_code = wrapped_code
@@ -141,6 +145,11 @@ func _execute_editor_script(params: Dictionary) -> Dictionary:
 	if editor_script == null:
 		return {"success": false, "error": "Failed to create EditorScript instance"}
 	editor_script._run()
+
+	# Read captured return value if any code returned a value
+	var return_value: Variant = editor_script.get("_mcp_return_value")
+	if return_value != null:
+		return {"success": true, "result": return_value}
 	return {"success": true, "message": "Editor script executed successfully"}
 
 
