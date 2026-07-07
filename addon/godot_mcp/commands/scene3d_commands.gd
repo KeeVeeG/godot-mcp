@@ -219,7 +219,22 @@ func setup_environment(params: Dictionary) -> Dictionary:
 			_apply_environment_props(cam_env, properties)
 			return {"result": "Environment set on camera: %s" % path}
 		elif node == null:
-			return {"error": "Node not found: %s" % path}
+			# Create new WorldEnvironment at the requested path
+			var last_slash: int = path.rfind("/")
+			var create_parent: Node = root
+			var create_name: String = path
+			if last_slash != -1:
+				create_parent = MCPCommandHelpers.resolve_node_path(_plugin, path.substr(0, last_slash))
+				create_name = path.substr(last_slash + 1)
+				if create_parent == null:
+					return {"error": "Parent not found for path: %s" % path}
+			env_node = WorldEnvironment.new()
+			env_node.name = create_name
+			if _undo_helper:
+				_undo_helper.add_node_with_undo(env_node, create_parent)
+			else:
+				create_parent.add_child(env_node)
+				env_node.set_owner(root)
 		else:
 			return {"error": "Node is not a WorldEnvironment or Camera3D: %s (type: %s)" % [path, node.get_class()]}
 	else:

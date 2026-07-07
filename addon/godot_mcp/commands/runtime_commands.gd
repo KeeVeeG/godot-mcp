@@ -1,4 +1,4 @@
-## Runtime commands module - 19 tools.
+﻿## Runtime commands module - 19 tools.
 ## Handles game runtime inspection via file-based IPC.
 class_name MCPRuntimeCommands
 extends RefCounted
@@ -123,10 +123,13 @@ func _do_ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	var tmp_path: String = REQUEST_PATH + ".tmp"
 	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if file == null:
-		return {"error": "Failed to write IPC request"}
+		var err_code: int = FileAccess.get_open_error()
+		return {"error": "Failed to write IPC request to '%s': %s (code %d)" % [tmp_path, error_string(err_code), err_code]}
 	file.store_string(json_text)
 	file.close()
-	DirAccess.rename_absolute(tmp_path, REQUEST_PATH)
+	var rename_err: Error = DirAccess.rename_absolute(tmp_path, REQUEST_PATH)
+	if rename_err != OK:
+		return {"error": "Failed to rename IPC request file: %s (code %d)" % [error_string(rename_err), rename_err]}
 
 	var start: float = Time.get_unix_time_from_system()
 	while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:

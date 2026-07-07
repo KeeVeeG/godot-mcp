@@ -1,4 +1,4 @@
-## Save/Load commands module - 5 tools.
+﻿## Save/Load commands module - 5 tools.
 ## Provides game state save/load testing, save file management,
 ## and save state comparison for verifying save system integrity.
 class_name MCPSaveLoadCommands
@@ -28,10 +28,17 @@ func get_commands() -> Dictionary:
 	}
 
 
-## Ensure the save directory exists.
-func _ensure_save_dir() -> void:
+## Ensure the save directory exists. Returns OK on success, error code on failure.
+func _ensure_save_dir() -> Error:
+	if DirAccess.dir_exists_absolute(SAVE_DIR):
+		return OK
+	var err: Error = DirAccess.make_dir_recursive_absolute(SAVE_DIR)
+	if err != OK:
+		return err
+	# Verify it was actually created
 	if not DirAccess.dir_exists_absolute(SAVE_DIR):
-		DirAccess.make_dir_recursive_absolute(SAVE_DIR)
+		return ERR_CANT_CREATE
+	return OK
 
 
 ## Get the save file path for a slot.
@@ -50,7 +57,9 @@ func save_game_state(params: Dictionary) -> Dictionary:
 	var slot: int = params.get("slot", 0)
 	var metadata: Dictionary = params.get("metadata", {})
 
-	_ensure_save_dir()
+	var dir_err: Error = _ensure_save_dir()
+	if dir_err != OK:
+		return {"error": "Failed to create save directory '%s': %s (code %d)" % [SAVE_DIR, error_string(dir_err), dir_err]}
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
@@ -68,10 +77,10 @@ func save_game_state(params: Dictionary) -> Dictionary:
 
 	# Write save file
 	var save_file_path: String = _save_path(slot)
-	var global_path: String = ProjectSettings.globalize_path(save_file_path)
 	var file: FileAccess = FileAccess.open(save_file_path, FileAccess.WRITE)
 	if file == null:
-		return {"error": "Failed to open save file for writing: %s" % error_string(FileAccess.get_open_error())}
+		var err_code: int = FileAccess.get_open_error()
+		return {"error": "Failed to open save file '%s' for writing: %s (code %d)" % [save_file_path, error_string(err_code), err_code]}
 	file.store_string(JSON.stringify(save_data, "\t"))
 	file.close()
 
@@ -197,7 +206,12 @@ func delete_save_file(params: Dictionary) -> Dictionary:
 	var meta_exists: bool = FileAccess.file_exists(meta_file_path)
 
 	if not save_exists and not meta_exists:
-		return {"error": "No save file found in slot %d" % slot}
+		return {"result": {
+			"success": true,
+			"slot": slot,
+			"deleted_files": [],
+			"message": "Save slot %d was already empty" % slot,
+		}}
 
 	var deleted: Array = []
 	if save_exists:

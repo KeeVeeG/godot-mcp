@@ -317,6 +317,11 @@ func _add_resource(params: Dictionary) -> Dictionary:
 			_undo_helper.set_property_with_undo(node, "material_override", res)
 		else:
 			(node as MeshInstance3D).material_override = res
+	elif node is VisualInstance3D and res is Material:
+		if _undo_helper:
+			_undo_helper.set_property_with_undo(node, "material_override", res)
+		else:
+			(node as VisualInstance3D).material_override = res
 	else:
 		# Generic: try common property names
 		var assigned: bool = false

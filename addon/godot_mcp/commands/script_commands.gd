@@ -135,11 +135,16 @@ func _delete_script(params: Dictionary) -> Dictionary:
 				return {"error": "Script is used by autoload '%s'. Remove it first." % autoload_name}
 	
 	# Check if script is attached to any node in the current scene
-	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
-	if root:
-		var attached_nodes: Array = _find_nodes_with_script(root, path, 0, 20)
-		if not attached_nodes.is_empty():
-			return {"error": "Script is attached to nodes: %s. Use update_property to set script to null first." % str(attached_nodes)}
+	var force: bool = params.get("force", false)
+	if not force:
+		var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
+		if root:
+			var attached_nodes: Array = _find_nodes_with_script(root, path, 0, 20)
+			if not attached_nodes.is_empty():
+				var ref_paths: PackedStringArray = []
+				for r in attached_nodes:
+					ref_paths.append(str(r))
+				return {"error": "Script is attached to %d node(s): %s. Use force=true to delete anyway." % [attached_nodes.size(), ", ".join(ref_paths)]}
 	
 	var err: Error = DirAccess.remove_absolute(path)
 	if err != OK:

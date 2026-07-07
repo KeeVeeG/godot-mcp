@@ -1,4 +1,4 @@
-## Animation commands module - 10 tools.
+﻿## Animation commands module - 10 tools.
 ## Handles AnimationPlayer, AnimationTree, and state machines.
 class_name MCPAnimationCommands
 extends RefCounted
@@ -307,15 +307,25 @@ func create_animation_tree(params: Dictionary) -> Dictionary:
 				return {"error": "Node at path '%s' is not an AnimationTree (type: %s)" % [path, existing.get_class()]}
 
 	if tree == null:
-		# Create new — use parent_path if given, otherwise path as parent
+		# Create new — determine parent and node name
 		var parent: Node = root
-		var effective_parent: String = parent_path if not parent_path.is_empty() else path
-		if not effective_parent.is_empty():
-			parent = MCPCommandHelpers.resolve_node_path(_plugin, effective_parent)
+		var node_name: String = props.get("name", "AnimationTree")
+		if not parent_path.is_empty():
+			# Explicit parent_path provided
+			parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
+		elif path.contains("/"):
+			# path like "AnimTestPlayer/AnimTree" — parent is "AnimTestPlayer", name is "AnimTree"
+			var last_slash: int = path.rfind("/")
+			var parent_part: String = path.substr(0, last_slash)
+			node_name = path.substr(last_slash + 1)
+			parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_part)
+		elif not path.is_empty():
+			# Bare name — use as node name, parent is scene root
+			node_name = path
 		if parent == null:
 			return {"error": "Parent not found"}
 		tree = AnimationTree.new()
-		tree.name = props.get("name", "AnimationTree")
+		tree.name = node_name
 		if _undo_helper:
 			_undo_helper.add_node_with_undo(tree, parent)
 		else:

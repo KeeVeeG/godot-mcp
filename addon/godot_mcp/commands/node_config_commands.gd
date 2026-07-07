@@ -80,6 +80,8 @@ func _set_preset(params: Dictionary) -> Dictionary:
 		"platformer_body":
 			if type == "CharacterBody2D":
 				preset_data = {"motion_mode": 0, "up_direction": {"x": 0, "y": -1}, "floor_max_angle": 0.785398}
+			elif type == "CharacterBody3D":
+				preset_data = {"motion_mode": 0, "up_direction": {"x": 0, "y": 1, "z": 0}, "floor_max_angle": 0.785398}
 		"top_down_camera":
 			if type == "Camera2D":
 				preset_data = {"position_smoothing_enabled": true, "position_smoothing_speed": 5.0, "drag_horizontal_enabled": true, "drag_vertical_enabled": true}
