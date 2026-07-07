@@ -175,25 +175,25 @@ func validate_export_for_platform(params: Dictionary) -> Dictionary:
 					"message": "Missing resource: %s (referenced by %s)" % [dep_path, scene_path],
 				})
 
-	# Check script errors — validate source on fresh script (no live instances)
+	# Check script errors — use load() which returns null on compile errors
+	# and returns cached valid GDScript for already-compiled scripts.
+	# Skip addons/ (third-party code) and empty files.
 	var script_files: Array = []
 	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["gd"]), func(path, _name): script_files.append(path))
 	var script_errors: int = 0
 	for script_path: String in script_files:
-		var source := FileAccess.get_file_as_string(script_path)
-		if source.is_empty():
+		if script_path.begins_with("res://addons/"):
 			continue
-		var temp := GDScript.new()
-		temp.source_code = source
-		var err: Error = temp.reload()
-		if err != OK:
-			script_errors += 1
-			issues.append({
-				"severity": "error",
-				"type": "script_error",
-				"path": script_path,
-				"message": "Script has compilation errors: %s" % error_string(err),
-			})
+		if ResourceLoader.exists(script_path):
+			var script := load(script_path)
+			if script == null:
+				script_errors += 1
+				issues.append({
+					"severity": "error",
+					"type": "script_error",
+					"path": script_path,
+					"message": "Script has compilation errors",
+				})
 
 	var error_count: int = issues.filter(func(i: Dictionary) -> bool: return i["severity"] == "error").size()
 	var warning_count: int = issues.filter(func(i: Dictionary) -> bool: return i["severity"] == "warning").size()
