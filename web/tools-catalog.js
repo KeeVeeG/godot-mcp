@@ -2321,7 +2321,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'get_game_scene_tree',
-    description: '🔴 Game must be running. Get the scene tree of the running game (runtime state)',
+    description: 'Get the scene tree of the running game (runtime state)',
     godot_command: 'runtime/get_scene_tree',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'get_game_scene_tree',
@@ -2331,7 +2331,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'get_game_node_properties',
-    description: '🔴 Game must be running. Get all properties of a node in the running game',
+    description: 'Get all properties of a node in the running game',
     godot_command: 'runtime/get_node_properties',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'get_game_node_properties',
@@ -2341,7 +2341,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'set_game_node_property',
-    description: '🔴 Game must be running. Set a property on a node in the running game',
+    description: 'Set a property on a node in the running game',
     godot_command: 'runtime/set_node_property',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'set_game_node_property',
@@ -2351,7 +2351,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'execute_game_script',
-    description: '🔴 Game must be running. Execute a GDScript snippet in the running game context',
+    description: 'Execute a GDScript snippet in the running game context',
     godot_command: 'runtime/execute_script',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'execute_game_script',
@@ -2361,7 +2361,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'capture_frames',
-    description: '🔴 Game must be running. Capture frames from the running game viewport as PNG files',
+    description: 'Capture frames from the running game viewport as PNG files',
     godot_command: 'runtime/capture_frames',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'capture_frames',
@@ -2371,7 +2371,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'monitor_properties',
-    description: '🔴 Game must be running. Monitor specific properties on a game node for changes over time',
+    description: 'Monitor specific properties on a game node for changes over time',
     godot_command: 'runtime/monitor_properties',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'monitor_properties',
@@ -2381,7 +2381,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'start_recording',
-    description: '🔴 Game must be running. Start recording game state changes',
+    description: 'Start recording game state changes',
     godot_command: 'runtime/start_recording',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'start_recording',
@@ -2391,7 +2391,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'stop_recording',
-    description: '🔴 Game must be running. Stop recording and return the recorded game state data',
+    description: 'Stop recording and return the recorded game state data',
     godot_command: 'runtime/stop_recording',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'stop_recording',
@@ -2401,7 +2401,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'replay_recording',
-    description: '🔴 Game must be running. Replay a previously recorded game session',
+    description: 'Replay a previously recorded game session',
     godot_command: 'runtime/replay_recording',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'replay_recording',
@@ -2411,7 +2411,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'find_nodes_by_script',
-    description: '🔴 Game must be running. Find all nodes in the game that use a specific script',
+    description: 'Find all nodes in the game that use a specific script',
     godot_command: 'runtime/find_by_script',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'find_nodes_by_script',
@@ -2421,7 +2421,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'get_autoload',
-    description: '🔴 Game must be running. Get properties of an autoload singleton from the running game',
+    description: 'Get properties of an autoload singleton from the running game',
     godot_command: 'runtime/get_autoload',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'get_autoload',
@@ -2431,7 +2431,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'batch_get_properties',
-    description: '🔴 Game must be running. Get multiple properties from multiple nodes in one call',
+    description: 'Get multiple properties from multiple nodes in one call',
     godot_command: 'runtime/batch_get_properties',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'batch_get_properties',
@@ -2441,7 +2441,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'find_ui_elements',
-    description: '🔴 Game must be running. Find UI elements in the running game by type, text, or name',
+    description: 'Find UI elements in the running game by type, text, or name',
     godot_command: 'runtime/find_ui_elements',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'find_ui_elements',
@@ -2451,7 +2451,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'click_button_by_text',
-    description: '🔴 Game must be running. Find and click a button by its text content',
+    description: 'Find and click a button by its text content',
     godot_command: 'runtime/click_button',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'click_button_by_text',
@@ -2461,7 +2461,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'wait_for_node',
-    description: '🔴 Game must be running. Wait for a node to appear in the running game tree',
+    description: 'Wait for a node to appear in the running game tree',
     godot_command: 'runtime/wait_for_node',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'wait_for_node',
@@ -2471,7 +2471,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'find_nearby_nodes',
-    description: '🔴 Game must be running. Find nodes within a radius of a world position',
+    description: 'Find nodes within a radius of a world position',
     godot_command: 'runtime/find_nearby',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'find_nearby_nodes',
@@ -2481,7 +2481,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'navigate_to',
-    description: '🔴 Game must be running. Navigate a node to a target position using pathfinding',
+    description: 'Navigate a node to a target position using pathfinding',
     godot_command: 'runtime/navigate_to',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'navigate_to',
@@ -2491,7 +2491,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'move_to',
-    description: '🔴 Game must be running. Directly move a node to a target position',
+    description: 'Directly move a node to a target position',
     godot_command: 'runtime/move_to',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'move_to',
@@ -2501,7 +2501,7 @@ const TOOLS_CATALOG = [
   },
   {
     tool_id: 'watch_signals',
-    description: '🔴 Game must be running. Watch for signal emissions from a game node',
+    description: 'Watch for signal emissions from a game node',
     godot_command: 'runtime/watch_signals',
     gd_file: 'addon/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'watch_signals',

@@ -71,7 +71,7 @@ function parseTs(tsPath) {
     const descMatch = descRe.exec(blockBody);
     tools.push({
       tool_id,
-      description: descMatch ? descMatch[1] || descMatch[2] : '',
+      description: (descMatch ? descMatch[1] || descMatch[2] : '').replace(/^🔴 Game must be running\.\s*/, ''),
       godot_command,
     });
   }
