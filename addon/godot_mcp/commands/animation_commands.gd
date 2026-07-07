@@ -345,12 +345,6 @@ func create_animation_tree(params: Dictionary) -> Dictionary:
 
 	tree.tree_root = root_node
 
-	if _undo_helper:
-		_undo_helper.add_node_with_undo(tree, parent)
-	else:
-		parent.add_child(tree)
-		tree.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
-
 	return {"result": {"name": str(tree.name), "path": MCPCommandHelpers.get_node_path(tree, _plugin), "root_type": root_type}}
 
 
