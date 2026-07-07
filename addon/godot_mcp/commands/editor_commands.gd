@@ -54,7 +54,7 @@ func _validate_scene_recursive(node: Node, errors: Array) -> void:
 	if scr:
 		if scr is GDScript:
 			var gd: GDScript = scr as GDScript
-			var err: Error = gd.reload()
+			var err: Error = gd.reload(true)
 			if err != OK:
 				errors.append({
 					"node": MCPCommandHelpers.get_node_path(node, _plugin),
