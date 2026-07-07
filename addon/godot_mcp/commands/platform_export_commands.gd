@@ -1,4 +1,4 @@
-## Platform export commands module - 5 tools.
+﻿## Platform export commands module - 5 tools.
 ## Provides platform-specific export, validation, template management,
 ## preset creation, and exported build execution.
 class_name MCPPlatformExportCommands
@@ -73,7 +73,13 @@ func export_for_platform(params: Dictionary) -> Dictionary:
 			idx += 1
 
 	if not has_preset:
-		return {"error": "No export preset found for %s. Run create_export_preset first." % platform_name}
+		# Auto-create the preset so export_for_platform works out of the box
+		var auto_result: Dictionary = create_export_preset({"platform": platform, "name": preset_name})
+		if auto_result.has("error"):
+			return {"error": "Failed to auto-create export preset for %s: %s" % [platform_name, auto_result["error"]}
+		# Reload config so the rest of this function sees the new preset
+		config = ConfigFile.new()
+		config.load(config_path)
 
 	# Build the export command
 	var exec_path: String = OS.get_executable_path()

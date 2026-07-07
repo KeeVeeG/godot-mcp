@@ -1,4 +1,4 @@
-## Visual testing commands module - 6 tools.
+﻿## Visual testing commands module - 6 tools.
 ## Provides screenshot capture with context, pixel-level comparison,
 ## visual regression recording, and baseline management.
 class_name MCPVisualTestingCommands
@@ -115,9 +115,13 @@ func compare_screenshots(params: Dictionary) -> Dictionary:
 	if baseline_path.is_empty() or current_path.is_empty():
 		return {"error": "Both baseline and current paths are required"}
 
-	# Resolve paths
-	var baseline_global: String = ProjectSettings.globalize_path(baseline_path) if baseline_path.begins_with("res://") else baseline_path
-	var current_global: String = ProjectSettings.globalize_path(current_path) if current_path.begins_with("res://") else current_path
+	# Resolve paths — handle both res:// and user:// virtual paths
+	var baseline_global: String = baseline_path
+	if baseline_path.begins_with("res://") or baseline_path.begins_with("user://"):
+		baseline_global = ProjectSettings.globalize_path(baseline_path)
+	var current_global: String = current_path
+	if current_path.begins_with("res://") or current_path.begins_with("user://"):
+		current_global = ProjectSettings.globalize_path(current_path)
 
 	# Load images
 	var img_a: Image = Image.new()

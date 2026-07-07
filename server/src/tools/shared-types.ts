@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shared Zod schemas and utility types for all tool modules.
  *
  * Every repeated schema literal lives here exactly once.
@@ -97,8 +97,19 @@ export const Position2D = z.tuple([z.number(), z.number()]).describe('Position a
 /** 3D position as [x, y, z] */
 export const Position3D = z.tuple([z.number(), z.number(), z.number()]).describe('Position as [x, y, z]');
 
-/** 2D integer coordinates [x, y] (e.g. tilemap cells) */
-export const Coord2D = z.tuple([z.number().int(), z.number().int()]).describe('Integer coordinates [x, y]');
+/** 2D integer coordinates [x, y] (e.g. tilemap cells). Accepts arrays of 2+ elements (extra elements are ignored). */
+export const Coord2D = z
+  .array(z.number().int())
+  .min(2)
+  .transform((a): [number, number] => [a[0], a[1]])
+  .describe('Integer coordinates [x, y]');
+
+/** 3D integer coordinates [x, y, z] (e.g. gridmap cells) */
+export const Coord3D = z
+  .array(z.number().int())
+  .min(3)
+  .transform((a): [number, number, number] => [a[0], a[1], a[2]])
+  .describe('Integer coordinates [x, y, z]');
 
 /** 2D size as [width, height] */
 export const Size2D = z.tuple([z.number().int(), z.number().int()]).describe('Size as [width, height]');

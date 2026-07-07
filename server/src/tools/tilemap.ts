@@ -1,11 +1,11 @@
-/**
+﻿/**
  * TileMap tools - 6 tools for tilemap manipulation
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { GodotBridge } from '../godot-bridge.js';
 import { callGodot } from '../server.js';
-import { z, NodePath, Coord2D } from './shared-types.js';
+import { z, NodePath, Coord2D, Coord3D } from './shared-types.js';
 
 export function registerTilemapTools(server: McpServer, bridge: GodotBridge): void {
   // 1. tilemap_set_cell
@@ -93,5 +93,72 @@ export function registerTilemapTools(server: McpServer, bridge: GodotBridge): vo
       },
     },
     async (args) => callGodot(bridge, 'tilemap/get_used_cells', args as Record<string, unknown>),
+  );
+
+  // ────────────────────────────────────────────────────────────
+  // GridMap tools (3D tile-based level editing)
+  // ────────────────────────────────────────────────────────────
+
+  // 7. gridmap_set_cell
+  server.registerTool(
+    'gridmap_set_cell',
+    {
+      description: 'Set a mesh item in a GridMap at 3D cell coordinates',
+      inputSchema: {
+        path: NodePath.describe('GridMap node path'),
+        coords: Coord3D,
+        item: z.number().int().describe('MeshLibrary item ID (-1 to clear)'),
+      },
+    },
+    async (args) => callGodot(bridge, 'gridmap/set_cell', args as Record<string, unknown>),
+  );
+
+  // 8. gridmap_get_cell
+  server.registerTool(
+    'gridmap_get_cell',
+    {
+      description: 'Get the mesh item at a specific GridMap cell',
+      inputSchema: {
+        path: NodePath.describe('GridMap node path'),
+        coords: Coord3D,
+      },
+    },
+    async (args) => callGodot(bridge, 'gridmap/get_cell', args as Record<string, unknown>),
+  );
+
+  // 9. gridmap_clear
+  server.registerTool(
+    'gridmap_clear',
+    {
+      description: 'Clear all cells in a GridMap',
+      inputSchema: {
+        path: NodePath.describe('GridMap node path'),
+      },
+    },
+    async (args) => callGodot(bridge, 'gridmap/clear', args as Record<string, unknown>),
+  );
+
+  // 10. gridmap_get_used_cells
+  server.registerTool(
+    'gridmap_get_used_cells',
+    {
+      description: 'Get all used cell coordinates in a GridMap',
+      inputSchema: {
+        path: NodePath.describe('GridMap node path'),
+      },
+    },
+    async (args) => callGodot(bridge, 'gridmap/get_used_cells', args as Record<string, unknown>),
+  );
+
+  // 11. gridmap_get_info
+  server.registerTool(
+    'gridmap_get_info',
+    {
+      description: 'Get GridMap configuration and MeshLibrary information',
+      inputSchema: {
+        path: NodePath.describe('GridMap node path'),
+      },
+    },
+    async (args) => callGodot(bridge, 'gridmap/get_info', args as Record<string, unknown>),
   );
 }

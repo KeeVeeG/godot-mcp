@@ -162,6 +162,8 @@ func uninstall_addon(params: Dictionary) -> Dictionary:
 ## Update an installed addon.
 func update_addon(params: Dictionary) -> Dictionary:
 	var name: String = params.get("name", "")
+	var source: String = params.get("source", "")
+	var url: String = params.get("url", params.get("source_url", ""))
 
 	if name.is_empty():
 		return {"error": "name is required"}
@@ -174,6 +176,15 @@ func update_addon(params: Dictionary) -> Dictionary:
 
 	if not DirAccess.dir_exists_absolute(global_path):
 		return {"error": "Addon not found: %s" % name}
+
+	# Manual override: use provided source/url if given
+	if not source.is_empty() and not url.is_empty():
+		if source == "git":
+			return _install_from_git(name, url)
+		elif source == "local":
+			return _install_from_local(name, url)
+		else:
+			return {"error": "Unknown source type: %s (use 'git' or 'local')" % source}
 
 	# Check if it's a git repo
 	var git_dir: String = global_path.path_join(".git")

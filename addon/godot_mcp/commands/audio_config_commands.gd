@@ -132,7 +132,10 @@ func _get_bus_effects(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Bus name is required"}
 	var bus_idx: int = MCPCommandHelpers.find_bus_index(bus_name)
 	if bus_idx == -1:
-		return {"success": false, "error": "Bus not found: %s" % bus_name}
+		var available: Array = []
+		for i: int in range(AudioServer.bus_count):
+			available.append(AudioServer.get_bus_name(i))
+		return {"success": false, "error": "Bus not found: %s. Available: %s" % [bus_name, ", ".join(available)]}
 	var effects: Array = []
 	var count: int = AudioServer.get_bus_effect_count(bus_idx)
 	for i: int in range(count):
