@@ -126,7 +126,20 @@ func _get_types(params: Dictionary) -> Dictionary:
 func _get_signals(params: Dictionary) -> Dictionary:
 	var type: String = params.get("type", "")
 	if type.is_empty():
-		return {"success": false, "error": "Type cannot be empty"}
+		# Fallback: resolve from node instance path
+		var node_path: String = params.get("path", "")
+		if node_path.is_empty():
+			return {"success": false, "error": "Either 'type' or 'path' is required"}
+		var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, node_path)
+		if node == null:
+			return {"success": false, "error": "Node not found: %s" % node_path}
+		type = node.get_class()
+		var script_obj: Variant = node.get_script()
+		if script_obj != null and script_obj is GDScript:
+			var script: GDScript = script_obj as GDScript
+			var cls: StringName = script.get_class_name()
+			if cls != "" and ClassDB.class_exists(String(cls)):
+				type = String(cls)
 	if not ClassDB.class_exists(type):
 		return {"success": false, "error": "Unknown type: %s" % type}
 	var signals_list: Array = ClassDB.class_get_signal_list(type, false)

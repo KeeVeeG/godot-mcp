@@ -122,6 +122,7 @@ export function registerShaderTools(server: McpServer, bridge: GodotBridge): voi
       description: 'Delete a shader file from the project',
       inputSchema: {
         path: z.string().describe('Shader file path to delete (e.g. res://shaders/my_shader.gdshader)'),
+        force: z.boolean().optional().default(false).describe('Delete even if shader is referenced by nodes'),
       },
     },
     async (args) => callGodot(bridge, 'shader/delete', args as Record<string, unknown>),

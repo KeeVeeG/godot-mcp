@@ -56,7 +56,7 @@ func list_animations(params: Dictionary) -> Dictionary:
 ## Create a new empty animation.
 func create_animation(params: Dictionary) -> Dictionary:
 	var path: String = params.get("player_path", params.get("path", ""))
-	var anim_name: String = params.get("name", "NewAnimation")
+	var anim_name: String = params.get("animation", params.get("name", "NewAnimation"))
 	if path.is_empty():
 		return {"error": "AnimationPlayer path is required"}
 	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
@@ -278,6 +278,8 @@ func remove_animation(params: Dictionary) -> Dictionary:
 		lib = player.get_animation_library(library_name)
 	if lib == null:
 		return {"error": "Animation library not found: '%s'" % library_name}
+	if not lib.has_animation(anim_name):
+		return {"error": "Animation not found: %s" % anim_name}
 	lib.remove_animation(anim_name)
 	return {"result": "Animation '%s' removed from %s" % [anim_name, path]}
 

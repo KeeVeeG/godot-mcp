@@ -264,11 +264,16 @@ func _delete_shader(params: Dictionary) -> Dictionary:
 		return {"error": "Shader not found: %s" % path}
 	
 	# Check if shader is used by any ShaderMaterial in the current scene
-	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
-	if root:
-		var refs: Array = _find_shader_refs_in_scene(root, path, 0, 20)
-		if not refs.is_empty():
-			return {"error": "Shader is used by nodes: %s. Remove references first." % str(refs)}
+	var force: bool = params.get("force", false)
+	if not force:
+		var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+		if root:
+			var refs: Array = _find_shader_refs_in_scene(root, path, 0, 20)
+			if not refs.is_empty():
+				var ref_paths: PackedStringArray = []
+				for r in refs:
+					ref_paths.append(str(r))
+				return {"error": "Shader is in use by %d node(s): %s. Use force=true to delete anyway." % [refs.size(), ", ".join(ref_paths)]}
 	
 	# Convert res:// to global path for DirAccess
 	var global_path: String = ProjectSettings.globalize_path(path)

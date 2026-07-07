@@ -2,7 +2,7 @@
  * Node introspection tools - 8 tools for querying node type metadata
  */
 import { callGodot } from '../server.js';
-import { z, NodeType } from './shared-types.js';
+import { z, NodeType, NodePath } from './shared-types.js';
 export function registerNodeConfigTools(server, bridge) {
     // 1. get_node_default_properties
     server.registerTool('get_node_default_properties', {
@@ -28,9 +28,10 @@ export function registerNodeConfigTools(server, bridge) {
     }, async (args) => callGodot(bridge, 'node_config/get_types', args));
     // 4. get_node_signals
     server.registerTool('get_node_signals', {
-        description: 'Get all signals defined on a node type with their argument signatures',
+        description: 'Get all signals defined on a node type with their argument signatures. Provide either "type" (a class name like "CharacterBody3D") or "path" (a node instance path like "Player" - the class will be resolved automatically).',
         inputSchema: {
-            type: NodeType,
+            type: NodeType.optional().describe('Node type name (e.g. "CharacterBody3D"). Provide this OR "path".'),
+            path: NodePath.optional().describe('Node instance path in the scene (e.g. "Player"). The node\'s class type will be resolved automatically. Provide this OR "type".'),
         },
     }, async (args) => callGodot(bridge, 'node_config/get_signals', args));
     // 5. get_node_methods

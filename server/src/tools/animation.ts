@@ -27,7 +27,7 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
       description: 'Create a new animation on an AnimationPlayer',
       inputSchema: {
         player_path: NodePath.describe('AnimationPlayer node path'),
-        name: z.string().describe('Animation name'),
+        animation: z.string().describe('Animation name'),
         length: PositiveNumber.optional().default(1.0).describe('Animation length in seconds (default: 1.0)'),
         library: z.string().optional().describe('Animation library name (empty for default)'),
         loop_mode: z.enum(['none', 'loop', 'pingpong']).optional().default('none').describe('Animation loop mode'),

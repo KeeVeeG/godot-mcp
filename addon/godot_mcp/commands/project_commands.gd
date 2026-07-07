@@ -137,11 +137,17 @@ func _search_files(params: Dictionary) -> Dictionary:
 	var search_content: bool = params.get("search_content", false)
 	var max_content_results: int = params.get("max_results", 50)
 	var results: Array = []
-	_search_recursive("res://", query, results, 0, 8, search_content, max_content_results)
+	# Support glob patterns (*, ?) by converting to regex
+	var regex: RegEx = null
+	if query.contains("*") or query.contains("?"):
+		var regex_str: String = "^" + query.replace(".", "\\.").replace("*", ".*").replace("?", ".") + "$"
+		regex = RegEx.new()
+		regex.compile(regex_str)
+	_search_recursive("res://", query, regex, results, 0, 8, search_content, max_content_results)
 	return {"success": true, "matches": results, "count": results.size(), "search_content": search_content}
 
 
-func _search_recursive(path: String, query: String, results: Array, depth: int, max_depth: int, search_content: bool = false, max_results: int = 50) -> void:
+func _search_recursive(path: String, query: String, regex: RegEx, results: Array, depth: int, max_depth: int, search_content: bool = false, max_results: int = 50) -> void:
 	if depth >= max_depth or results.size() >= max_results:
 		return
 	var dir: DirAccess = DirAccess.open(path)
@@ -157,11 +163,18 @@ func _search_recursive(path: String, query: String, results: Array, depth: int, 
 			continue
 		var full_path: String = path.path_join(file_name)
 		if dir.current_is_dir():
-			if file_name.to_lower().find(query) != -1:
-				results.append({"path": full_path, "type": "directory"})
-			_search_recursive(full_path, query, results, depth + 1, max_depth, search_content, max_results)
+			if regex:
+				_search_recursive(full_path, query, regex, results, depth + 1, max_depth, search_content, max_results)
+			else:
+				if file_name.to_lower().find(query) != -1:
+					results.append({"path": full_path, "type": "directory"})
+				_search_recursive(full_path, query, regex, results, depth + 1, max_depth, search_content, max_results)
 		else:
-			var name_match: bool = file_name.to_lower().find(query) != -1
+			var name_match: bool = false
+			if regex:
+				name_match = regex.search(file_name.to_lower()) != null
+			else:
+				name_match = file_name.to_lower().find(query) != -1
 			var content_match: bool = false
 			if search_content and not name_match:
 				content_match = _file_content_matches(full_path, query)

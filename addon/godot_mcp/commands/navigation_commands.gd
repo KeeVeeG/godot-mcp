@@ -191,6 +191,16 @@ func setup_navigation_agent(params: Dictionary) -> Dictionary:
 			else:
 				return {"error": "Node is not a NavigationAgent: %s" % existing.get_class()}
 
+	# If path given but node doesn't exist, derive parent + name from path
+	if not path.is_empty() and parent_path.is_empty():
+		var last_slash: int = path.rfind("/")
+		if last_slash != -1:
+			parent_path = path.substr(0, last_slash)
+			if node_name.is_empty():
+				node_name = path.substr(last_slash + 1)
+		elif node_name.is_empty():
+			node_name = path
+
 	# Create a new node
 	var parent: Node = root
 	if parent_path != "":
@@ -478,7 +488,7 @@ func get_navigation_info(params: Dictionary) -> Dictionary:
 		result["end_position"] = {"x": end3d.x, "y": end3d.y, "z": end3d.z}
 		result["bidirectional"] = link3d.bidirectional
 	else:
-		return {"error": "Node does not have navigation info: %s" % node.get_class()}
+		return {"error": "Node does not have navigation info: %s. Supported: NavigationRegion2D/3D, NavigationAgent2D/3D, NavigationLink2D/3D" % node.get_class()}
 
 	return {"result": result}
 
@@ -571,7 +581,7 @@ func find_navigation_path(params: Dictionary) -> Dictionary:
 				var maps: Array = NavigationServer2D.get_maps()
 				map_rid = maps[0] if maps.size() > 0 else RID()
 			if map_rid == RID():
-				return {"error": "No navigation map available"}
+				return {"error": "No navigation map available. Bake a navigation mesh first using bake_navigation_mesh on a NavigationRegion node."}
 			path = NavigationServer2D.map_get_path(map_rid, start_vec, end_vec, true)
 			var result: Array = []
 			for pt: Vector2 in path:
@@ -590,7 +600,7 @@ func find_navigation_path(params: Dictionary) -> Dictionary:
 				var maps3: Array = NavigationServer3D.get_maps()
 				map_rid3 = maps3[0] if maps3.size() > 0 else RID()
 			if map_rid3 == RID():
-				return {"error": "No navigation map available"}
+				return {"error": "No navigation map available. Bake a navigation mesh first using bake_navigation_mesh on a NavigationRegion node."}
 			path3d = NavigationServer3D.map_get_path(map_rid3, start_vec3, end_vec3, true)
 			var result3: Array = []
 			for pt3: Vector3 in path3d:

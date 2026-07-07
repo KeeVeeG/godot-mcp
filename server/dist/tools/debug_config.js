@@ -22,16 +22,8 @@ export function registerDebugConfigTools(server, bridge) {
     server.registerTool('set_profiler_settings', {
         description: 'Configure profiler limits. Note: profiler on/off toggles (CPU, GPU, etc.) are controlled by the editor debugger panel during gameplay and cannot be set via ProjectSettings.',
         inputSchema: {
-            max_functions: z
-                .number()
-                .int()
-                .optional()
-                .describe('Max functions tracked by script profiler (range: 16-512)'),
-            max_timestamp_query_elements: z
-                .number()
-                .int()
-                .optional()
-                .describe('Max timestamp query elements (default: 256)'),
+            max_functions: z.number().int().optional().describe('Max functions tracked by script profiler (range: 16-512)'),
+            max_timestamp_query_elements: z.number().int().optional().describe('Max timestamp query elements (default: 256)'),
         },
     }, async (args) => callGodot(bridge, 'debug_config/set_profilers', args));
     // 4. set_error_handling
