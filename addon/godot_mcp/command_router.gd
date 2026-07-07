@@ -64,11 +64,23 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 			}
 		}
 
-	# Runtime handlers are async (IPC-based) and must be awaited.
-	# All other handlers are synchronous — calling with await on them
-	# emits wrong VM opcodes for Callable-based dispatch.
+	# Async handlers (IPC-based or use await internally) — must be awaited.
+	# Sync handlers are called directly. Prefix-based dispatch avoids
+	# Callable opcode issues in Godot 4 GDScript VM.
+	var _async_prefixes: PackedStringArray = [
+		"runtime/",
+		"gameplay/simulate",      # simulate_gameplay_scenario
+		"gameplay/replay",         # replay_gameplay
+		"visual_testing/",         # record_visual_regression (frame captures)
+	]
+	var is_async: bool = false
+	for p in _async_prefixes:
+		if method_name.begins_with(p):
+			is_async = true
+			break
+
 	var result: Variant
-	if method_name.begins_with("runtime/"):
+	if is_async:
 		result = await handler.call(params)
 	else:
 		result = handler.call(params)
