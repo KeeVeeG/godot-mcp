@@ -34,10 +34,13 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 	return {"success": false, "error": "Unknown method: " + method}
 
 
-## Get all audio settings.
+## Get all audio settings including driver info.
 func _get_settings() -> Dictionary:
 	var buses: Array = MCPCommandHelpers.collect_bus_layout()
 	var settings: Dictionary = {
+		"driver": AudioServer.get_driver_name(),
+		"mix_rate": AudioServer.get_mix_rate(),
+		"output_latency": AudioServer.get_output_latency(),
 		"bus_count": AudioServer.bus_count,
 		"buses": buses,
 		"default_bus": ProjectSettings.get_setting("audio/buses/default_bus", "Master"),
