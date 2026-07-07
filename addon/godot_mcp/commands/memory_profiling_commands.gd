@@ -222,14 +222,13 @@ func force_garbage_collection(_params: Dictionary) -> Dictionary:
 	var objects_before: int = int(Performance.get_monitor(Performance.OBJECT_COUNT))
 	var orphans_before: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 
-	# Force frame processing to flush deferred queue_free() calls
-	# In the editor, we can't await process_frame, so we use OS delay
+	# Godot 4.x does not expose manual GC from GDScript.
+	# Flush deferred queue_free() calls by ticking the scene tree.
 	for i: int in range(3):
-		OS.delay_msec(16) # ~1 frame at 60fps
+		OS.delay_msec(16)
 		var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
 		if root != null and root.is_inside_tree():
-			# Notify the scene tree to process idle callbacks (deferred frees)
-			root.get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, &"", &"")
+			root.get_tree().call_group_flags(SceneTree.GROUP_CALL_DEFERRED, &"", &"__dummy_gc_tick")
 
 	var mem_after: float = Performance.get_monitor(Performance.MEMORY_STATIC)
 	var objects_after: int = int(Performance.get_monitor(Performance.OBJECT_COUNT))
