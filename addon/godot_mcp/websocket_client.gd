@@ -21,6 +21,9 @@ var _is_connected: bool = false
 ## Port that we are currently connected to
 var _connected_port: int = -1
 
+## Project path of the connected MCP server (from server_hello)
+var _connected_project_path: String = ""
+
 ## Whether we are currently scanning for a server
 var _scanning: bool = false
 
@@ -219,6 +222,7 @@ func _pick_best_candidate() -> void:
 			if c.projectPath.length() < best.projectPath.length():
 				best = c
 		_scan_found_port = best.port
+		_connected_project_path = best.projectPath
 		_scan_settle_timer = SCAN_SETTLE_DELAY
 		_scan_state = SCAN_SETTLING
 	else:
@@ -303,6 +307,7 @@ func _connect_to_port(port: int) -> void:
 ## Handle disconnection.
 func _handle_disconnect() -> void:
 	_is_connected = false
+	_connected_project_path = ""
 	var old_port: int = _connected_port
 	_connected_port = -1
 	_config.connected_port = -1
@@ -393,3 +398,8 @@ func is_server_connected() -> bool:
 ## Get the port we are connected to.
 func get_connected_port() -> int:
 	return _connected_port
+
+
+## Get the project path of the connected MCP server.
+func get_connected_project_path() -> String:
+	return _connected_project_path

@@ -263,10 +263,14 @@ func _register_all_commands() -> void:
 
 ## Called when WebSocket connects to a server.
 func _on_ws_connected(port: int) -> void:
-	print("[MCP] Connected to server on port %d" % port)
+	var project_path: String = _ws_client.get_connected_project_path()
+	var url: String = "ws://localhost:%d" % port
+	print("[MCP] Connected to %s (project: %s)" % [url, project_path])
 	if _status_panel:
 		_status_panel.update_connection(true, port)
-		_status_panel.log_activity("Connected to MCP server on port %d" % port, "success")
+		_status_panel.log_activity("Connected: %s" % url, "success")
+		if not project_path.is_empty():
+			_status_panel.log_activity("Server project: %s" % project_path, "info")
 
 
 ## Called when WebSocket disconnects.
