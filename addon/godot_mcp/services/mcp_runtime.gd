@@ -105,16 +105,27 @@ func _poll_ipc() -> void:
 	var params: Dictionary = req_dict.get("params", {})
 	var request_id: String = req_dict.get("request_id", "")
 
-	_ipc_busy = true
-	var result: Dictionary = await _handle_request(method, params)
-	_ipc_busy = false
+	# Call handler — may return a result directly (sync) or a coroutine (async)
+	var handler_result: Variant = _handle_request(method, params)
 
-	# Echo request_id back for correlation
-	if not request_id.is_empty():
-		result["request_id"] = request_id
-
-	if not _write_response(result):
-		push_warning("[MCP Runtime] Failed to write response for method: %s" % method)
+	# Check if result is a coroutine that needs awaiting
+	if typeof(handler_result) == TYPE_OBJECT and handler_result != null \
+			and handler_result.get_class() == "GDScriptFunctionState":
+		# Async handler — block re-entry during await
+		_ipc_busy = true
+		var result: Dictionary = await (handler_result as GDScriptFunctionState)
+		_ipc_busy = false
+		if not request_id.is_empty():
+			result["request_id"] = request_id
+		if not _write_response(result):
+			push_warning("[MCP Runtime] Failed to write response for method: %s" % method)
+	else:
+		# Sync handler — write response immediately (same frame, no busy flag)
+		var result: Dictionary = handler_result as Dictionary
+		if not request_id.is_empty():
+			result["request_id"] = request_id
+		if not _write_response(result):
+			push_warning("[MCP Runtime] Failed to write response for method: %s" % method)
 
 
 ## Handle a runtime request.
@@ -129,7 +140,7 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 		"execute_game_script":
 			return _execute_game_script(params.get("code", ""))
 		"capture_frames":
-			return await _capture_frames(params.get("count", 1), params.get("interval", 0.1))
+			return _capture_frames(params.get("count", 1), params.get("interval", 0.1))
 		"monitor_properties":
 			return _monitor_properties(params.get("path", ""), params.get("properties", []), params.get("duration", 5.0))
 		"start_recording":
@@ -147,9 +158,9 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 		"find_ui_elements":
 			return _find_ui_elements(params.get("filter", {}))
 		"click_button_by_text":
-			return await _click_button_by_text(params.get("text", ""), params.get("timeout", 5.0))
+			return _click_button_by_text(params.get("text", ""), params.get("timeout", 5.0))
 		"wait_for_node":
-			return await _wait_for_node(params.get("path", ""), params.get("timeout", 5.0))
+			return _wait_for_node(params.get("path", ""), params.get("timeout", 5.0))
 		"find_nearby_nodes":
 			return _find_nearby_nodes(params.get("position", {}), params.get("radius", 100.0))
 		"navigate_to":
@@ -161,7 +172,7 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 		"simulate_input":
 			return _simulate_input(params)
 		"simulate_sequence":
-			return await _simulate_sequence(params)
+			return _simulate_sequence(params)
 		"get_monitor_results":
 			return _get_monitor_results(params.get("monitor_id", 0))
 		"capture_screenshot":
