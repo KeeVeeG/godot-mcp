@@ -64,12 +64,10 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 			}
 		}
 
-	var result: Variant = handler.call(params)
-
-	# If the handler is an async function, it returns a GDScriptFunctionState.
-	# Await it to get the actual result instead of the coroutine object.
-	if result is GDScriptFunctionState:
-		result = await (result as GDScriptFunctionState)
+	# Use await for all handlers — in Godot 4, await on a non-coroutine
+	# returns the value immediately with no error. This correctly handles
+	# both sync and async handlers (e.g., runtime IPC tools).
+	var result: Variant = await handler.call(params)
 
 	# Guard: if handler returned null, it likely hit a runtime error
 	if result == null:
