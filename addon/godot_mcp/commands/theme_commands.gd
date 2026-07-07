@@ -95,7 +95,7 @@ func set_theme_color(params: Dictionary) -> Dictionary:
 	if path.is_empty() or theme_type.is_empty() or name_str.is_empty():
 		return {"error": "path, theme_type, and name are required"}
 
-	var theme: Theme = ResourceLoader.load(path) as Theme
+	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
 	if theme == null:
 		return {"error": "Theme not found: %s" % path}
 
@@ -117,7 +117,7 @@ func set_theme_constant(params: Dictionary) -> Dictionary:
 	if path.is_empty() or theme_type.is_empty() or name_str.is_empty():
 		return {"error": "path, theme_type, and name are required"}
 
-	var theme: Theme = ResourceLoader.load(path) as Theme
+	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
 	if theme == null:
 		return {"error": "Theme not found: %s" % path}
 
@@ -138,7 +138,7 @@ func set_theme_font_size(params: Dictionary) -> Dictionary:
 	if path.is_empty() or theme_type.is_empty() or name_str.is_empty():
 		return {"error": "path, theme_type, and name are required"}
 
-	var theme: Theme = ResourceLoader.load(path) as Theme
+	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
 	if theme == null:
 		return {"error": "Theme not found: %s" % path}
 
@@ -159,7 +159,7 @@ func set_theme_stylebox(params: Dictionary) -> Dictionary:
 	if path.is_empty() or theme_type.is_empty() or name_str.is_empty():
 		return {"error": "path, theme_type, and name are required"}
 
-	var theme: Theme = ResourceLoader.load(path) as Theme
+	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
 	if theme == null:
 		return {"error": "Theme not found: %s" % path}
 
@@ -232,7 +232,7 @@ func get_theme_info(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var theme: Theme = ResourceLoader.load(path) as Theme
+	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
 	if theme == null:
 		return {"error": "Theme not found: %s" % path}
 

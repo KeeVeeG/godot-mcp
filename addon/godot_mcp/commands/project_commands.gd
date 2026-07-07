@@ -244,22 +244,14 @@ func _set_project_setting(params: Dictionary) -> Dictionary:
 
 
 ## Convert uid:// to res:// path.
+## Uses Godot's built-in ResourceUID.text_to_id() for proper decoding.
 func _uid_to_project_path(params: Dictionary) -> Dictionary:
 	var uid_str: String = params.get("uid", "")
 	if uid_str.is_empty():
 		return {"success": false, "error": "UID cannot be empty"}
-	var uid_value: int = -1
-	if uid_str.begins_with("uid://"):
-		var id_part: String = uid_str.substr(6)
-		if id_part.is_empty() or not id_part.is_valid_int():
-			return {"success": false, "error": "Malformed UID: %s" % uid_str}
-		uid_value = id_part.to_int()
-	else:
-		if not uid_str.is_valid_int():
-			return {"success": false, "error": "Malformed UID: %s" % uid_str}
-		uid_value = uid_str.to_int()
-	if uid_value < 0:
-		return {"success": false, "error": "Invalid UID: %s" % uid_str}
+	var uid_value: int = ResourceUID.text_to_id(uid_str)
+	if uid_value == ResourceUID.INVALID_ID:
+		return {"success": false, "error": "Malformed UID: %s" % uid_str}
 	if not ResourceUID.has_id(uid_value):
 		return {"success": false, "error": "UID not found: %s" % uid_str}
 	var path: String = ResourceUID.get_id_path(uid_value)

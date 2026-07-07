@@ -420,9 +420,9 @@ func add_state_machine_state(params: Dictionary) -> Dictionary:
 	if node == null or not node is AnimationTree:
 		return {"error": "AnimationTree not found: %s" % path}
 	var tree: AnimationTree = node as AnimationTree
+	# Auto-convert root to StateMachine if needed (tool implies state machine usage)
 	if tree.tree_root == null or not tree.tree_root is AnimationNodeStateMachine:
-		return {"error": "AnimationTree root is not a state machine"}
-
+		tree.tree_root = AnimationNodeStateMachine.new()
 	var sm: AnimationNodeStateMachine = tree.tree_root as AnimationNodeStateMachine
 	var anim_node: AnimationNodeAnimation = AnimationNodeAnimation.new()
 	if not animation.is_empty():

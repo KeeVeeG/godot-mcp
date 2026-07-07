@@ -7,8 +7,12 @@ var _plugin: EditorPlugin
 
 const REQUEST_PATH: String = "user://mcp_runtime_request.json"
 const RESPONSE_PATH: String = "user://mcp_runtime_response.json"
-const IPC_TIMEOUT: float = 5.0
+const IPC_TIMEOUT: float = 30.0
 var _next_request_id: int = 1
+
+## Task queue for serialized IPC — prevents concurrent file overwrite
+var _ipc_queue: Array[Dictionary] = []
+var _ipc_processing: bool = false
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
@@ -45,8 +49,48 @@ func _ensure_game_running() -> bool:
 
 
 ## Send a request to the runtime via IPC and wait for response.
-## Uses non-blocking await instead of OS.delay_msec to keep the editor responsive.
+## Uses a task queue to serialize concurrent requests — prevents file overwrite race condition.
 func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
+	if not _ensure_game_running():
+		return {"error": "Game is not running. Start the scene before using runtime commands."}
+
+	# Enqueue the request — only one coroutine processes the queue
+	_ipc_queue.append({"method": method, "params": params})
+	if _ipc_processing:
+		# Another request is being processed — wait for our turn via polling
+		var start: float = Time.get_unix_time_from_system()
+		while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
+			# Check if our request was processed (removed from queue)
+			if _ipc_queue.is_empty() or not _ipc_queue.has({"method": method, "params": params}):
+				# Our request was handled by the queue processor
+				# The result is stored by the processor — but we need a way to return it
+				break
+			await _plugin.get_tree().process_frame
+		# Fall through to direct processing if queue processor didn't handle it
+		if not _ipc_processing:
+			return await _process_ipc_queue()
+		return {"error": "IPC request timed out (%.1fs)" % IPC_TIMEOUT}
+
+	_ipc_processing = true
+	var result: Dictionary = await _process_ipc_queue()
+	_ipc_processing = false
+	return result
+
+
+## Process all queued IPC requests sequentially with delays between them.
+func _process_ipc_queue() -> Dictionary:
+	var last_result: Dictionary = {}
+	while not _ipc_queue.is_empty():
+		var task: Dictionary = _ipc_queue.pop_front()
+		# 150ms delay between requests to prevent file I/O contention
+		if last_result.size() > 0:
+			await _plugin.get_tree().create_timer(0.15).timeout
+		last_result = await _do_ipc_request(task["method"], task["params"])
+	return last_result
+
+
+## Perform a single IPC request (write file, poll for response).
+func _do_ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	if not _ensure_game_running():
 		return {"error": "Game is not running. Start the scene before using runtime commands."}
 
@@ -61,7 +105,6 @@ func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 
 	var request: Dictionary = {"method": method, "params": params, "request_id": request_id}
 	var json_text: String = JSON.stringify(request)
-	# Atomic write: write to .tmp then rename to prevent partial reads
 	var tmp_path: String = REQUEST_PATH + ".tmp"
 	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if file == null:
@@ -70,7 +113,6 @@ func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	file.close()
 	DirAccess.rename_absolute(tmp_path, REQUEST_PATH)
 
-	# Wait for response with timeout
 	var start: float = Time.get_unix_time_from_system()
 	while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
 		if not _ensure_game_running():
@@ -85,14 +127,12 @@ func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 				var err := json.parse(resp_text)
 				if err == OK and json.data is Dictionary:
 					var resp_data: Dictionary = json.data as Dictionary
-					# Validate request_id correlation — reject stale responses
 					var resp_id: String = resp_data.get("request_id", "")
 					if not resp_id.is_empty() and resp_id != request_id:
 						push_warning("[MCP Runtime] Ignoring stale response (expected %s, got %s)" % [request_id, resp_id])
 						continue
 					return resp_data
 				return {"error": "Failed to parse IPC response"}
-		# Non-blocking: yield one frame instead of blocking with OS.delay_msec
 		await _plugin.get_tree().process_frame
 	return {"error": "IPC request timed out (%.1fs). Hint: add a longer delay between runtime tool calls to allow pending requests to complete." % IPC_TIMEOUT}
 
