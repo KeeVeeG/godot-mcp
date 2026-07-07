@@ -49,6 +49,11 @@ module.exports = {
       description: 'Set main scene',
       validate: (d) => d && d.path === 'res://_verify_scene.tscn',
     },
+    {
+      tool: 'get_main_scene',
+      description: 'Get main scene',
+      validate: (d) => d && typeof d.path === 'string',
+    },
     // play_scene and stop_scene tested in runtime group
     {
       tool: 'add_scene_instance',

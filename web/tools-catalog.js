@@ -2676,7 +2676,7 @@ const TOOLS_CATALOG = [
     gd_file: 'addon/godot_mcp/commands/scene_commands.gd',
     gd_function: 'get_main_scene',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
+    test_file: 'tests/cases/group_02_scene.js',
     category: 'scene',
   },
   {
