@@ -64,13 +64,14 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 			}
 		}
 
-	var result: Variant = handler.call(params)
-
-	# Detect async handlers — they return GDScriptFunctionState (internal class,
-	# not available as type). Await to get actual result.
-	if typeof(result) == TYPE_OBJECT and result != null \
-			and result.get_class() == "GDScriptFunctionState":
-		result = await result
+	# Runtime handlers are async (IPC-based) and must be awaited.
+	# All other handlers are synchronous — calling with await on them
+	# emits wrong VM opcodes for Callable-based dispatch.
+	var result: Variant
+	if method_name.begins_with("runtime/"):
+		result = await handler.call(params)
+	else:
+		result = handler.call(params)
 
 	# Guard: if handler returned null, it likely hit a runtime error
 	if result == null:
