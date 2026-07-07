@@ -9,6 +9,9 @@ var _status_label: Label
 ## Port label showing connected port
 var _port_label: Label
 
+## Project path label showing server project
+var _path_label: Label
+
 ## Activity log
 var _log_text: RichTextLabel
 
@@ -58,6 +61,13 @@ func _setup_ui() -> void:
 	_port_label.text = "Port: -"
 	vbox.add_child(_port_label)
 
+	# Project path
+	_path_label = Label.new()
+	_path_label.name = "PathLabel"
+	_path_label.text = ""
+	_path_label.clip_text = true
+	vbox.add_child(_path_label)
+
 	# Separator
 	var sep := HSeparator.new()
 	vbox.add_child(sep)
@@ -78,7 +88,7 @@ func _setup_ui() -> void:
 
 
 ## Update connection status display.
-func update_connection(connected: bool, port: int = -1) -> void:
+func update_connection(connected: bool, port: int = -1, project_path: String = "") -> void:
 	var status_icon: Label = find_child("StatusIcon", true, false) as Label
 	if status_icon:
 		if connected:
@@ -97,6 +107,12 @@ func update_connection(connected: bool, port: int = -1) -> void:
 			_port_label.text = "Port: %d" % port
 		else:
 			_port_label.text = "Port: -"
+
+	if _path_label:
+		if connected and not project_path.is_empty():
+			_path_label.text = project_path
+		else:
+			_path_label.text = ""
 
 
 ## Add a log entry.

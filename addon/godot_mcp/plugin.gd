@@ -267,7 +267,7 @@ func _on_ws_connected(port: int) -> void:
 	var url: String = "ws://localhost:%d" % port
 	print("[MCP] Connected to %s (project: %s)" % [url, project_path])
 	if _status_panel:
-		_status_panel.update_connection(true, port)
+		_status_panel.update_connection(true, port, project_path)
 		_status_panel.log_activity("Connected: %s" % url, "success")
 		if not project_path.is_empty():
 			_status_panel.log_activity("Server project: %s" % project_path, "info")
