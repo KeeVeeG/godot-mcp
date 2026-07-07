@@ -175,19 +175,24 @@ func validate_export_for_platform(params: Dictionary) -> Dictionary:
 					"message": "Missing resource: %s (referenced by %s)" % [dep_path, scene_path],
 				})
 
-	# Check script errors
+	# Check script errors — validate source on fresh script (no live instances)
 	var script_files: Array = []
 	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["gd"]), func(path, _name): script_files.append(path))
 	var script_errors: int = 0
 	for script_path: String in script_files:
-		var script: GDScript = load(script_path) as GDScript
-		if script != null and script.reload(true) != OK:
+		var source := FileAccess.get_file_as_string(script_path)
+		if source.is_empty():
+			continue
+		var temp := GDScript.new()
+		temp.source_code = source
+		var err: Error = temp.reload()
+		if err != OK:
 			script_errors += 1
 			issues.append({
 				"severity": "error",
 				"type": "script_error",
 				"path": script_path,
-				"message": "Script has compilation errors",
+				"message": "Script has compilation errors: %s" % error_string(err),
 			})
 
 	var error_count: int = issues.filter(func(i: Dictionary) -> bool: return i["severity"] == "error").size()
