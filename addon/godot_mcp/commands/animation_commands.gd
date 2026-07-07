@@ -284,21 +284,44 @@ func remove_animation(params: Dictionary) -> Dictionary:
 	return {"result": "Animation '%s' removed from %s" % [anim_name, path]}
 
 
-## Create an AnimationTree node.
+## Create an AnimationTree node, or configure existing one.
 func create_animation_tree(params: Dictionary) -> Dictionary:
-	var parent_path: String = params.get("parent_path", params.get("path", ""))
+	var path: String = params.get("path", "")
+	var parent_path: String = params.get("parent_path", "")
 	var player_path: String = params.get("player_path", "")
 	var props: Dictionary = params.get("properties", {})
 	var root_type: String = params.get("root_type", props.get("root_type", "AnimationNodeBlendTree"))
 
-	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
-	if parent_path != "":
-		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
-	if parent == null:
-		return {"error": "Parent not found"}
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
 
-	var tree: AnimationTree = AnimationTree.new()
-	tree.name = props.get("name", "AnimationTree")
+	# If path points to an existing AnimationTree, configure it
+	var tree: AnimationTree = null
+	if not path.is_empty():
+		var existing: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+		if existing != null:
+			if existing is AnimationTree:
+				tree = existing as AnimationTree
+			else:
+				return {"error": "Node at path '%s' is not an AnimationTree (type: %s)" % [path, existing.get_class()]}
+
+	if tree == null:
+		# Create new — use parent_path if given, otherwise path as parent
+		var parent: Node = root
+		var effective_parent: String = parent_path if not parent_path.is_empty() else path
+		if not effective_parent.is_empty():
+			parent = MCPCommandHelpers.resolve_node_path(_plugin, effective_parent)
+		if parent == null:
+			return {"error": "Parent not found"}
+		tree = AnimationTree.new()
+		tree.name = props.get("name", "AnimationTree")
+		if _undo_helper:
+			_undo_helper.add_node_with_undo(tree, parent)
+		else:
+			parent.add_child(tree)
+			tree.set_owner(root)
+
 	if not player_path.is_empty():
 		var player: Node = MCPCommandHelpers.resolve_node_path(_plugin, player_path)
 		if player and player is AnimationPlayer:
@@ -328,7 +351,7 @@ func create_animation_tree(params: Dictionary) -> Dictionary:
 		parent.add_child(tree)
 		tree.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
-	return {"result": {"name": str(tree.name), "path": str(tree.get_path()), "root_type": root_type}}
+	return {"result": {"name": str(tree.name), "path": MCPCommandHelpers.get_node_path(tree, _plugin), "root_type": root_type}}
 
 
 ## Get AnimationTree structure.
