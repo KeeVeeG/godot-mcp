@@ -122,7 +122,7 @@ func setup_collision(params: Dictionary) -> Dictionary:
 				_undo_helper.add_node_with_undo(col_node, node)
 			else:
 				node.add_child(col_node)
-		col_node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
+			col_node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 			return {"result": {"shape_type": "polygon", "node": str(col_node.get_path())}}
 		"cylinder", "CylinderShape3D":
 			var cyl: CylinderShape3D = CylinderShape3D.new()
