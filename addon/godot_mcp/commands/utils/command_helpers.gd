@@ -57,11 +57,11 @@ static func count_nodes(node: Node) -> int:
 
 
 ## Recursively find first node of given class.
-static func find_node_by_class(start: Node, class_name: String) -> Node:
-	if start.get_class() == class_name:
+static func find_node_by_class(start: Node, target_class: String) -> Node:
+	if start.get_class() == target_class:
 		return start
 	for child in start.get_children():
-		var found := find_node_by_class(child, class_name)
+		var found := find_node_by_class(child, target_class)
 		if found != null:
 			return found
 	return null
