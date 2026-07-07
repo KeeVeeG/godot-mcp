@@ -334,7 +334,7 @@ func _reload_quiet(script: GDScript) -> Error:
 	var setting_path: String = "debug/gdscript/warnings/enable"
 	var orig_val: Variant = ProjectSettings.get_setting(setting_path)
 	ProjectSettings.set_setting(setting_path, false)
-	var err: Error = script.reload()
+	var err: Error = script.reload(true)
 	ProjectSettings.set_setting(setting_path, orig_val)
 	return err
 

@@ -181,7 +181,7 @@ func validate_export_for_platform(params: Dictionary) -> Dictionary:
 	var script_errors: int = 0
 	for script_path: String in script_files:
 		var script: GDScript = load(script_path) as GDScript
-		if script != null and script.reload() != OK:
+		if script != null and script.reload(true) != OK:
 			script_errors += 1
 			issues.append({
 				"severity": "error",

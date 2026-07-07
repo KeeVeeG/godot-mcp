@@ -137,7 +137,7 @@ func _execute_editor_script(params: Dictionary) -> Dictionary:
 			wrapped_code += "    " + line + "\n"
 	script.source_code = wrapped_code
 
-	var err: Error = script.reload()
+	var err: Error = script.reload(true)
 	if err != OK:
 		return {"success": false, "error": "Script compilation failed: %s" % error_string(err)}
 

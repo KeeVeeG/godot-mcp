@@ -94,7 +94,7 @@ func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 				return {"error": "Failed to parse IPC response"}
 		# Non-blocking: yield one frame instead of blocking with OS.delay_msec
 		await _plugin.get_tree().process_frame
-	return {"error": "IPC request timed out (%.1fs)" % IPC_TIMEOUT}
+	return {"error": "IPC request timed out (%.1fs). Hint: add a longer delay between runtime tool calls to allow pending requests to complete." % IPC_TIMEOUT}
 
 
 ## Get the game scene tree.
