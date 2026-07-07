@@ -238,8 +238,15 @@ func _write_runtime_command(method: String, params: Dictionary) -> void:
 
 
 ## Parse a key name to a keycode.
+## Accepts: "Space", "KEY_SPACE", "32", "A"
 func _parse_keycode(key_str: String) -> int:
 	var upper: String = key_str.to_upper()
+	# Strip KEY_ prefix if present (e.g., "KEY_SPACE" → "SPACE")
+	if upper.begins_with("KEY_"):
+		upper = upper.trim_prefix("KEY_")
+	# Try numeric keycode
+	if upper.is_valid_int():
+		return upper.to_int()
 	# Try direct name lookup
 	var code: int = OS.find_keycode_from_string(upper)
 	if code != 0:

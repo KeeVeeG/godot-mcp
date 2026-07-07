@@ -66,6 +66,11 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 
 	var result: Variant = handler.call(params)
 
+	# If the handler is an async function, it returns a GDScriptFunctionState.
+	# Await it to get the actual result instead of the coroutine object.
+	if result is GDScriptFunctionState:
+		result = await (result as GDScriptFunctionState)
+
 	# Guard: if handler returned null, it likely hit a runtime error
 	if result == null:
 		return {
