@@ -101,7 +101,7 @@ func add_mesh_instance(params: Dictionary) -> Dictionary:
 		parent.add_child(mi)
 		mi.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
-	return {"result": {"name": str(mi.name), "path": str(mi.get_path()), "mesh_type": mesh_type}}
+	return {"result": {"name": str(mi.name), "path": MCPCommandHelpers.get_node_path(mi, _plugin), "mesh_type": mesh_type}}
 
 
 ## Setup Camera3D properties.
@@ -192,7 +192,7 @@ func setup_lighting(params: Dictionary) -> Dictionary:
 		parent.add_child(light)
 		light.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
-	return {"result": {"name": str(light.name), "path": str(light.get_path()), "type": light_type}}
+	return {"result": {"name": str(light.name), "path": MCPCommandHelpers.get_node_path(light, _plugin), "type": light_type}}
 
 
 ## Setup WorldEnvironment node with environment settings.
@@ -218,6 +218,10 @@ func setup_environment(params: Dictionary) -> Dictionary:
 			var cam_env: Environment = cam.environment
 			_apply_environment_props(cam_env, properties)
 			return {"result": "Environment set on camera: %s" % path}
+		elif node == null:
+			return {"error": "Node not found: %s" % path}
+		else:
+			return {"error": "Node is not a WorldEnvironment or Camera3D: %s (type: %s)" % [path, node.get_class()]}
 	else:
 		# Find existing or create new
 		for child: Node in root.get_children():
@@ -236,7 +240,7 @@ func setup_environment(params: Dictionary) -> Dictionary:
 	if env_node.environment == null:
 		env_node.environment = Environment.new()
 	_apply_environment_props(env_node.environment, properties)
-	return {"result": "Environment configured: %s" % str(env_node.get_path())}
+	return {"result": "Environment configured: %s" % MCPCommandHelpers.get_node_path(env_node, _plugin)}
 
 
 func _apply_environment_props(env: Environment, props: Dictionary) -> void:
@@ -293,7 +297,7 @@ func add_gridmap(params: Dictionary) -> Dictionary:
 		parent.add_child(gridmap)
 		gridmap.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
-	return {"result": {"name": str(gridmap.name), "path": str(gridmap.get_path())}}
+	return {"result": {"name": str(gridmap.name), "path": MCPCommandHelpers.get_node_path(gridmap, _plugin)}}
 
 
 ## Set material on a 3D node.

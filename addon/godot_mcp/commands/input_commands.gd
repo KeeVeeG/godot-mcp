@@ -174,7 +174,11 @@ func get_input_actions(params: Dictionary) -> Dictionary:
 		var action_name: StringName = action_name_variant as StringName
 		var action_str: String = str(action_name)
 		if action_str.begins_with("ui_"):
-			continue  # Skip built-in UI actions unless requested
+			continue
+		# Filter to only project-defined actions (stored in input/ project settings)
+		var scope: String = params.get("scope", "game")
+		if scope == "game" and not ProjectSettings.has_setting("input/" + action_str):
+			continue
 		var events: Array = []
 		for event: InputEvent in InputMap.action_get_events(action_name):
 			events.append(MCPVariantCodec.serialize_input_event(event))

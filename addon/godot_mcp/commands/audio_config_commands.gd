@@ -36,31 +36,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 
 ## Get all audio settings.
 func _get_settings() -> Dictionary:
-	var buses: Array = []
-	for i: int in range(AudioServer.bus_count):
-		var bus_info: Dictionary = {
-			"index": i,
-			"name": AudioServer.get_bus_name(i),
-			"volume_db": AudioServer.get_bus_volume_db(i),
-			"solo": AudioServer.is_bus_solo(i),
-			"mute": AudioServer.is_bus_mute(i),
-			"bypass_effects": AudioServer.is_bus_bypassing_effects(i),
-		}
-		var send_name: String = AudioServer.get_bus_send(i)
-		if send_name != "":
-			bus_info["send"] = send_name
-		var effects: Array = []
-		var effect_count: int = AudioServer.get_bus_effect_count(i)
-		for j: int in range(effect_count):
-			var effect: AudioEffect = AudioServer.get_bus_effect(i, j)
-			if effect != null:
-				effects.append({
-					"index": j,
-					"type": effect.get_class(),
-					"enabled": AudioServer.is_bus_effect_enabled(i, j),
-				})
-		bus_info["effects"] = effects
-		buses.append(bus_info)
+	var buses: Array = MCPCommandHelpers.collect_bus_layout()
 	var settings: Dictionary = {
 		"bus_count": AudioServer.bus_count,
 		"buses": buses,

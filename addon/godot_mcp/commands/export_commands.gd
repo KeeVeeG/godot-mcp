@@ -26,7 +26,7 @@ func get_commands() -> Dictionary:
 func list_export_presets(_params: Dictionary) -> Dictionary:
 	var config_path: String = "res://export_presets.cfg"
 	if not FileAccess.file_exists(config_path):
-		return {"error": "No export_presets.cfg found. Create export presets in Project > Export."}
+		return {"result": {"preset_count": 0, "presets": []}}
 
 	var config: ConfigFile = ConfigFile.new()
 	var err: Error = config.load(config_path)

@@ -99,6 +99,7 @@ func duplicate_node_with_undo(node: Node) -> Node:
 	var dupe: Node = node.duplicate()
 	if dupe == null:
 		return null
+	dupe.name = node.name + "_copy"
 	var ur: EditorUndoRedoManager = _undo_redo_manager
 	ur.create_action("MCP: Duplicate node %s" % node.name)
 	ur.add_do_method(parent, "add_child", dupe)

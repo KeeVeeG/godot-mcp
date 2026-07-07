@@ -80,7 +80,7 @@ func add_audio_player(params: Dictionary) -> Dictionary:
 	ur.add_undo_method(parent, "remove_child", player)
 	ur.commit_action()
 
-	return {"result": {"name": str(player.name), "path": str(player.get_path()), "type": player_type}}
+	return {"result": {"name": str(player.name), "path": MCPCommandHelpers.get_node_path(player, _plugin), "type": player_type}}
 
 
 ## Remove an audio player node from the scene.
@@ -233,34 +233,7 @@ func set_audio_bus(params: Dictionary) -> Dictionary:
 
 ## Get the full audio bus layout with all buses and their effects.
 func get_audio_bus_layout(_params: Dictionary) -> Dictionary:
-	var buses: Array = []
-	for i: int in range(AudioServer.bus_count):
-		var bus_info: Dictionary = {
-			"index": i,
-			"name": AudioServer.get_bus_name(i),
-			"volume_db": AudioServer.get_bus_volume_db(i),
-			"solo": AudioServer.is_bus_solo(i),
-			"mute": AudioServer.is_bus_mute(i),
-			"bypass_effects": AudioServer.is_bus_bypassing_effects(i),
-		}
-		var send_name: String = AudioServer.get_bus_send(i)
-		if send_name != "":
-			bus_info["send"] = send_name
-
-		var effects: Array = []
-		var effect_count: int = AudioServer.get_bus_effect_count(i)
-		for j: int in range(effect_count):
-			var effect: AudioEffect = AudioServer.get_bus_effect(i, j)
-			if effect != null:
-				var effect_info: Dictionary = {
-					"index": j,
-					"type": effect.get_class(),
-					"enabled": AudioServer.is_bus_effect_enabled(i, j),
-				}
-				effects.append(effect_info)
-		bus_info["effects"] = effects
-		buses.append(bus_info)
-
+	var buses: Array = MCPCommandHelpers.collect_bus_layout()
 	return {"result": {"bus_count": buses.size(), "buses": buses}}
 
 

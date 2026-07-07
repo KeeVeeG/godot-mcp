@@ -73,7 +73,7 @@ func create_particles(params: Dictionary) -> Dictionary:
 		parent.add_child(node)
 		node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
-	return {"result": {"name": str(node.name), "path": str(node.get_path()), "dimension": dimension}}
+	return {"result": {"name": str(node.name), "path": MCPCommandHelpers.get_node_path(node, _plugin), "dimension": dimension}}
 
 
 ## Set particle material properties.

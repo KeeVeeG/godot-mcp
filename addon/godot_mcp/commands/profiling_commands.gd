@@ -74,35 +74,40 @@ func get_performance_monitors(params: Dictionary) -> Dictionary:
 
 
 ## Get a summary of editor performance: FPS, memory, physics, and render stats.
-func get_editor_performance(_params: Dictionary) -> Dictionary:
-	var fps: float = Performance.get_monitor(Performance.TIME_FPS)
-	var process_time: float = Performance.get_monitor(Performance.TIME_PROCESS)
-	var physics_time: float = Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
+## Delegates to get_performance_monitors for raw data.
+func get_editor_performance(params: Dictionary) -> Dictionary:
+	var raw_result: Dictionary = get_performance_monitors(params)
+	var monitors: Dictionary = raw_result.get("result", {})
 
-	var mem_static: float = Performance.get_monitor(Performance.MEMORY_STATIC)
-	var mem_video: float = Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED)
-	var mem_texture: float = Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED)
+	var fps: float = monitors.get("time/fps", 0.0) as float
+	var process_time: float = monitors.get("time/process_time", 0.0) as float
+	var physics_time: float = monitors.get("time/physics_process_time", 0.0) as float
+	var mem_static: float = monitors.get("memory/static", 0.0) as float
+	var mem_video: float = monitors.get("render/video_mem_used", 0.0) as float
+	var mem_texture: float = monitors.get("render/texture_mem_used", 0.0) as float
+	var object_count: int = int(monitors.get("object/object_count", 0))
+	var node_count: int = int(monitors.get("object/node_count", 0))
+	var resource_count: int = int(monitors.get("object/resource_count", 0))
+	var orphan_count: int = int(monitors.get("object/orphan_node_count", 0))
+	var draw_calls: int = int(monitors.get("render/total_draw_calls_in_frame", 0))
+	var total_objects: int = int(monitors.get("render/total_objects_in_frame", 0))
+	var total_primitives: int = int(monitors.get("render/total_primitives_in_frame", 0))
+	var physics_2d_active: int = int(monitors.get("physics/active_objects", 0))
+	var physics_3d_active: int = int(monitors.get("physics_3d/active_objects", 0))
 
-	var object_count: int = int(Performance.get_monitor(Performance.OBJECT_COUNT))
-	var node_count: int = int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
-	var resource_count: int = int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT))
-	var orphan_count: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
-
-	var draw_calls: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
-	var total_objects: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
-	var total_primitives: int = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
-
-	var physics_2d_active: int = int(Performance.get_monitor(Performance.PHYSICS_2D_ACTIVE_OBJECTS))
-	var physics_3d_active: int = int(Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS))
-
-	# Determine performance rating
+	# Determine performance rating with editor-aware thresholds
 	var rating: String = "good"
-	if fps < 30.0:
-		rating = "critical"
-	elif fps < 50.0:
-		rating = "warning"
-	elif fps < 55.0:
-		rating = "acceptable"
+	var is_editor: bool = not _plugin.get_editor_interface().is_playing_scene()
+	if is_editor:
+		if fps < 5.0:
+			rating = "critical"
+		elif fps < 15.0:
+			rating = "warning"
+	else:
+		if fps < 30.0:
+			rating = "critical"
+		elif fps < 50.0:
+			rating = "warning"
 
 	return {"result": {
 		"fps": fps,

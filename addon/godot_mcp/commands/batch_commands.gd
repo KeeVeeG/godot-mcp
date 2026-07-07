@@ -47,7 +47,7 @@ func _find_by_type_recursive(node: Node, type_name: String, include_inactive: bo
 		return
 	if node.is_class(type_name):
 		results.append({
-			"path": str(node.get_path()),
+			"path": MCPCommandHelpers.get_node_path(node, _plugin),
 			"name": str(node.name),
 			"type": node.get_class(),
 		})
@@ -91,10 +91,16 @@ func _find_connections_recursive(node: Node, connections: Array) -> void:
 			var target: Object = callable.get_object()
 			var target_path: String = ""
 			var target_method: String = str(callable.get_method())
+			# Skip editor-internal signal connections
+			if sig_name.begins_with("__") or target_method.begins_with("__"):
+				continue
 			if target is Node:
 				target_path = str((target as Node).get_path())
+				# Skip connections to editor-internal nodes
+				if target_path.begins_with("/root/@"):
+					continue
 			connections.append({
-				"source": str(node.get_path()),
+				"source": MCPCommandHelpers.get_node_path(node, _plugin),
 				"signal": sig_name,
 				"target": target_path,
 				"method": target_method,

@@ -94,7 +94,7 @@ func _add_node(params: Dictionary) -> Dictionary:
 		parent.add_child(node)
 		node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
-	return {"result": {"name": str(node.name), "path": str(node.get_path()), "type": type_name}}
+	return {"result": {"name": str(node.name), "path": MCPCommandHelpers.get_node_path(node, _plugin), "type": type_name}}
 
 
 ## Delete a node from the scene tree with UndoRedo support.
@@ -129,7 +129,7 @@ func _duplicate_node(params: Dictionary) -> Dictionary:
 	if _undo_helper:
 		var dupe: Node = _undo_helper.duplicate_node_with_undo(node)
 		if dupe:
-			return {"result": {"original": path, "duplicate": str(dupe.get_path()), "name": str(dupe.name)}}
+			return {"result": {"original": path, "duplicate": MCPCommandHelpers.get_node_path(dupe, _plugin), "name": str(dupe.name)}}
 		return {"error": "Duplication failed"}
 	else:
 		var dupe2: Node = node.duplicate()
@@ -137,7 +137,7 @@ func _duplicate_node(params: Dictionary) -> Dictionary:
 			return {"error": "Duplication failed"}
 		node.get_parent().add_child(dupe2)
 		dupe2.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
-		return {"result": {"original": path, "duplicate": str(dupe2.get_path()), "name": str(dupe2.name)}}
+		return {"result": {"original": path, "duplicate": MCPCommandHelpers.get_node_path(dupe2, _plugin), "name": str(dupe2.name)}}
 
 
 ## Move a node to a new parent with UndoRedo support.
@@ -393,7 +393,7 @@ func _rename_node(params: Dictionary) -> Dictionary:
 		_undo_helper.rename_node_with_undo(node, new_name)
 	else:
 		node.name = new_name
-	return {"result": {"old_path": path, "new_name": new_name, "new_path": str(node.get_path())}}
+	return {"result": {"old_path": path, "new_name": new_name, "new_path": MCPCommandHelpers.get_node_path(node, _plugin)}}
 
 
 ## Connect a signal between two nodes with UndoRedo support.
@@ -512,7 +512,7 @@ func _find_nodes_in_group(params: Dictionary) -> Dictionary:
 	var results: Array = []
 	for n: Node in nodes:
 		results.append({
-			"path": str(n.get_path()),
+			"path": MCPCommandHelpers.get_node_path(n, _plugin),
 			"name": str(n.name),
 			"type": n.get_class(),
 		})
@@ -526,7 +526,7 @@ func _get_editor_selection() -> Dictionary:
 	var results: Array = []
 	for node: Node in selected:
 		results.append({
-			"path": str(node.get_path()),
+			"path": MCPCommandHelpers.get_node_path(node, _plugin),
 			"name": str(node.name),
 			"type": node.get_class(),
 		})
@@ -576,6 +576,12 @@ func _resolve_node(path: String, root: Node) -> Node:
 	# Bare name (no slashes) that matches the root's own name
 	if not path.contains("/") and root.name == path:
 		return root
+	# Strip editor-internal prefix if present (e.g., /root/@EditorNode@123/.../SceneRoot/Node)
+	if path.begins_with("/root/@"):
+		var root_path: String = str(root.get_path())
+		var idx: int = path.find(root_path)
+		if idx != -1:
+			path = path.substr(idx + root_path.length() + 1)
 	return root.get_node_or_null(path)
 
 

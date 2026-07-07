@@ -91,7 +91,19 @@ func _create_script(params: Dictionary) -> Dictionary:
 	file.close()
 
 	_plugin.safe_scan_filesystem()
-	return {"result": {"path": path, "base_class": base_class}}
+
+	# Infer base_class from content if not explicitly provided
+	var inferred_class: String = base_class
+	if not content.is_empty():
+		var lines: PackedStringArray = content.split("\n")
+		for line: String in lines:
+			var stripped: String = line.strip_edges()
+			if stripped.begins_with("extends "):
+				var extends_name: String = stripped.trim_prefix("extends ").strip_edges()
+				if not extends_name.is_empty():
+					inferred_class = extends_name
+				break
+	return {"result": {"path": path, "base_class": inferred_class}}
 
 
 ## Delete a script file from the project.

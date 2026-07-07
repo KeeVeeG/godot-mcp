@@ -1,5 +1,5 @@
 /**
- * Scene tools - 11 tools for scene management
+ * Scene tools - 12 tools for scene management
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -138,5 +138,15 @@ export function registerSceneTools(server: McpServer, bridge: GodotBridge): void
       },
     },
     async (args) => callGodot(bridge, 'scene/set_main', args as Record<string, unknown>),
+  );
+
+  // 12. get_main_scene
+  server.registerTool(
+    'get_main_scene',
+    {
+      description: 'Get the project main scene path',
+      inputSchema: {},
+    },
+    async () => callGodot(bridge, 'scene/get_main', {}),
   );
 }

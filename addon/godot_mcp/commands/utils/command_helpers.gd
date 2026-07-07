@@ -39,13 +39,40 @@ static func get_edited_scene_root(plugin: EditorPlugin) -> Node:
 
 ## Resolve a node path relative to the scene root.
 ## Empty or "." path returns the root itself.
+## Accepts both scene-relative paths and full editor paths.
 static func resolve_node_path(plugin: EditorPlugin, path: String) -> Node:
 	var root: Node = get_scene_root(plugin)
 	if root == null:
 		return null
 	if path.is_empty() or path == ".":
 		return root
+	# Strip editor-internal prefix if present (e.g., /root/@EditorNode@123/.../SceneRoot/Node)
+	if path.begins_with("/root/@"):
+		var root_path: String = str(root.get_path())
+		var idx: int = path.find(root_path)
+		if idx != -1:
+			path = path.substr(idx + root_path.length() + 1)
 	return root.get_node_or_null(path)
+
+
+## Get a scene-relative path string for a node (strips editor prefix).
+## Use this instead of str(node.get_path()) when returning paths to MCP clients.
+## Overload 1: pass plugin to auto-resolve scene root.
+static func get_node_path(node: Node, plugin_or_root: Variant) -> String:
+	var root: Node
+	if plugin_or_root is EditorPlugin:
+		root = get_scene_root(plugin_or_root as EditorPlugin)
+	else:
+		root = plugin_or_root as Node
+	if root == null or node == null:
+		return ""
+	var full_path: String = str(node.get_path())
+	var root_path: String = str(root.get_path())
+	if full_path.begins_with(root_path + "/"):
+		return full_path.trim_prefix(root_path + "/")
+	if full_path == root_path:
+		return "."
+	return full_path
 
 
 ## Recursively count all child nodes.
@@ -73,6 +100,36 @@ static func find_bus_index(bus_name: String) -> int:
 		if AudioServer.get_bus_name(i) == bus_name:
 			return i
 	return -1
+
+
+## Collect audio bus layout as a standardized array.
+static func collect_bus_layout() -> Array:
+	var buses: Array = []
+	for i: int in range(AudioServer.bus_count):
+		var bus_info: Dictionary = {
+			"index": i,
+			"name": AudioServer.get_bus_name(i),
+			"volume_db": AudioServer.get_bus_volume_db(i),
+			"solo": AudioServer.is_bus_solo(i),
+			"mute": AudioServer.is_bus_mute(i),
+			"bypass_effects": AudioServer.is_bus_bypassing_effects(i),
+		}
+		var send_name: String = AudioServer.get_bus_send(i)
+		if send_name != "":
+			bus_info["send"] = send_name
+		var effects: Array = []
+		var effect_count: int = AudioServer.get_bus_effect_count(i)
+		for j: int in range(effect_count):
+			var effect: AudioEffect = AudioServer.get_bus_effect(i, j)
+			if effect != null:
+				effects.append({
+					"index": j,
+					"type": effect.get_class(),
+					"enabled": AudioServer.is_bus_effect_enabled(i, j),
+				})
+		bus_info["effects"] = effects
+		buses.append(bus_info)
+	return buses
 
 
 ## Walk directory recursively, calling callback for each file matching extension.

@@ -75,8 +75,8 @@ func get_memory_usage(_params: Dictionary) -> Dictionary:
 			"nodes": node_count,
 			"orphan_nodes": orphan_count,
 		},
-		"orphan_warning": orphan_count > 0,
-		"orphan_message": "Found %d orphan nodes - potential memory leaks" % orphan_count if orphan_count > 0 else "No orphan nodes detected",
+		"orphan_warning": orphan_count > 0 and not Engine.is_editor_hint(),
+		"orphan_message": "Found %d orphan nodes (normal in editor context)" % orphan_count if orphan_count > 0 and Engine.is_editor_hint() else ("Found %d orphan nodes - potential memory leaks" % orphan_count if orphan_count > 0 else "No orphan nodes detected"),
 	}}
 
 

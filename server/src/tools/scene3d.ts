@@ -28,7 +28,7 @@ export function registerScene3dTools(server: McpServer, bridge: GodotBridge): vo
     {
       description: 'Add and configure a Camera3D node',
       inputSchema: {
-        path: NodePath.describe('Camera node path'),
+        path: NodePath.optional().default('').describe('Camera node path (leave empty to create a new Camera3D)'),
         properties: Properties.describe('Camera properties (fov, near, far, position, look_at, make_current, etc.)'),
       },
     },

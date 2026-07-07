@@ -62,7 +62,13 @@ func _get_settings() -> Dictionary:
 		"gi": {
 			"mode": ProjectSettings.get_setting("rendering/global_illumination/gi/use_half_resolution", false),
 		},
-		"post_processing": "Bloom, SSAO, SSR, and volumetric fog are per-Environment resource settings, not project-level. Configure them on the Environment resource in your WorldEnvironment node.",
+		"post_processing": {
+			"glow_enabled": ProjectSettings.get_setting("rendering/environment/glow/enabled", false),
+			"ssao_enabled": ProjectSettings.get_setting("rendering/environment/ssao/enabled", false),
+			"ssr_enabled": ProjectSettings.get_setting("rendering/environment/ssr/enabled", false),
+			"sdfgi_enabled": ProjectSettings.get_setting("rendering/environment/sdfgi/enabled", false),
+			"volumetric_fog_enabled": ProjectSettings.get_setting("rendering/environment/volumetric_fog/enabled", false),
+		},
 		"window": {
 			"mode": ProjectSettings.get_setting("display/window/size/mode", 0),
 			"vsync": ProjectSettings.get_setting("display/window/vsync/vsync_mode", 1),

@@ -1,4 +1,4 @@
-## Scene commands module - 11 tools.
+## Scene commands module - 12 tools.
 ## Handles scene tree, file operations, play/stop, and instancing.
 class_name MCPSceneCommands
 extends RefCounted
@@ -27,6 +27,7 @@ func get_commands() -> Dictionary:
 		"scene/save": func(params: Dictionary) -> Dictionary: return execute("save_scene", params),
 		"scene/get_loaded": func(params: Dictionary) -> Dictionary: return execute("get_loaded_scenes", params),
 		"scene/set_main": func(params: Dictionary) -> Dictionary: return execute("set_main_scene", params),
+		"scene/get_main": func(params: Dictionary) -> Dictionary: return execute("get_main_scene", params),
 	}
 
 
@@ -44,6 +45,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"save_scene": return _save_scene(params)
 		"get_loaded_scenes": return _get_loaded_scenes()
 		"set_main_scene": return _set_main_scene(params)
+		"get_main_scene": return _get_main_scene(params)
 	return {"error": "Unknown method: " + method}
 
 
@@ -61,7 +63,7 @@ func _serialize_node(node: Node, depth: int, max_depth: int) -> Dictionary:
 	var result: Dictionary = {
 		"name": str(node.name),
 		"type": node.get_class(),
-		"path": str(node.get_path()),
+		"path": MCPCommandHelpers.get_node_path(node, _plugin),
 		"children": [],
 	}
 	if node is Node2D:
@@ -280,6 +282,12 @@ func _get_loaded_scenes() -> Dictionary:
 		if not already_listed:
 			scenes.append({"path": current_path, "active": true})
 	return {"result": {"scenes": scenes, "count": scenes.size()}}
+
+
+## Get the project's main scene path.
+func _get_main_scene(_params: Dictionary) -> Dictionary:
+	var main_scene: String = ProjectSettings.get_setting("application/run/main_scene", "")
+	return {"result": {"path": main_scene}}
 
 
 ## Set the project's main scene.

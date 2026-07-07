@@ -124,7 +124,7 @@ func setup_collision(params: Dictionary) -> Dictionary:
 			else:
 				node.add_child(col_node)
 				col_node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
-			return {"result": {"shape_type": "polygon", "node": str(col_node.get_path())}}
+			return {"result": {"shape_type": "polygon", "node": MCPCommandHelpers.get_node_path(col_node, _plugin)}}
 		"cylinder", "CylinderShape3D":
 			var cyl: CylinderShape3D = CylinderShape3D.new()
 			cyl.radius = properties.get("radius", 0.5) as float
@@ -163,7 +163,7 @@ func setup_collision(params: Dictionary) -> Dictionary:
 	elif col_node is CollisionShape3D and shape3d:
 		(col_node as CollisionShape3D).shape = shape3d
 
-	return {"result": {"shape_type": shape_type, "node": str(col_node.get_path())}}
+	return {"result": {"shape_type": shape_type, "node": MCPCommandHelpers.get_node_path(col_node, _plugin)}}
 
 
 ## Set physics collision layers and mask.
@@ -306,7 +306,7 @@ func add_raycast(params: Dictionary) -> Dictionary:
 		parent.add_child(raycast)
 		raycast.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
-	return {"result": {"name": str(raycast.name), "path": str(raycast.get_path()), "is_2d": is_2d}}
+	return {"result": {"name": str(raycast.name), "path": MCPCommandHelpers.get_node_path(raycast, _plugin), "is_2d": is_2d}}
 
 
 ## Get physics material properties from a node.
@@ -321,16 +321,16 @@ func get_physics_material(params: Dictionary) -> Dictionary:
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 	var mat: PhysicsMaterial = null
-	if node is RigidBody2D:
-		mat = (node as RigidBody2D).physics_material_override
+	if node is RigidBody2D or node is CharacterBody2D:
+		mat = node.physics_material_override
 	elif node is StaticBody2D:
 		mat = (node as StaticBody2D).physics_material_override
-	elif node is RigidBody3D:
-		mat = (node as RigidBody3D).physics_material_override
+	elif node is RigidBody3D or node is CharacterBody3D:
+		mat = node.physics_material_override
 	elif node is StaticBody3D:
 		mat = (node as StaticBody3D).physics_material_override
 	else:
-		return {"error": "Node does not support physics_material_override: %s. Only RigidBody and StaticBody support it." % node.get_class()}
+		return {"error": "Node does not support physics_material_override: %s." % node.get_class()}
 	if mat == null:
 		return {"result": {"path": path, "has_material": false}}
 	return {"result": {
@@ -375,18 +375,18 @@ func set_physics_material(params: Dictionary) -> Dictionary:
 		mat.bounce = properties["bounce"] as float
 	if properties.has("absorbent"):
 		mat.absorbent = properties["absorbent"] as bool
-	if node is RigidBody2D or node is StaticBody2D:
+	if node is RigidBody2D or node is StaticBody2D or node is CharacterBody2D:
 		if _undo_helper:
 			_undo_helper.set_property_with_undo(node, "physics_material_override", mat)
 		else:
 			node.physics_material_override = mat
-	elif node is RigidBody3D or node is StaticBody3D:
+	elif node is RigidBody3D or node is StaticBody3D or node is CharacterBody3D:
 		if _undo_helper:
 			_undo_helper.set_property_with_undo(node, "physics_material_override", mat)
 		else:
 			node.physics_material_override = mat
 	else:
-		return {"error": "Node does not support physics_material_override: %s. Only RigidBody and StaticBody support it." % node.get_class()}
+		return {"error": "Node does not support physics_material_override: %s." % node.get_class()}
 	return {"result": {"path": path, "friction": mat.friction, "rough": mat.rough, "bounce": mat.bounce, "absorbent": mat.absorbent}}
 
 
