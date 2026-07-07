@@ -14,7 +14,7 @@ The AI can read your scene tree, create nodes, write scripts, simulate gameplay 
 
 📋 Browse the [full tools catalog](https://keeveeg.github.io/godot-mcp/tools.html) — searchable list of all 300+ tools with descriptions.
 
-> This project was fully developed by **MiMo-V2.5-Pro** (Xiaomi AI).
+> This project was developed with the help of multiple AI models: MiMo-V2.5-Pro, DeepSeek V4 Pro, DeepSeek V4 Flash, and Qwen 3.7 Plus.
 
 ## Table of Contents
 
