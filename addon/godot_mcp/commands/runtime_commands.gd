@@ -15,6 +15,7 @@ var _ipc_queue: Array[Dictionary] = []
 var _ipc_processing: bool = false
 var _ipc_results: Dictionary = {}  # int -> Dictionary
 var _task_counter: int = 0
+var _dead_tasks: Array[int] = []
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
@@ -67,6 +68,7 @@ func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 
 
 ## Wait for our specific task result (with timeout).
+## Marks task as dead on timeout to prevent memory leak in _ipc_results.
 func _wait_for_ipc_result(task_id: int) -> Dictionary:
 	var start: float = Time.get_unix_time_from_system()
 	while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
@@ -75,18 +77,29 @@ func _wait_for_ipc_result(task_id: int) -> Dictionary:
 			_ipc_results.erase(task_id)
 			return result
 		await _plugin.get_tree().process_frame
+	_dead_tasks.append(task_id)
 	return {"error": "IPC request timed out (%.1fs)" % IPC_TIMEOUT}
 
 
 ## Process all queued IPC requests sequentially.
+## Wrapped in try/catch to prevent _ipc_processing from getting stuck on errors.
 func _process_ipc_queue() -> void:
+	if _ipc_processing:
+		return
 	_ipc_processing = true
 	while not _ipc_queue.is_empty():
 		var task: Dictionary = _ipc_queue.pop_front()
-		var result: Dictionary = await _do_ipc_request(task["method"], task["params"])
-		_ipc_results[task["id"]] = result
-		# 150ms delay between requests to prevent file I/O contention
-		if not _ipc_queue.is_empty():
+		# Skip tasks whose callers already timed out
+		if _dead_tasks.has(task["id"]):
+			continue
+		var result: Dictionary = {}
+		if not _ensure_game_running():
+			result = {"error": "Game stopped during IPC processing"}
+		else:
+			result = await _do_ipc_request(task["method"], task["params"])
+		if not _dead_tasks.has(task["id"]):
+			_ipc_results[task["id"]] = result
+		if not _ipc_queue.is_empty() and not _dead_tasks.has(task["id"]):
 			await _plugin.get_tree().create_timer(0.15).timeout
 	_ipc_processing = false
 
