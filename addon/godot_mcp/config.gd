@@ -26,6 +26,9 @@ var enabled_tools: Dictionary = {}
 ## Current connected port (set at runtime)
 var connected_port: int = -1
 
+## Manual port override — if set, skip port scanning
+var port: int = -1
+
 ## Config file path
 var config_path: String = "res://godot_mcp_config.json"
 
@@ -64,6 +67,8 @@ func _load_config() -> void:
 		var config_dict: Dictionary = data as Dictionary
 		if config_dict.has("enabled_tools") and config_dict["enabled_tools"] is Dictionary:
 			enabled_tools = config_dict["enabled_tools"] as Dictionary
+		if config_dict.has("port") and config_dict["port"] is int:
+			port = config_dict["port"] as int
 
 
 func is_tool_enabled(tool_name: String) -> bool:

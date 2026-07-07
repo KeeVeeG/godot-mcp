@@ -9,6 +9,8 @@ signal connected(port: int)
 signal disconnected()
 ## Emitted when a raw JSON-RPC message is received
 signal message_received(message: Dictionary)
+## Emitted when server identity is received (server_hello)
+signal server_identity_received(identity: Dictionary)
 
 ## WebSocket peer
 var _ws: WebSocketPeer = WebSocketPeer.new()
@@ -45,7 +47,8 @@ var _config: MCPConfig
 const SCAN_IDLE: int = 0
 const SCAN_CONNECTING: int = 1
 const SCAN_WAITING: int = 2
-const SCAN_SETTLING: int = 3
+const SCAN_READING: int = 3
+const SCAN_SETTLING: int = 4
 var _scan_state: int = SCAN_IDLE
 var _scan_ports: Array[int] = []
 var _scan_port_index: int = 0
@@ -53,12 +56,20 @@ var _scan_test_ws: WebSocketPeer = null
 var _scan_elapsed: float = 0.0
 var _scan_found_port: int = -1
 const SCAN_CONNECT_TIMEOUT: float = 0.5
+const SCAN_READ_TIMEOUT: float = 0.3
 const SCAN_SETTLE_DELAY: float = 0.2
 var _scan_settle_timer: float = 0.0
+
+## Servers matching our project, collected during scan: [{port, projectPath}, ...]
+var _candidates: Array[Dictionary] = []
+
+## Manual port override — if set, skip scanning
+var _target_port: int = -1
 
 
 func _ready() -> void:
 	_config = MCPConfig.get_instance()
+	_target_port = _config.port
 
 
 func _process(delta: float) -> void:
@@ -148,24 +159,32 @@ func _process_scan(delta: float) -> void:
 			_scan_test_ws.poll()
 			var state: int = _scan_test_ws.get_ready_state()
 			if state == WebSocketPeer.STATE_OPEN:
-				# Found a server — close test socket, enter settle delay
+				# Found a server — read server_hello to check if it's ours
 				_scan_found_port = _scan_ports[_scan_port_index]
-				_scan_test_ws.close()
-				_scan_test_ws = null
-				_scan_settle_timer = SCAN_SETTLE_DELAY
-				_scan_state = SCAN_SETTLING
+				_scan_elapsed = 0.0
+				_scan_state = SCAN_READING
 			elif state == WebSocketPeer.STATE_CLOSED or _scan_elapsed >= SCAN_CONNECT_TIMEOUT:
-				# Timed out or closed, try next port
+				_next_scan_port()
+
+		SCAN_READING:
+			_scan_elapsed += delta
+			_scan_test_ws.poll()
+			while _scan_test_ws.get_available_packet_count() > 0:
+				var packet: PackedByteArray = _scan_test_ws.get_packet()
+				var text: String = packet.get_string_from_utf8()
+				var hello: Dictionary = _parse_server_hello(text)
+				if not hello.is_empty():
+					_scan_test_ws.close()
+					_scan_test_ws = null
+					_candidates.append({port = _scan_found_port, projectPath = hello.projectPath})
+					_next_scan_port()
+					return
+			if _scan_elapsed >= SCAN_READ_TIMEOUT:
 				_scan_test_ws.close()
 				_scan_test_ws = null
-				_scan_port_index += 1
-				if _scan_port_index >= _scan_ports.size():
-					_finish_scan(false)
-				else:
-					_scan_state = SCAN_CONNECTING
+				_next_scan_port()
 
 		SCAN_SETTLING:
-			# Non-blocking settle delay to let server process the close
 			_scan_settle_timer -= delta
 			if _scan_settle_timer <= 0.0:
 				_connect_to_port(_scan_found_port)
@@ -173,20 +192,84 @@ func _process_scan(delta: float) -> void:
 				_finish_scan(true)
 
 
+## Advance to next scan port or finish scanning.
+func _next_scan_port() -> void:
+	_scan_port_index += 1
+	if _scan_port_index >= _scan_ports.size():
+		_pick_best_candidate()
+	else:
+		_scan_state = SCAN_CONNECTING
+
+
+## Choose the best matching server from candidates and connect.
+## Prefers server closest to project root (shortest projectPath).
+func _pick_best_candidate() -> void:
+	var project_root: String = ProjectSettings.globalize_path("res://").to_lower().replace("\\", "/")
+	# Filter to servers within our project
+	var matching: Array[Dictionary] = []
+	for c in _candidates:
+		var sp: String = c.projectPath.to_lower().replace("\\", "/")
+		if project_root.begins_with(sp) or sp.begins_with(project_root):
+			matching.append(c)
+
+	if not matching.is_empty():
+		# Pick the server closest to root (shortest projectPath)
+		var best: Dictionary = matching[0]
+		for c in matching:
+			if c.projectPath.length() < best.projectPath.length():
+				best = c
+		_scan_found_port = best.port
+		_scan_settle_timer = SCAN_SETTLE_DELAY
+		_scan_state = SCAN_SETTLING
+	else:
+		_finish_scan(false)
+
+
+## Parse server_hello message. Returns {projectPath, port} or {}.
+func _parse_server_hello(text: String) -> Dictionary:
+	var test_json: JSON = JSON.new()
+	if test_json.parse(text) != OK:
+		return {}
+	var msg: Variant = test_json.get_data()
+	if not msg is Dictionary or msg.get("method") != "server_hello":
+		return {}
+	var params: Variant = msg.get("params")
+	if not params is Dictionary:
+		return {}
+	return params
+
+
 ## Finish scanning and reset state.
 func _finish_scan(found: bool) -> void:
 	_scanning = false
 	_scan_state = SCAN_IDLE
 	_scan_test_ws = null
+	_candidates.clear()
 	if not found:
 		pass  # No server found, will retry on next reconnect cycle
 
 
-## Scan ports 6505-6514 for an active MCP server.
+## Connect to a specific port bypassing the scan.
+func connect_to_port(port: int) -> void:
+	_target_port = port
+	_config.port = port
+	if _is_connected:
+		_handle_disconnect()
+	_connect_to_port(port)
+
+
+## Scan ports 6505-6514 for an active MCP server matching our project.
 ## Non-blocking: sets up state machine, returns immediately.
+## If _target_port is set, connects directly to that port.
 func scan_for_server() -> void:
 	if _scanning:
 		return
+
+	# If user specified a port, connect directly (no scan)
+	if _target_port > 0:
+		_connect_to_port(_target_port)
+		return
+
 	_scanning = true
 	_scan_ports = _config.get_port_range()
 	_scan_port_index = 0

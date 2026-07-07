@@ -44,6 +44,7 @@ export class GodotBridge {
     pingInterval = null;
     lastPongTime = 0;
     requestIdCounter = 0;
+    projectPath = process.cwd();
     constructor(port = WS_BASE_PORT) {
         this.port = port;
     }
@@ -102,9 +103,18 @@ export class GodotBridge {
             this.client = ws;
             this.state = 'connected';
             this.lastPongTime = Date.now();
-            log('info', 'Godot editor connected');
+            log('info', `Godot editor connected (project: ${this.projectPath})`);
             this.setupClientHandlers(ws);
             this.startPingInterval(ws);
+            // Send server identity immediately so Godot can match project during scan
+            ws.send(JSON.stringify({
+                jsonrpc: JSONRPC_VERSION,
+                method: 'server_hello',
+                params: {
+                    projectPath: this.projectPath,
+                    port: this.port,
+                },
+            }));
         });
         wss.on('error', (err) => {
             log('error', 'WebSocket server error:', err.message);
