@@ -13,6 +13,8 @@ var _next_request_id: int = 1
 ## Task queue for serialized IPC — prevents concurrent file overwrite
 var _ipc_queue: Array[Dictionary] = []
 var _ipc_processing: bool = false
+var _ipc_results: Dictionary = {}  # int -> Dictionary
+var _task_counter: int = 0
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
@@ -49,44 +51,44 @@ func _ensure_game_running() -> bool:
 
 
 ## Send a request to the runtime via IPC and wait for response.
-## Uses a task queue to serialize concurrent requests — prevents file overwrite race condition.
+## Uses task queue with per-task IDs to route results to correct caller.
 func _ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	if not _ensure_game_running():
 		return {"error": "Game is not running. Start the scene before using runtime commands."}
 
-	# Enqueue the request — only one coroutine processes the queue
-	_ipc_queue.append({"method": method, "params": params})
-	if _ipc_processing:
-		# Another request is being processed — wait for our turn via polling
-		var start: float = Time.get_unix_time_from_system()
-		while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
-			# Check if our request was processed (removed from queue)
-			if _ipc_queue.is_empty() or not _ipc_queue.has({"method": method, "params": params}):
-				# Our request was handled by the queue processor
-				# The result is stored by the processor — but we need a way to return it
-				break
-			await _plugin.get_tree().process_frame
-		# Fall through to direct processing if queue processor didn't handle it
-		if not _ipc_processing:
-			return await _process_ipc_queue()
-		return {"error": "IPC request timed out (%.1fs)" % IPC_TIMEOUT}
+	_task_counter += 1
+	var task_id := _task_counter
+	_ipc_queue.append({"id": task_id, "method": method, "params": params})
 
+	if not _ipc_processing:
+		_process_ipc_queue()
+
+	return await _wait_for_ipc_result(task_id)
+
+
+## Wait for our specific task result (with timeout).
+func _wait_for_ipc_result(task_id: int) -> Dictionary:
+	var start: float = Time.get_unix_time_from_system()
+	while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
+		if _ipc_results.has(task_id):
+			var result: Dictionary = _ipc_results[task_id]
+			_ipc_results.erase(task_id)
+			return result
+		await _plugin.get_tree().process_frame
+	return {"error": "IPC request timed out (%.1fs)" % IPC_TIMEOUT}
+
+
+## Process all queued IPC requests sequentially.
+func _process_ipc_queue() -> void:
 	_ipc_processing = true
-	var result: Dictionary = await _process_ipc_queue()
-	_ipc_processing = false
-	return result
-
-
-## Process all queued IPC requests sequentially with delays between them.
-func _process_ipc_queue() -> Dictionary:
-	var last_result: Dictionary = {}
 	while not _ipc_queue.is_empty():
 		var task: Dictionary = _ipc_queue.pop_front()
+		var result: Dictionary = await _do_ipc_request(task["method"], task["params"])
+		_ipc_results[task["id"]] = result
 		# 150ms delay between requests to prevent file I/O contention
-		if last_result.size() > 0:
+		if not _ipc_queue.is_empty():
 			await _plugin.get_tree().create_timer(0.15).timeout
-		last_result = await _do_ipc_request(task["method"], task["params"])
-	return last_result
+	_ipc_processing = false
 
 
 ## Perform a single IPC request (write file, poll for response).
