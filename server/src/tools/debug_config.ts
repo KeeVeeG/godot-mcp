@@ -36,12 +36,10 @@ export function registerDebugConfigTools(server: McpServer, bridge: GodotBridge)
   server.registerTool(
     'set_profiler_settings',
     {
-      description: 'Enable or disable built-in profilers',
+      description: 'Configure profiler limits. Note: profiler on/off toggles (CPU, GPU, etc.) are controlled by the editor debugger panel during gameplay and cannot be set via ProjectSettings.',
       inputSchema: {
-        cpu: z.boolean().optional().describe('Enable CPU profiler'),
-        gpu: z.boolean().optional().describe('Enable GPU profiler'),
-        memory: z.boolean().optional().describe('Enable memory profiler'),
-        network: z.boolean().optional().describe('Enable network profiler'),
+        max_functions: z.number().int().optional().describe('Max functions tracked by script profiler (range: 16-512)'),
+        max_timestamp_query_elements: z.number().int().optional().describe('Max timestamp query elements (default: 256)'),
       },
     },
     async (args) => callGodot(bridge, 'debug_config/set_profilers', args as Record<string, unknown>),

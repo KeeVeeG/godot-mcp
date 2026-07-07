@@ -205,7 +205,7 @@ func _add_scene_instance(params: Dictionary) -> Dictionary:
 		instance.queue_free()
 		return {"error": "No scene open"}
 	if parent_path != "":
-		parent = parent.get_node_or_null(parent_path)
+		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
 		if parent == null:
 			instance.queue_free()
 			return {"error": "Parent node not found: %s" % parent_path}
@@ -216,7 +216,7 @@ func _add_scene_instance(params: Dictionary) -> Dictionary:
 		parent.add_child(instance)
 		instance.set_owner(MCPCommandHelpers.get_edited_scene_root(_plugin))
 
-	return {"result": {"path": path, "instance_name": str(instance.name), "parent": str(parent.get_path())}}
+	return {"result": {"path": path, "instance_name": str(instance.name), "parent": MCPCommandHelpers.get_node_path(parent, _plugin)}}
 
 
 ## Play the game scene (main, current, or custom).

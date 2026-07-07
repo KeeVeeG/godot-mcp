@@ -217,6 +217,6 @@ func _collect_groups(node: Node, groups: Dictionary) -> void:
 	for group: String in node.get_groups():
 		if not groups.has(group):
 			groups[group] = []
-		groups[group].append(str(node.get_path()))
+		groups[group].append(MCPCommandHelpers.get_node_path(node, _plugin))
 	for child: Node in node.get_children():
 		_collect_groups(child, groups)

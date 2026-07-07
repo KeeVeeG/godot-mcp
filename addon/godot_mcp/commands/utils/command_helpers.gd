@@ -46,6 +46,9 @@ static func resolve_node_path(plugin: EditorPlugin, path: String) -> Node:
 		return null
 	if path.is_empty() or path == ".":
 		return root
+	# Bare name matching root's own name → return root
+	if not path.contains("/") and root.name == path:
+		return root
 	# Strip editor-internal prefix if present (e.g., /root/@EditorNode@123/.../SceneRoot/Node)
 	if path.begins_with("/root/@"):
 		var root_path: String = str(root.get_path())

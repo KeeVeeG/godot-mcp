@@ -278,7 +278,7 @@ func _find_suspicious_nodes(node: Node, depth: int) -> Array:
 		issues.append({
 			"severity": "info",
 			"type": "deep_nesting",
-			"path": str(node.get_path()),
+			"path": MCPCommandHelpers.get_node_path(node, _plugin),
 			"depth": depth,
 			"message": "Node at depth %d: %s" % [depth, str(node.get_path())],
 			"suggestion": "Very deep node trees can impact performance. Consider flattening.",

@@ -1,4 +1,4 @@
-## Analysis commands module - 4 tools.
+﻿## Analysis commands module - 4 tools.
 ## Provides scene complexity analysis, signal flow mapping,
 ## unused resource detection, and project statistics.
 class_name MCPAnalysisCommands
@@ -125,7 +125,7 @@ func _analyze_signals_recursive(node: Node, nodes: Array, edges: Array, node_set
 	# Limit to avoid WebSocket buffer overflow
 	if nodes.size() >= 25 or edges.size() >= 50:
 		return
-	var node_path: String = str(node.get_path())
+	var node_path: String = MCPCommandHelpers.get_node_path(node, _plugin)
 	if not node_set.has(node_path):
 		node_set[node_path] = true
 		nodes.append({
@@ -139,6 +139,9 @@ func _analyze_signals_recursive(node: Node, nodes: Array, edges: Array, node_set
 		if edges.size() >= 50:
 			break
 		var sig_name: String = sig_info["name"] as String
+		# Skip editor-internal signals
+		if sig_name.begins_with("__"):
+			continue
 		var connections: Array = node.get_signal_connection_list(sig_name)
 		for conn: Dictionary in connections:
 			if edges.size() >= 50:
@@ -147,10 +150,17 @@ func _analyze_signals_recursive(node: Node, nodes: Array, edges: Array, node_set
 			var target: Object = callable.get_object()
 			var target_path: String = ""
 			var target_type: String = ""
+			var target_method: String = str(callable.get_method())
+			# Skip editor-internal methods
+			if target_method.begins_with("__"):
+				continue
 			if target is Node:
 				var target_node: Node = target as Node
-				target_path = str(target_node.get_path())
+				target_path = MCPCommandHelpers.get_node_path(target_node, _plugin)
 				target_type = target_node.get_class()
+				# Skip connections to editor-internal nodes
+				if target_path.begins_with("/root/@"):
+					continue
 				if not node_set.has(target_path):
 					node_set[target_path] = true
 					nodes.append({
@@ -162,7 +172,7 @@ func _analyze_signals_recursive(node: Node, nodes: Array, edges: Array, node_set
 				"from": node_path,
 				"signal": sig_name,
 				"to": target_path,
-				"method": str(callable.get_method()),
+				"method": target_method,
 			})
 
 	for child: Node in node.get_children():

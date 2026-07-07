@@ -391,19 +391,19 @@ func _step_wait(params: Dictionary) -> Dictionary:
 func _find_text_recursive(node: Node, search_text: String, results: Array) -> void:
 	if node is Label:
 		if (node as Label).text.find(search_text) != -1:
-			results.append(str(node.get_path()))
-	elif node is Button:
+			results.append(MCPCommandHelpers.get_node_path(node, _plugin))
+		elif node is Button:
 		if (node as Button).text.find(search_text) != -1:
-			results.append(str(node.get_path()))
-	elif node is RichTextLabel:
+			results.append(MCPCommandHelpers.get_node_path(node, _plugin))
+		elif node is RichTextLabel:
 		if (node as RichTextLabel).get_parsed_text().find(search_text) != -1:
-			results.append(str(node.get_path()))
-	elif node is LineEdit:
+			results.append(MCPCommandHelpers.get_node_path(node, _plugin))
+		elif node is LineEdit:
 		if (node as LineEdit).text.find(search_text) != -1:
-			results.append(str(node.get_path()))
-	elif node is TextEdit:
+			results.append(MCPCommandHelpers.get_node_path(node, _plugin))
+		elif node is TextEdit:
 		if (node as TextEdit).text.find(search_text) != -1:
-			results.append(str(node.get_path()))
+			results.append(MCPCommandHelpers.get_node_path(node, _plugin))
 	for child: Node in node.get_children():
 		_find_text_recursive(child, search_text, results)
 
