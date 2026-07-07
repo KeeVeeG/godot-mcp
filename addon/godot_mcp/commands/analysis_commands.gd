@@ -20,14 +20,10 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_edited_scene_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
 ## Analyze the current scene's complexity: node count, type breakdown,
 ## estimated draw calls, script count, and depth.
 func analyze_scene_complexity(_params: Dictionary) -> Dictionary:
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -101,7 +97,7 @@ func _analyze_node_recursive(node: Node, depth: int, stats: Dictionary) -> void:
 
 ## Map all signal connections in the scene as a graph.
 func analyze_signal_flow(_params: Dictionary) -> Dictionary:
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -181,13 +177,13 @@ func _analyze_signals_recursive(node: Node, nodes: Array, edges: Array, node_set
 ## per-resource substring matching (O(N×M)).
 func find_unused_resources(_params: Dictionary) -> Dictionary:
 	var resource_files: Array = []
-	_collect_resource_files("res://", resource_files)
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["png", "jpg", "jpeg", "svg", "webp", "wav", "ogg", "mp3", "ttf", "otf", "obj", "fbx", "glb", "gltf", "material", "shader"]), func(path, _name): resource_files.append(ProjectSettings.localize_path(path)))
 
 	# Collect all code files (.tscn, .gd, .tres) that might reference resources
 	var code_files: Array = []
-	_collect_files_by_ext("res://", ".tscn", code_files)
-	_collect_files_by_ext("res://", ".gd", code_files)
-	_collect_files_by_ext("res://", ".tres", code_files)
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["tscn"]), func(path, _name): code_files.append(path))
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["gd"]), func(path, _name): code_files.append(path))
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["tres"]), func(path, _name): code_files.append(path))
 
 	# Single-pass: extract all res:// paths from all code files into a set
 	var all_references: Dictionary = {}
@@ -259,44 +255,7 @@ func _scan_project_dir(dir_path: String, stats: Dictionary) -> void:
 	dir.list_dir_end()
 
 
-## Helper: collect resource files (.png, .jpg, .wav, .ogg, .mp3, .ttf, .otf, .obj, .fbx, .glb, .gltf).
-func _collect_resource_files(dir_path: String, results: Array) -> void:
-	var resource_extensions: Array = [".png", ".jpg", ".jpeg", ".svg", ".webp", ".wav", ".ogg", ".mp3", ".ttf", ".otf", ".obj", ".fbx", ".glb", ".gltf", ".material", ".shader"]
-	var dir: DirAccess = DirAccess.open(dir_path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
-	while file_name != "":
-		var full_path: String = dir_path.path_join(file_name)
-		if dir.current_is_dir():
-			if not file_name.begins_with(".") and file_name != ".godot":
-				_collect_resource_files(full_path, results)
-		else:
-			var ext: String = "." + file_name.get_extension().to_lower()
-			if resource_extensions.has(ext):
-				results.append(ProjectSettings.localize_path(full_path))
-		file_name = dir.get_next()
-	dir.list_dir_end()
 
-
-## Helper: collect files by extension.
-func _collect_files_by_ext(dir_path: String, extension: String, results: Array) -> void:
-	var dir: DirAccess = DirAccess.open(dir_path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
-	while file_name != "":
-		var full_path: String = dir_path.path_join(file_name)
-		if dir.current_is_dir():
-			if not file_name.begins_with(".") and file_name != ".godot":
-				_collect_files_by_ext(full_path, extension, results)
-		else:
-			if file_name.ends_with(extension):
-				results.append(ProjectSettings.localize_path(full_path))
-		file_name = dir.get_next()
-	dir.list_dir_end()
 
 
 ## Helper: read file content.

@@ -10,18 +10,6 @@ func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
 
 
-## Validate path to prevent path traversal attacks.
-## Returns empty string if valid, error message if invalid.
-func _validate_path(path: String) -> String:
-	if path.is_empty():
-		return ""
-	if path.contains(".."):
-		return "Invalid path: path traversal ('..') not allowed"
-	if path.contains("//"):
-		return "Invalid path: double slash '//' not allowed"
-	return ""
-
-
 ## Router compatibility: returns callable map for MCPCommandRouter.
 func get_commands() -> Dictionary:
 	return {
@@ -65,9 +53,8 @@ func _create_project(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
 
-	var path_err: String = _validate_path(path)
-	if not path_err.is_empty():
-		return {"success": false, "error": path_err}
+	if not MCPCommandHelpers.validate_path(path):
+		return {"success": false, "error": "Invalid path"}
 
 	# Create project directory
 	var err: Error = DirAccess.make_dir_recursive_absolute(path)
@@ -116,18 +103,16 @@ func _create_project_from_template(params: Dictionary) -> Dictionary:
 	if path.is_empty() or template_path.is_empty():
 		return {"success": false, "error": "Both path and template_path are required"}
 
-	var path_err: String = _validate_path(path)
-	if not path_err.is_empty():
-		return {"success": false, "error": path_err}
-	path_err = _validate_path(template_path)
-	if not path_err.is_empty():
-		return {"success": false, "error": "template: " + path_err}
+	if not MCPCommandHelpers.validate_path(path):
+		return {"success": false, "error": "Invalid path"}
+	if not MCPCommandHelpers.validate_path(template_path):
+		return {"success": false, "error": "Invalid template path"}
 
 	if not DirAccess.dir_exists_absolute(template_path):
 		return {"success": false, "error": "Template path not found: %s" % template_path}
 
 	# Copy template to new location
-	var err: Error = _copy_directory_recursive(template_path, path)
+	var err: Error = MCPCommandHelpers.copy_directory_recursive(template_path, path)
 	if err != OK:
 		return {"success": false, "error": "Failed to copy template: %s" % error_string(err)}
 
@@ -156,9 +141,8 @@ func _scaffold_project_structure(params: Dictionary) -> Dictionary:
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
 
-	var path_err: String = _validate_path(project_path)
-	if not path_err.is_empty():
-		return {"success": false, "error": path_err}
+	if not MCPCommandHelpers.validate_path(project_path):
+		return {"success": false, "error": "Invalid path"}
 
 	if not FileAccess.file_exists(project_path.path_join("project.godot")):
 		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
@@ -381,7 +365,7 @@ func _setup_project_dependencies(params: Dictionary) -> Dictionary:
 					errors.append("Local addon '%s' requires url (source path)" % addon_name)
 					continue
 				if DirAccess.dir_exists_absolute(url):
-					var err: Error = _copy_directory_recursive(url, dest_path)
+					var err: Error = MCPCommandHelpers.copy_directory_recursive(url, dest_path)
 					if err == OK:
 						installed.append(addon_name)
 					else:
@@ -581,32 +565,7 @@ func _create_default_scene(project_path: String, scene_name: String, root_type: 
 	return "res://scenes/%s.tscn" % scene_name
 
 
-func _copy_directory_recursive(source: String, destination: String) -> Error:
-	var err: Error = DirAccess.make_dir_recursive_absolute(destination)
-	if err != OK:
-		return err
-	var dir: DirAccess = DirAccess.open(source)
-	if dir == null:
-		return ERR_FILE_NOT_FOUND
-	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
-	while file_name != "":
-		if file_name.begins_with("."):
-			file_name = dir.get_next()
-			continue
-		var src_path: String = source.path_join(file_name)
-		var dst_path: String = destination.path_join(file_name)
-		if dir.current_is_dir():
-			err = _copy_directory_recursive(src_path, dst_path)
-			if err != OK:
-				return err
-		else:
-			err = DirAccess.copy_absolute(src_path, dst_path)
-			if err != OK:
-				return err
-		file_name = dir.get_next()
-	dir.list_dir_end()
-	return OK
+
 
 
 func _count_files_recursive(path: String, counts: Dictionary, depth: int, max_depth: int) -> void:

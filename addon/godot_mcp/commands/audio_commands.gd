@@ -22,10 +22,6 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_edited_scene_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
 ## Add an AudioStreamPlayer, AudioStreamPlayer2D, or AudioStreamPlayer3D node.
 func add_audio_player(params: Dictionary) -> Dictionary:
 	var parent_path: String = params.get("parent", params.get("parent_path", ""))
@@ -34,7 +30,7 @@ func add_audio_player(params: Dictionary) -> Dictionary:
 	var stream_path: String = params.get("stream_path", params.get("stream", ""))
 	var properties: Dictionary = params.get("properties", {})
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -72,8 +68,8 @@ func add_audio_player(params: Dictionary) -> Dictionary:
 	for prop: String in properties:
 		if prop == "stream":
 			continue
-		if _has_property(player, prop):
-			var expected_type: int = _get_property_type(player, prop)
+		if MCPCommandHelpers.has_property(player, prop):
+			var expected_type: int = MCPCommandHelpers.get_property_type(player, prop)
 			var val: Variant = MCPVariantCodec.parse_for_property(properties[prop], expected_type)
 			player.set(prop, val)
 
@@ -93,7 +89,7 @@ func _remove_audio_player(params: Dictionary) -> Dictionary:
 	if node_path.is_empty():
 		return {"error": "node_path is required"}
 	
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 	
@@ -159,7 +155,7 @@ func add_audio_bus_effect(params: Dictionary) -> Dictionary:
 	if effect_type.is_empty():
 		return {"error": "Effect type is required"}
 
-	var bus_idx: int = _find_bus_index(bus_name)
+	var bus_idx: int = MCPCommandHelpers.find_bus_index(bus_name)
 	if bus_idx == -1:
 		return {"error": "Bus not found: %s" % bus_name}
 
@@ -170,8 +166,8 @@ func add_audio_bus_effect(params: Dictionary) -> Dictionary:
 
 	# Apply properties
 	for prop: String in properties:
-		if _has_property(effect, prop):
-			var expected_type: int = _get_property_type(effect, prop)
+		if MCPCommandHelpers.has_property(effect, prop):
+			var expected_type: int = MCPCommandHelpers.get_property_type(effect, prop)
 			var val: Variant = MCPVariantCodec.parse_for_property(properties[prop], expected_type)
 			effect.set(prop, val)
 
@@ -190,7 +186,7 @@ func set_audio_bus(params: Dictionary) -> Dictionary:
 	if bus_name.is_empty():
 		return {"error": "Bus name is required"}
 
-	var bus_idx: int = _find_bus_index(bus_name)
+	var bus_idx: int = MCPCommandHelpers.find_bus_index(bus_name)
 	if bus_idx == -1:
 		return {"error": "Bus not found: %s" % bus_name}
 
@@ -223,7 +219,7 @@ func set_audio_bus(params: Dictionary) -> Dictionary:
 
 	if params.has("send"):
 		var send_bus: String = params["send"] as String
-		var send_idx: int = _find_bus_index(send_bus)
+		var send_idx: int = MCPCommandHelpers.find_bus_index(send_bus)
 		if send_idx == -1:
 			return {"error": "Send bus not found: %s" % send_bus}
 		AudioServer.set_bus_send(bus_idx, send_bus)
@@ -274,7 +270,7 @@ func get_audio_info(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -326,12 +322,7 @@ func get_audio_info(params: Dictionary) -> Dictionary:
 	return {"result": info}
 
 
-## Helper: find bus index by name.
-func _find_bus_index(bus_name: String) -> int:
-	for i: int in range(AudioServer.bus_count):
-		if AudioServer.get_bus_name(i) == bus_name:
-			return i
-	return -1
+
 
 
 ## Helper: create an AudioEffect by type name.
@@ -381,11 +372,4 @@ func _create_audio_effect(effect_type: String) -> AudioEffect:
 			return null
 
 
-## Helper: check if object has property.
-func _has_property(obj: Object, prop: String) -> bool:
-	return MCPCommandHelpers.has_property(obj, prop)
 
-
-## Helper: get property type.
-func _get_property_type(obj: Object, prop: String) -> int:
-	return MCPCommandHelpers.get_property_type(obj, prop)

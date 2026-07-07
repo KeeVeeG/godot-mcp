@@ -167,7 +167,7 @@ func _get_log(params: Dictionary) -> Dictionary:
 func _clear_log() -> Dictionary:
 	# Try to find and clear the editor log UI
 	var base: Control = _plugin.get_editor_interface().get_base_control()
-	var editor_log: Node = _find_node_by_class(base, "EditorLog")
+	var editor_log: Node = MCPCommandHelpers.find_node_by_class(base, "EditorLog")
 	if editor_log and editor_log.has_method("clear"):
 		editor_log.clear()
 		return {"success": true, "message": "Editor log cleared"}
@@ -182,12 +182,4 @@ func _clear_log() -> Dictionary:
 	return {"success": true, "message": "Log clear requested"}
 
 
-## Helper: find a node by class name recursively.
-func _find_node_by_class(node: Node, class_name_str: String) -> Node:
-	if node.get_class() == class_name_str:
-		return node
-	for child: Node in node.get_children():
-		var found: Node = _find_node_by_class(child, class_name_str)
-		if found:
-			return found
-	return null
+

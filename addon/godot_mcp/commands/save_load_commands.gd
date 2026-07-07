@@ -52,7 +52,7 @@ func save_game_state(params: Dictionary) -> Dictionary:
 
 	_ensure_save_dir()
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open to save"}
 
@@ -94,7 +94,7 @@ func save_game_state(params: Dictionary) -> Dictionary:
 		"slot": slot,
 		"path": save_file_path,
 		"timestamp": save_data["timestamp_human"],
-		"node_count": _count_nodes(root),
+		"node_count": MCPCommandHelpers.count_nodes(root),
 		"metadata": metadata,
 		"message": "Game state saved to slot %d" % slot,
 	}}
@@ -133,7 +133,7 @@ func load_game_state(params: Dictionary) -> Dictionary:
 	if scene_tree_data.is_empty():
 		return {"error": "Save file contains no scene tree data"}
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open to load into"}
 
@@ -250,19 +250,10 @@ func compare_save_states(params: Dictionary) -> Dictionary:
 	}}
 
 
-## Helper: Get the current scene root.
-func _get_scene_root() -> Node:
-	if _plugin == null:
-		return null
-	return _plugin.get_editor_interface().get_edited_scene_root()
 
 
-## Helper: Count total nodes in a tree.
-func _count_nodes(node: Node) -> int:
-	var count: int = 1
-	for child: Node in node.get_children():
-		count += _count_nodes(child)
-	return count
+
+
 
 
 ## Helper: Serialize a node tree to a dictionary.
@@ -300,8 +291,8 @@ func _restore_node_tree(node: Node, data: Dictionary) -> int:
 	# Restore properties with type verification
 	var properties: Dictionary = data.get("properties", {})
 	for prop_name: String in properties:
-		if _has_property(node, prop_name):
-			var prop_type: int = _get_property_type(node, prop_name)
+		if MCPCommandHelpers.has_property(node, prop_name):
+			var prop_type: int = MCPCommandHelpers.get_property_type(node, prop_name)
 			var value: Variant = MCPVariantCodec.parse_for_property(properties[prop_name], prop_type)
 			node.set(prop_name, value)
 			restored += 1
@@ -331,14 +322,7 @@ func _is_serializable(value: Variant) -> bool:
 	return false
 
 
-## Helper: Check if object has a property.
-func _has_property(obj: Object, prop: String) -> bool:
-	return MCPCommandHelpers.has_property(obj, prop)
 
-
-## Helper: Get the Variant type of a property.
-func _get_property_type(obj: Object, prop: String) -> int:
-	return MCPCommandHelpers.get_property_type(obj, prop)
 
 
 ## Helper: Load save data from a slot.

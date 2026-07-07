@@ -367,7 +367,7 @@ func _install_from_local(name: String, local_path: String) -> Dictionary:
 		return {"error": "Addon directory already exists: %s. Uninstall first." % name}
 
 	# Copy directory
-	var err: Error = _copy_directory_recursive(source_path, target_dir)
+	var err: Error = MCPCommandHelpers.copy_directory_recursive(source_path, target_dir)
 	if err != OK:
 		return {"error": "Failed to copy addon: %s" % error_string(err)}
 
@@ -417,42 +417,6 @@ func _remove_directory_recursive(path: String) -> Error:
 	dir.list_dir_end()
 
 	return DirAccess.remove_absolute(path)
-
-
-## Helper: Copy directory recursively.
-func _copy_directory_recursive(source: String, target: String) -> Error:
-	if not DirAccess.dir_exists_absolute(target):
-		var err: Error = DirAccess.make_dir_recursive_absolute(target)
-		if err != OK:
-			return err
-
-	var dir: DirAccess = DirAccess.open(source)
-	if dir == null:
-		return ERR_CANT_OPEN
-
-	dir.list_dir_begin()
-	var entry: String = dir.get_next()
-	while entry != "":
-		if not entry.begins_with("."):
-			var src_path: String = source.path_join(entry)
-			var dst_path: String = target.path_join(entry)
-			if dir.current_is_dir():
-				var err: Error = _copy_directory_recursive(src_path, dst_path)
-				if err != OK:
-					return err
-			else:
-				var src_file: FileAccess = FileAccess.open(src_path, FileAccess.READ)
-				if src_file != null:
-					var data: PackedByteArray = src_file.get_buffer(src_file.get_length())
-					src_file.close()
-					var dst_file: FileAccess = FileAccess.open(dst_path, FileAccess.WRITE)
-					if dst_file != null:
-						dst_file.store_buffer(data)
-						dst_file.close()
-		entry = dir.get_next()
-	dir.list_dir_end()
-
-	return OK
 
 
 ## Helper: Count files in a directory recursively.

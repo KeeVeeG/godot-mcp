@@ -24,24 +24,13 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
-func _get_node(path: String) -> Node:
-	var root: Node = _get_root()
-	if root == null:
-		return null
-	return root.get_node_or_null(path)
-
-
 ## Resolve a TileMapLayer from a path. Accepts either a TileMapLayer node
 ## directly or a TileMap parent with an optional layer index.
 func _get_tilemap_layer(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"error": "TileMapLayer path is required"}
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
@@ -226,7 +215,7 @@ func tilemap_get_info(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 

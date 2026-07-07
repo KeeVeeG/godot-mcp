@@ -26,26 +26,15 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
-func _get_node(path: String) -> Node:
-	var root: Node = _get_root()
-	if root == null:
-		return null
-	return root.get_node_or_null(path)
-
-
 ## Create a GPUParticles2D or GPUParticles3D node.
 func create_particles(params: Dictionary) -> Dictionary:
 	var parent_path: String = params.get("parent", params.get("parent_path", ""))
 	var dimension: String = params.get("type", params.get("dimension", "2d"))
 	var properties: Dictionary = params.get("properties", {})
 
-	var parent: Node = _get_root()
+	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if parent_path != "":
-		parent = _get_node(parent_path)
+		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
 	if parent == null:
 		return {"error": "Parent not found"}
 
@@ -82,7 +71,7 @@ func create_particles(params: Dictionary) -> Dictionary:
 		_undo_helper.add_node_with_undo(node, parent)
 	else:
 		parent.add_child(node)
-		node.set_owner(_get_root())
+		node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	return {"result": {"name": str(node.name), "path": str(node.get_path()), "dimension": dimension}}
 
@@ -94,7 +83,7 @@ func set_particle_material(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
@@ -139,7 +128,7 @@ func set_particle_color_gradient(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
@@ -173,7 +162,7 @@ func apply_particle_preset(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
@@ -275,7 +264,7 @@ func get_particle_info(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
@@ -316,7 +305,7 @@ func set_particle_emission_shape(params: Dictionary) -> Dictionary:
 	var size_array: Array = params.get("size", []) as Array if params.get("size", null) is Array else []
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 	var process_mat: ParticleProcessMaterial = null
@@ -366,7 +355,7 @@ func set_particle_velocity_curve(params: Dictionary) -> Dictionary:
 	var curve_data: Variant = params.get("curve", [])
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 	var process_mat: ParticleProcessMaterial = null
@@ -401,7 +390,7 @@ func _delete_particles(params: Dictionary) -> Dictionary:
 	if node_path.is_empty():
 		return {"error": "node_path is required"}
 
-	var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 

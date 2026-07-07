@@ -627,3 +627,40 @@ static func parse_for_property(value: Variant, expected_type: int) -> Variant:
 			return value
 		_:
 			return value
+
+
+## Serialize an InputEvent to a dictionary for JSON transport.
+static func serialize_input_event(event: InputEvent) -> Dictionary:
+	var d: Dictionary = {"type": event.get_class()}
+	if event is InputEventKey:
+		d["keycode"] = event.keycode
+		d["key_label"] = event.key_label
+		d["physical_keycode"] = event.physical_keycode
+		if event.ctrl_pressed: d["ctrl"] = true
+		if event.shift_pressed: d["shift"] = true
+		if event.alt_pressed: d["alt"] = true
+	elif event is InputEventMouseButton:
+		d["button"] = event.button_index
+		d["double_click"] = event.double_click
+	elif event is InputEventJoypadButton:
+		d["button"] = event.button_index
+	return d
+
+
+## Create an InputEvent from a dictionary with type and event data.
+static func create_input_event(event_data: Dictionary) -> InputEvent:
+	var type: String = event_data.get("type", "")
+	match type:
+		"key":
+			var ev := InputEventKey.new()
+			ev.keycode = event_data.get("keycode", 0) as Key
+			return ev
+		"mouse_button":
+			var ev := InputEventMouseButton.new()
+			ev.button_index = event_data.get("button", 1) as MouseButton
+			return ev
+		"joypad_button":
+			var ev := InputEventJoypadButton.new()
+			ev.button_index = event_data.get("button", 0) as JoyButton
+			return ev
+	return null

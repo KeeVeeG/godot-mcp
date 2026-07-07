@@ -139,7 +139,7 @@ func _set_bus_volume(params: Dictionary) -> Dictionary:
 	var volume_db: float = params.get("volume_db", 0.0)
 	if bus_name.is_empty():
 		return {"success": false, "error": "Bus name is required"}
-	var bus_idx: int = _find_bus_index(bus_name)
+	var bus_idx: int = MCPCommandHelpers.find_bus_index(bus_name)
 	if bus_idx == -1:
 		return {"success": false, "error": "Bus not found: %s" % bus_name}
 	AudioServer.set_bus_volume_db(bus_idx, volume_db)
@@ -151,7 +151,7 @@ func _get_bus_effects(params: Dictionary) -> Dictionary:
 	var bus_name: String = params.get("bus", "")
 	if bus_name.is_empty():
 		return {"success": false, "error": "Bus name is required"}
-	var bus_idx: int = _find_bus_index(bus_name)
+	var bus_idx: int = MCPCommandHelpers.find_bus_index(bus_name)
 	if bus_idx == -1:
 		return {"success": false, "error": "Bus not found: %s" % bus_name}
 	var effects: Array = []
@@ -179,9 +179,4 @@ func _get_bus_effects(params: Dictionary) -> Dictionary:
 	return {"success": true, "bus": bus_name, "effects": effects, "count": effects.size()}
 
 
-## Helper: find bus index by name.
-func _find_bus_index(bus_name: String) -> int:
-	for i: int in range(AudioServer.bus_count):
-		if AudioServer.get_bus_name(i) == bus_name:
-			return i
-	return -1
+

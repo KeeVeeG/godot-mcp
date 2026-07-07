@@ -36,21 +36,6 @@ func execute(command: String, params: Dictionary) -> Dictionary:
 		_: return {"error": "Unknown command: %s" % command}
 
 
-func _get_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
-func _get_node(path: String) -> Node:
-	var root: Node = _get_root()
-	if root == null:
-		return null
-	return root.get_node_or_null(path)
-
-
-func _has_property(obj: Object, prop: String) -> bool:
-	return MCPCommandHelpers.has_property(obj, prop)
-
-
 ## Setup a NavigationRegion2D or NavigationRegion3D. Configures an existing node
 ## or creates a new one when parent_path is provided.
 func setup_navigation_region(params: Dictionary) -> Dictionary:
@@ -60,13 +45,13 @@ func setup_navigation_region(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 	var node_name: String = params.get("name", "")
 
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
 	# Try to configure an existing node first
 	if not path.is_empty():
-		var existing: Node = _get_node(path)
+		var existing: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 		if existing != null:
 			if existing is NavigationRegion2D:
 				var nr: NavigationRegion2D = existing as NavigationRegion2D
@@ -96,7 +81,7 @@ func setup_navigation_region(params: Dictionary) -> Dictionary:
 	# Create a new node
 	var parent: Node = root
 	if parent_path != "":
-		parent = _get_node(parent_path)
+		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
 	if parent == null:
 		return {"error": "Parent not found"}
 
@@ -159,13 +144,13 @@ func setup_navigation_agent(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 	var node_name: String = params.get("name", "")
 
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
 	# Try to configure an existing node
 	if not path.is_empty():
-		var existing: Node = _get_node(path)
+		var existing: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 		if existing != null:
 			if existing is NavigationAgent2D:
 				var na: NavigationAgent2D = existing as NavigationAgent2D
@@ -209,7 +194,7 @@ func setup_navigation_agent(params: Dictionary) -> Dictionary:
 	# Create a new node
 	var parent: Node = root
 	if parent_path != "":
-		parent = _get_node(parent_path)
+		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
 	if parent == null:
 		return {"error": "Parent not found"}
 
@@ -265,7 +250,7 @@ func setup_navigation_agent(params: Dictionary) -> Dictionary:
 
 	# Apply remaining properties
 	for prop: String in properties:
-		if _has_property(agent_node, prop):
+		if MCPCommandHelpers.has_property(agent_node, prop):
 			agent_node.set(prop, properties[prop])
 
 	if _undo_helper:
@@ -284,7 +269,7 @@ func bake_navigation_mesh(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
@@ -312,7 +297,7 @@ func bake_navigation_mesh(params: Dictionary) -> Dictionary:
 
 		# Use NavigationServer to bake from source geometry (async to avoid editor freeze)
 		var source_geom: NavigationMeshSourceGeometryData3D = NavigationMeshSourceGeometryData3D.new()
-		var root_node: Node = _get_root()
+		var root_node: Node = MCPCommandHelpers.get_scene_root(_plugin)
 		if root_node:
 			var bake_done: Array = [false]
 			var bake_callback: Callable = func() -> void: bake_done[0] = true
@@ -333,7 +318,7 @@ func bake_navigation_mesh(params: Dictionary) -> Dictionary:
 
 		# Use NavigationServer to bake from source geometry (async to avoid editor freeze)
 		var source_geom2d: NavigationMeshSourceGeometryData2D = NavigationMeshSourceGeometryData2D.new()
-		var root_node2d: Node = _get_root()
+		var root_node2d: Node = MCPCommandHelpers.get_scene_root(_plugin)
 		if root_node2d:
 			var bake_done_2d: Array = [false]
 			var bake_callback_2d: Callable = func() -> void: bake_done_2d[0] = true
@@ -355,7 +340,7 @@ func set_navigation_layers(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
@@ -413,7 +398,7 @@ func get_navigation_info(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
@@ -505,9 +490,9 @@ func setup_navigation_link(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 	var node_name: String = params.get("name", "")
 
-	var parent: Node = _get_root()
+	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if parent_path != "":
-		parent = _get_node(parent_path)
+		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
 	if parent == null:
 		return {"error": "Parent not found"}
 
@@ -549,14 +534,14 @@ func setup_navigation_link(params: Dictionary) -> Dictionary:
 
 	# Apply remaining properties
 	for prop: String in properties:
-		if _has_property(link_node, prop):
+		if MCPCommandHelpers.has_property(link_node, prop):
 			link_node.set(prop, properties[prop])
 
 	if _undo_helper:
 		_undo_helper.add_node_with_undo(link_node, parent)
 	else:
 		parent.add_child(link_node)
-		link_node.set_owner(_get_root())
+		link_node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	return {"result": {"name": str(link_node.name), "path": str(link_node.get_path()), "dimension": dimension}}
 
@@ -579,7 +564,7 @@ func find_navigation_path(params: Dictionary) -> Dictionary:
 			var map_rid: RID = RID()
 			# Use specified region's map if provided
 			if not map_region_path.is_empty():
-				var region_node: Node = _get_node(map_region_path)
+				var region_node: Node = MCPCommandHelpers.resolve_node_path(_plugin, map_region_path)
 				if region_node != null and region_node is NavigationRegion2D:
 					map_rid = NavigationServer2D.region_get_map((region_node as NavigationRegion2D).get_rid())
 			if map_rid == RID():
@@ -598,7 +583,7 @@ func find_navigation_path(params: Dictionary) -> Dictionary:
 			var map_rid3: RID = RID()
 			# Use specified region's map if provided
 			if not map_region_path.is_empty():
-				var region_node3: Node = _get_node(map_region_path)
+				var region_node3: Node = MCPCommandHelpers.resolve_node_path(_plugin, map_region_path)
 				if region_node3 != null and region_node3 is NavigationRegion3D:
 					map_rid3 = NavigationServer3D.region_get_map((region_node3 as NavigationRegion3D).get_rid())
 			if map_rid3 == RID():
@@ -621,7 +606,7 @@ func _remove_navigation_node(params: Dictionary, expected_class: String) -> Dict
 	if node_path.is_empty():
 		return {"error": "node_path is required"}
 	
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	

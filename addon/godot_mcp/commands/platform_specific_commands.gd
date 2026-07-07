@@ -369,7 +369,8 @@ func validate_platform_build(params: Dictionary) -> Dictionary:
 				warnings.append({"severity": "warning", "type": "no_templates", "message": "Export templates for Godot %s may not be installed" % version_str})
 
 	# Check for missing script dependencies
-	var script_files: Array = _find_files_recursive("res://", ".gd")
+	var script_files: Array = []
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["gd"]), func(path, _name): script_files.append(path))
 	var script_errors: int = 0
 	for script_path: String in script_files:
 		var script: GDScript = load(script_path) as GDScript
@@ -414,23 +415,4 @@ func _has_platform_config(platform: String) -> bool:
 	return false
 
 
-## Helper: Find files recursively by extension.
-func _find_files_recursive(path: String, extension: String) -> Array:
-	var global_path: String = ProjectSettings.globalize_path(path) if path.begins_with("res://") else path
-	var files: Array = []
-	var dir: DirAccess = DirAccess.open(global_path)
-	if dir == null:
-		return files
 
-	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
-	while file_name != "":
-		if not file_name.begins_with("."):
-			var full_path: String = path.path_join(file_name)
-			if dir.current_is_dir():
-				files.append_array(_find_files_recursive(full_path, extension))
-			elif file_name.ends_with(extension):
-				files.append(full_path)
-		file_name = dir.get_next()
-	dir.list_dir_end()
-	return files

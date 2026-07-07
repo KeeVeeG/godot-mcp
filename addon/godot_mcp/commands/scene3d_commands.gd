@@ -24,26 +24,15 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
-func _get_node(path: String) -> Node:
-	var root: Node = _get_root()
-	if root == null:
-		return null
-	return root.get_node_or_null(path)
-
-
 ## Add a MeshInstance3D with a primitive mesh.
 func add_mesh_instance(params: Dictionary) -> Dictionary:
 	var parent_path: String = params.get("parent", params.get("parent_path", ""))
 	var mesh_type: String = params.get("mesh_type", "cube")
 	var properties: Dictionary = params.get("properties", {})
 
-	var parent: Node = _get_root()
+	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if parent_path != "":
-		parent = _get_node(parent_path)
+		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
 	if parent == null:
 		return {"error": "Parent not found"}
 
@@ -110,7 +99,7 @@ func add_mesh_instance(params: Dictionary) -> Dictionary:
 		_undo_helper.add_node_with_undo(mi, parent)
 	else:
 		parent.add_child(mi)
-		mi.set_owner(_get_root())
+		mi.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	return {"result": {"name": str(mi.name), "path": str(mi.get_path()), "mesh_type": mesh_type}}
 
@@ -120,7 +109,7 @@ func setup_camera_3d(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var properties: Dictionary = params.get("properties", {})
 
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -135,7 +124,7 @@ func setup_camera_3d(params: Dictionary) -> Dictionary:
 			root.add_child(cam)
 			cam.set_owner(root)
 	else:
-		var node: Node = _get_node(path)
+		var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 		if node == null:
 			return {"error": "Node not found: %s" % path}
 		if not node is Camera3D:
@@ -166,9 +155,9 @@ func setup_lighting(params: Dictionary) -> Dictionary:
 	var light_type: String = params.get("light_type", params.get("type", "directional"))
 	var properties: Dictionary = params.get("properties", {})
 
-	var parent: Node = _get_root()
+	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if parent_path != "":
-		parent = _get_node(parent_path)
+		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
 	if parent == null:
 		return {"error": "Parent not found"}
 
@@ -201,7 +190,7 @@ func setup_lighting(params: Dictionary) -> Dictionary:
 		_undo_helper.add_node_with_undo(light, parent)
 	else:
 		parent.add_child(light)
-		light.set_owner(_get_root())
+		light.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	return {"result": {"name": str(light.name), "path": str(light.get_path()), "type": light_type}}
 
@@ -212,13 +201,13 @@ func setup_environment(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 
 	# Find or create WorldEnvironment
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
 	var env_node: WorldEnvironment = null
 	if path != "":
-		var node: Node = _get_node(path)
+		var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 		if node is WorldEnvironment:
 			env_node = node as WorldEnvironment
 		elif node is Camera3D:
@@ -282,9 +271,9 @@ func add_gridmap(params: Dictionary) -> Dictionary:
 	var parent_path: String = params.get("parent", params.get("parent_path", ""))
 	var properties: Dictionary = params.get("properties", {})
 
-	var parent: Node = _get_root()
+	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if parent_path != "":
-		parent = _get_node(parent_path)
+		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
 	if parent == null:
 		return {"error": "Parent not found"}
 
@@ -302,7 +291,7 @@ func add_gridmap(params: Dictionary) -> Dictionary:
 		_undo_helper.add_node_with_undo(gridmap, parent)
 	else:
 		parent.add_child(gridmap)
-		gridmap.set_owner(_get_root())
+		gridmap.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	return {"result": {"name": str(gridmap.name), "path": str(gridmap.get_path())}}
 
@@ -314,7 +303,7 @@ func set_material_3d(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 

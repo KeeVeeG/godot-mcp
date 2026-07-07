@@ -26,17 +26,13 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
 ## Setup physics properties on a body node.
 func setup_physics_body(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var properties: Dictionary = params.get("properties", {})
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = root.get_node_or_null(path)
@@ -49,8 +45,8 @@ func setup_physics_body(params: Dictionary) -> Dictionary:
 		return {"error": "Node is not a physics body: %s" % node.get_class()}
 
 	for prop: String in properties:
-		if _has_property(node, prop):
-			var val: Variant = MCPVariantCodec.parse_for_property(properties[prop], _get_property_type(node, prop))
+		if MCPCommandHelpers.has_property(node, prop):
+			var val: Variant = MCPVariantCodec.parse_for_property(properties[prop], MCPCommandHelpers.get_property_type(node, prop))
 			if _undo_helper:
 				_undo_helper.set_property_with_undo(node, prop, val)
 			else:
@@ -65,7 +61,7 @@ func setup_collision(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = root.get_node_or_null(path)
@@ -126,7 +122,7 @@ func setup_collision(params: Dictionary) -> Dictionary:
 				_undo_helper.add_node_with_undo(col_node, node)
 			else:
 				node.add_child(col_node)
-				col_node.set_owner(_get_root())
+		col_node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 			return {"result": {"shape_type": "polygon", "node": str(col_node.get_path())}}
 		"cylinder", "CylinderShape3D":
 			var cyl: CylinderShape3D = CylinderShape3D.new()
@@ -149,7 +145,7 @@ func setup_collision(params: Dictionary) -> Dictionary:
 			_undo_helper.add_node_with_undo(col_node, node)
 		else:
 			node.add_child(col_node)
-			col_node.set_owner(_get_root())
+			col_node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	if col_node is CollisionShape2D and shape:
 		(col_node as CollisionShape2D).shape = shape
@@ -167,7 +163,7 @@ func set_physics_layers(params: Dictionary) -> Dictionary:
 	var mask: int = params.get("mask", 0)
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = root.get_node_or_null(path)
@@ -196,7 +192,7 @@ func get_physics_layers(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = root.get_node_or_null(path)
@@ -222,7 +218,7 @@ func get_collision_info(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = root.get_node_or_null(path)
@@ -262,7 +258,7 @@ func add_raycast(params: Dictionary) -> Dictionary:
 	var path: String = params.get("parent_path", params.get("path", ""))
 	var properties: Dictionary = params.get("properties", {})
 
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -297,7 +293,7 @@ func add_raycast(params: Dictionary) -> Dictionary:
 		_undo_helper.add_node_with_undo(raycast, parent)
 	else:
 		parent.add_child(raycast)
-		raycast.set_owner(_get_root())
+		raycast.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	return {"result": {"name": str(raycast.name), "path": str(raycast.get_path()), "is_2d": is_2d}}
 
@@ -307,7 +303,7 @@ func get_physics_material(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = root.get_node_or_null(path)
@@ -353,7 +349,7 @@ func set_physics_material(params: Dictionary) -> Dictionary:
 			properties["absorbent"] = params["absorbent"]
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = root.get_node_or_null(path)
@@ -383,9 +379,4 @@ func set_physics_material(params: Dictionary) -> Dictionary:
 	return {"result": {"path": path, "friction": mat.friction, "rough": mat.rough, "bounce": mat.bounce, "absorbent": mat.absorbent}}
 
 
-func _has_property(obj: Object, prop: String) -> bool:
-	return MCPCommandHelpers.has_property(obj, prop)
 
-
-func _get_property_type(obj: Object, prop: String) -> int:
-	return MCPCommandHelpers.get_property_type(obj, prop)

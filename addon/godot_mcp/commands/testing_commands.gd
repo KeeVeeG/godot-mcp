@@ -26,10 +26,6 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_edited_scene_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
 ## Execute an array of test steps sequentially. Each step has a "type" and "params".
 ## Supported step types:
 ##   - "add_node": {parent_path, type, name, properties}
@@ -111,7 +107,7 @@ func assert_node_state(params: Dictionary) -> Dictionary:
 	if path.is_empty() or property.is_empty():
 		return {"error": "Path and property are required"}
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -120,7 +116,7 @@ func assert_node_state(params: Dictionary) -> Dictionary:
 		return {"error": "Node not found: %s" % path}
 
 	var actual: Variant = node.get(property)
-	var passed: bool = _compare_values(actual, expected, operator)
+	var passed: bool = MCPCommandHelpers.compare_values(actual, expected, operator)
 
 	var entry: Dictionary = {
 		"path": path,
@@ -148,7 +144,7 @@ func assert_screen_text(params: Dictionary) -> Dictionary:
 	if expected_text.is_empty():
 		return {"error": "Text is required"}
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -179,7 +175,7 @@ func run_stress_test(params: Dictionary) -> Dictionary:
 	var parent_path: String = params.get("parent_path", "")
 	var properties: Dictionary = params.get("properties", {})
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -259,7 +255,7 @@ func _step_add_node(params: Dictionary) -> Dictionary:
 	var node_name: String = params.get("name", type_name)
 	var properties: Dictionary = params.get("properties", {})
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -294,7 +290,7 @@ func _step_delete_node(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path required"}
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -326,7 +322,7 @@ func _step_set_property(params: Dictionary) -> Dictionary:
 	if path.is_empty() or property.is_empty():
 		return {"error": "Path and property required"}
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -361,7 +357,7 @@ func _step_connect_signal(params: Dictionary) -> Dictionary:
 	if source_path.is_empty() or signal_name.is_empty() or target_path.is_empty() or method_name.is_empty():
 		return {"error": "source, signal, target, and method are required"}
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -389,39 +385,6 @@ func _step_wait(params: Dictionary) -> Dictionary:
 	var seconds: float = params.get("seconds", 1.0)
 	# In editor mode, we can't truly wait. Record the intent.
 	return {"result": "Wait step recorded (%.1fs) - execution deferred to runtime" % seconds}
-
-
-## Compare two values using an operator.
-func _compare_values(actual: Variant, expected: Variant, operator: String) -> bool:
-	match operator:
-		"==":
-			return actual == expected
-		"!=":
-			return actual != expected
-		">":
-			if actual is float or actual is int:
-				return float(actual) > float(expected)
-			return false
-		"<":
-			if actual is float or actual is int:
-				return float(actual) < float(expected)
-			return false
-		">=":
-			if actual is float or actual is int:
-				return float(actual) >= float(expected)
-			return false
-		"<=":
-			if actual is float or actual is int:
-				return float(actual) <= float(expected)
-			return false
-		"contains":
-			if actual is String and expected is String:
-				return (actual as String).find(expected as String) != -1
-			if actual is Array:
-				return (actual as Array).has(expected)
-			return false
-		_:
-			return actual == expected
 
 
 ## Find nodes whose text content matches a search string.

@@ -107,7 +107,7 @@ func _get_input_map() -> Dictionary:
 	for action_name: String in InputMap.get_actions():
 		var events: Array = []
 		for event: InputEvent in InputMap.action_get_events(action_name):
-			events.append(_serialize_input_event(event))
+			events.append(MCPVariantCodec.serialize_input_event(event))
 		actions[action_name] = {
 			"deadzone": InputMap.action_get_deadzone(action_name),
 			"events": events,
@@ -135,7 +135,7 @@ func _set_input_map(params: Dictionary) -> Dictionary:
 			InputMap.action_erase_events(action_name)
 		if action_data is Array:
 			for event_data: Dictionary in action_data:
-				var event: InputEvent = _create_input_event(event_data)
+				var event: InputEvent = MCPVariantCodec.create_input_event(event_data)
 				if event:
 					InputMap.action_add_event(action_name, event)
 	return {"success": true, "message": "Input map %s" % ("merged" if merge else "replaced")}
@@ -152,7 +152,7 @@ func _add_input_action(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Action already exists: %s" % action}
 	InputMap.add_action(action, deadzone)
 	for event_data: Dictionary in events:
-		var event: InputEvent = _create_input_event(event_data)
+		var event: InputEvent = MCPVariantCodec.create_input_event(event_data)
 		if event:
 			InputMap.action_add_event(action, event)
 	return {"success": true, "action": action, "event_count": events.size()}
@@ -275,46 +275,4 @@ func _reorder_autoloads(params: Dictionary) -> Dictionary:
 	return {"success": true, "order": order, "message": "Autoloads reordered"}
 
 
-## Helper: serialize an InputEvent to a dictionary.
-func _serialize_input_event(event: InputEvent) -> Dictionary:
-	if event is InputEventKey:
-		var ek: InputEventKey = event as InputEventKey
-		return {"type": "key", "keycode": ek.keycode, "physical_keycode": ek.physical_keycode, "ctrl": ek.ctrl_pressed, "shift": ek.shift_pressed, "alt": ek.alt_pressed}
-	elif event is InputEventMouseButton:
-		var emb: InputEventMouseButton = event as InputEventMouseButton
-		return {"type": "mouse_button", "button_index": emb.button_index}
-	elif event is InputEventJoypadButton:
-		var ejb: InputEventJoypadButton = event as InputEventJoypadButton
-		return {"type": "joypad_button", "button_index": ejb.button_index}
-	elif event is InputEventJoypadMotion:
-		var ejm: InputEventJoypadMotion = event as InputEventJoypadMotion
-		return {"type": "joypad_motion", "axis": ejm.axis, "axis_value": ejm.axis_value}
-	return {"type": "unknown"}
 
-
-## Helper: create an InputEvent from a dictionary.
-func _create_input_event(data: Dictionary) -> InputEvent:
-	var type: String = data.get("type", "")
-	match type:
-		"key":
-			var event: InputEventKey = InputEventKey.new()
-			event.keycode = data.get("keycode", 0) as Key
-			event.physical_keycode = data.get("physical_keycode", 0) as Key
-			event.ctrl_pressed = data.get("ctrl", false)
-			event.shift_pressed = data.get("shift", false)
-			event.alt_pressed = data.get("alt", false)
-			return event
-		"mouse_button":
-			var event: InputEventMouseButton = InputEventMouseButton.new()
-			event.button_index = data.get("button_index", 1) as MouseButton
-			return event
-		"joypad_button":
-			var event: InputEventJoypadButton = InputEventJoypadButton.new()
-			event.button_index = data.get("button_index", 0) as JoyButton
-			return event
-		"joypad_motion":
-			var event: InputEventJoypadMotion = InputEventJoypadMotion.new()
-			event.axis = data.get("axis", 0) as JoyAxis
-			event.axis_value = data.get("axis_value", 0.0)
-			return event
-	return null

@@ -171,5 +171,4 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 	return {"result": {"path": path, "message": "Import settings updated and reimport triggered"}}
 
 
-func _ensure_dir(path: String) -> void:
-	MCPCommandHelpers.ensure_dir(path)
+

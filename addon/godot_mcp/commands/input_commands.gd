@@ -177,7 +177,7 @@ func get_input_actions(params: Dictionary) -> Dictionary:
 			continue  # Skip built-in UI actions unless requested
 		var events: Array = []
 		for event: InputEvent in InputMap.action_get_events(action_name):
-			events.append(_serialize_input_event(event))
+			events.append(MCPVariantCodec.serialize_input_event(event))
 		actions[action_str] = {"deadzone": InputMap.action_get_deadzone(action_name), "events": events}
 	return {"result": {"actions": actions, "count": actions.size()}}
 
@@ -205,18 +205,10 @@ func set_input_action(params: Dictionary) -> Dictionary:
 		var ev: Dictionary = event_variant as Dictionary
 		var ev_type: String = ev.get("type", "")
 		match ev_type:
-			"key":
-				var key_ev: InputEventKey = InputEventKey.new()
-				key_ev.keycode = ev.get("keycode", 0) as Key
-				InputMap.action_add_event(action, key_ev)
-			"mouse_button":
-				var mb_ev: InputEventMouseButton = InputEventMouseButton.new()
-				mb_ev.button_index = ev.get("button", 1) as MouseButton
-				InputMap.action_add_event(action, mb_ev)
-			"joypad_button":
-				var jb_ev: InputEventJoypadButton = InputEventJoypadButton.new()
-				jb_ev.button_index = ev.get("button", 0) as JoyButton
-				InputMap.action_add_event(action, jb_ev)
+			"key", "mouse_button", "joypad_button":
+				var input_event: InputEvent = MCPVariantCodec.create_input_event(ev)
+				if input_event:
+					InputMap.action_add_event(action, input_event)
 			"joypad_motion":
 				var jm_ev: InputEventJoypadMotion = InputEventJoypadMotion.new()
 				jm_ev.axis = ev.get("axis", 0) as JoyAxis
@@ -282,18 +274,4 @@ func _parse_keycode(key_str: String) -> int:
 	return 0
 
 
-## Serialize an InputEvent to a dictionary.
-func _serialize_input_event(event: InputEvent) -> Dictionary:
-	if event is InputEventKey:
-		var ke: InputEventKey = event as InputEventKey
-		return {"type": "key", "keycode": int(ke.keycode), "key_label": OS.get_keycode_string(ke.keycode)}
-	elif event is InputEventMouseButton:
-		var mb: InputEventMouseButton = event as InputEventMouseButton
-		return {"type": "mouse_button", "button": int(mb.button_index)}
-	elif event is InputEventJoypadButton:
-		var jb: InputEventJoypadButton = event as InputEventJoypadButton
-		return {"type": "joypad_button", "button": int(jb.button_index)}
-	elif event is InputEventJoypadMotion:
-		var jm: InputEventJoypadMotion = event as InputEventJoypadMotion
-		return {"type": "joypad_motion", "axis": int(jm.axis), "value": jm.axis_value}
-	return {"type": "unknown"}
+

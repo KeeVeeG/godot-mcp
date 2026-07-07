@@ -52,7 +52,7 @@ func take_screenshot_with_context(params: Dictionary) -> Dictionary:
 
 	_ensure_dirs()
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -76,7 +76,7 @@ func take_screenshot_with_context(params: Dictionary) -> Dictionary:
 		"timestamp_human": Time.get_datetime_string_from_system(),
 		"viewport_size": {"x": viewport.get_visible_rect().size.x, "y": viewport.get_visible_rect().size.y},
 		"scene_path": root.scene_file_path,
-		"node_count": _count_nodes(root),
+		"node_count": MCPCommandHelpers.count_nodes(root),
 	}
 
 	# Include node properties if requested
@@ -281,7 +281,7 @@ func record_visual_regression(params: Dictionary) -> Dictionary:
 	if not DirAccess.dir_exists_absolute(recording_dir):
 		DirAccess.make_dir_recursive_absolute(recording_dir)
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -402,19 +402,10 @@ func set_visual_baseline(params: Dictionary) -> Dictionary:
 	}}
 
 
-## Helper: Get the current scene root.
-func _get_scene_root() -> Node:
-	if _plugin == null:
-		return null
-	return _plugin.get_editor_interface().get_edited_scene_root()
 
 
-## Helper: Count nodes in tree.
-func _count_nodes(node: Node) -> int:
-	var count: int = 1
-	for child: Node in node.get_children():
-		count += _count_nodes(child)
-	return count
+
+
 
 
 ## Helper: Get a snapshot of a node's key properties.

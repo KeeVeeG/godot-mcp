@@ -27,10 +27,6 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
 ## Create a new shader file.
 func create_shader(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
@@ -56,7 +52,7 @@ func create_shader(params: Dictionary) -> Dictionary:
 
 	var shader: Shader = Shader.new()
 	shader.code = content
-	_ensure_dir(path.get_base_dir())
+	MCPCommandHelpers.ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(shader, path)
 	if err != OK:
 		return {"error": "Cannot create shader: %s — %s" % [path, error_string(err)]}
@@ -117,7 +113,7 @@ func assign_shader_material(params: Dictionary) -> Dictionary:
 	if node_path.is_empty() or shader_path.is_empty():
 		return {"error": "node_path and shader_path are required"}
 
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = root.get_node_or_null(node_path)
@@ -154,7 +150,7 @@ func set_shader_param(params: Dictionary) -> Dictionary:
 	if node_path.is_empty() or param.is_empty():
 		return {"error": "node_path and param are required"}
 
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = root.get_node_or_null(node_path)
@@ -193,7 +189,7 @@ func get_shader_params(params: Dictionary) -> Dictionary:
 	if node_path.is_empty():
 		return {"error": "node_path is required"}
 
-	var root: Node = _get_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = root.get_node_or_null(node_path)
@@ -231,7 +227,7 @@ func get_shader_params(params: Dictionary) -> Dictionary:
 func list_shaders(params: Dictionary) -> Dictionary:
 	var path: String = params.get("filter", params.get("path", "res://"))
 	var shaders: Array = []
-	_collect_shader_files(path, shaders)
+	MCPCommandHelpers.walk_directory(path, PackedStringArray(["gdshader", "shader"]), func(fp, _name): shaders.append(fp))
 	return {"result": {"shaders": shaders, "count": shaders.size()}}
 
 
@@ -256,24 +252,7 @@ func validate_shader(params: Dictionary) -> Dictionary:
 	return {"result": {"path": path, "valid": true, "lines": code.count("\n") + 1, "type": shader.get_class()}}
 
 
-## Helper: recursively collect shader files.
-func _collect_shader_files(dir_path: String, results: Array) -> void:
-	var global_path: String = ProjectSettings.globalize_path(dir_path) if dir_path.begins_with("res://") else dir_path
-	var dir: DirAccess = DirAccess.open(global_path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
-	while file_name != "":
-		if not file_name.begins_with("."):
-			var full_path: String = dir_path.path_join(file_name)
-			if dir.current_is_dir():
-				if file_name != ".godot" and file_name != ".import":
-					_collect_shader_files(full_path, results)
-			elif file_name.ends_with(".gdshader") or file_name.ends_with(".shader"):
-				results.append(full_path)
-		file_name = dir.get_next()
-	dir.list_dir_end()
+
 
 
 ## Delete a shader file from the project.
@@ -285,7 +264,7 @@ func _delete_shader(params: Dictionary) -> Dictionary:
 		return {"error": "Shader not found: %s" % path}
 	
 	# Check if shader is used by any ShaderMaterial in the current scene
-	var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root:
 		var refs: Array = _find_shader_refs_in_scene(root, path, 0, 20)
 		if not refs.is_empty():
@@ -336,5 +315,4 @@ func _find_shader_refs_in_scene(node: Node, shader_path: String, depth: int = 0,
 	return result
 
 
-func _ensure_dir(path: String) -> void:
-	MCPCommandHelpers.ensure_dir(path)
+

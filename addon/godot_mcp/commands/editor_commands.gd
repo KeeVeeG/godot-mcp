@@ -250,15 +250,7 @@ func _get_output_log() -> Dictionary:
 ## Helper: find the EditorLog node by traversing the editor UI tree.
 func _find_editor_log() -> Node:
 	var base: Node = _plugin.get_editor_interface().get_base_control()
-	return _find_node_by_class(base, "EditorLog")
+	return MCPCommandHelpers.find_node_by_class(base, "EditorLog")
 
 
-## Helper: recursively find a node by its class name.
-func _find_node_by_class(node: Node, class_name_str: String) -> Node:
-	if node.get_class() == class_name_str:
-		return node
-	for child: Node in node.get_children():
-		var found: Node = _find_node_by_class(child, class_name_str)
-		if found:
-			return found
-	return null
+

@@ -23,10 +23,6 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_edited_scene_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
 ## Recursively walk the scene tree and find all nodes matching a given type.
 func find_nodes_by_type(params: Dictionary) -> Dictionary:
 	var type_name: String = params.get("type_name", params.get("type", ""))
@@ -35,7 +31,7 @@ func find_nodes_by_type(params: Dictionary) -> Dictionary:
 	if type_name.is_empty():
 		return {"error": "Type is required"}
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -62,7 +58,7 @@ func _find_by_type_recursive(node: Node, type_name: String, include_inactive: bo
 ## Find all signal connections in the scene tree. Recursively walks all nodes
 ## and reports their connected signals.
 func find_signal_connections(_params: Dictionary) -> Dictionary:
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -120,7 +116,7 @@ func batch_set_property(params: Dictionary) -> Dictionary:
 	if property.is_empty():
 		return {"error": "Property is required"}
 
-	var root: Node = _get_edited_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -134,8 +130,8 @@ func batch_set_property(params: Dictionary) -> Dictionary:
 
 func _batch_set_recursive(node: Node, type_name: String, property: String, value: Variant, count: int, ur: EditorUndoRedoManager) -> int:
 	if node.is_class(type_name):
-		if _has_property(node, property):
-			var expected_type: int = _get_property_type(node, property)
+		if MCPCommandHelpers.has_property(node, property):
+			var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
 			var parsed: Variant = MCPVariantCodec.parse_for_property(value, expected_type)
 			var old_val: Variant = node.get(property)
 			ur.add_do_method(node, "set", property, parsed)
@@ -221,7 +217,8 @@ func cross_scene_set_property(params: Dictionary) -> Dictionary:
 	if not confirm_no_undo:
 		return {"error": "This operation is DESTRUCTIVE and bypasses the undo system. Set \"confirm_no_undo\": true to acknowledge that these changes cannot be reversed via Ctrl+Z.", "hint": "Use batch/set_property for undoable in-scene changes."}
 
-	var scene_files: Array = _find_files_recursive("res://", ".tscn")
+	var scene_files: Array = []
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["tscn"]), func(path, _name): scene_files.append(path))
 	var modified_scenes: Array = []
 
 	for scene_path_variant: Variant in scene_files:
@@ -251,7 +248,8 @@ func find_script_references(params: Dictionary) -> Dictionary:
 
 ## Detect circular dependencies among GDScript files in the project.
 func detect_circular_dependencies(_params: Dictionary) -> Dictionary:
-	var script_files: Array = _find_files_recursive("res://", ".gd")
+	var script_files: Array = []
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["gd"]), func(path, _name): script_files.append(path))
 	var graph: Dictionary = {}  # path -> [dependency_paths]
 	var errors: Array = []
 
@@ -358,31 +356,6 @@ func _file_contains(file_path: String, term: String) -> bool:
 	return content.find(term) != -1
 
 
-## Helper: find all files with a given extension.
-func _find_files_recursive(base_path: String, extension: String) -> Array:
-	var results: Array = []
-	_collect_files(base_path, extension, results)
-	return results
-
-
-func _collect_files(dir_path: String, extension: String, results: Array) -> void:
-	var dir: DirAccess = DirAccess.open(dir_path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
-	while file_name != "":
-		var full_path: String = dir_path.path_join(file_name)
-		if dir.current_is_dir():
-			if not file_name.begins_with(".") and file_name != ".godot":
-				_collect_files(full_path, extension, results)
-		else:
-			if file_name.ends_with(extension):
-				results.append(ProjectSettings.localize_path(full_path))
-		file_name = dir.get_next()
-	dir.list_dir_end()
-
-
 ## Helper: modify a .tscn file to set a property on matching nodes.
 ## Returns true if the file was modified.
 func _modify_scene_file(scene_path: String, type_name: String, property: String, value: Variant) -> bool:
@@ -463,11 +436,4 @@ func _serialize_for_tscn(value: Variant) -> String:
 		return str(value)
 
 
-## Helper: check if object has property.
-func _has_property(obj: Object, prop: String) -> bool:
-	return MCPCommandHelpers.has_property(obj, prop)
 
-
-## Helper: get property type.
-func _get_property_type(obj: Object, prop: String) -> int:
-	return MCPCommandHelpers.get_property_type(obj, prop)

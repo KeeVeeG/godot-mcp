@@ -25,15 +25,11 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
 ## Create a new theme resource.
 func create_theme(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "res://theme.tres")
 	var theme: Theme = Theme.new()
-	_ensure_dir(path.get_base_dir())
+	MCPCommandHelpers.ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(theme, path)
 	if err != OK:
 		return {"error": "Failed to save theme: %s" % error_string(err)}
@@ -263,5 +259,4 @@ func get_theme_info(params: Dictionary) -> Dictionary:
 	return {"result": result}
 
 
-func _ensure_dir(path: String) -> void:
-	MCPCommandHelpers.ensure_dir(path)
+

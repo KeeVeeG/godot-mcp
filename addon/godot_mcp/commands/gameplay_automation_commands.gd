@@ -40,7 +40,7 @@ func simulate_gameplay_scenario(params: Dictionary) -> Dictionary:
 	if scenario.is_empty():
 		return {"error": "scenario array is required"}
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -98,7 +98,7 @@ func record_gameplay(params: Dictionary) -> Dictionary:
 	var include_input: bool = params.get("include_input", true)
 	var include_state: bool = params.get("include_state", false)
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -195,7 +195,7 @@ func replay_gameplay(params: Dictionary) -> Dictionary:
 	if events.is_empty():
 		return {"error": "Recording contains no events"}
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -251,7 +251,7 @@ func create_test_character(params: Dictionary) -> Dictionary:
 	if instance == null:
 		return {"error": "Failed to instantiate scene"}
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		instance.free()
 		return {"error": "No scene open"}
@@ -286,7 +286,7 @@ func navigate_character(params: Dictionary) -> Dictionary:
 	if character_path.is_empty():
 		return {"error": "character_path is required"}
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -345,7 +345,7 @@ func assert_game_state(params: Dictionary) -> Dictionary:
 	if conditions.is_empty():
 		return {"error": "conditions array is required"}
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -365,7 +365,7 @@ func assert_game_state(params: Dictionary) -> Dictionary:
 			continue
 
 		var actual: Variant = node.get(property)
-		var passed: bool = _compare_values(actual, expected, operator)
+		var passed: bool = MCPCommandHelpers.compare_values(actual, expected, operator)
 		results.append({
 			"path": path,
 			"property": property,
@@ -394,7 +394,7 @@ func wait_for_game_event(params: Dictionary) -> Dictionary:
 	if event.is_empty():
 		return {"error": "event is required"}
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -482,13 +482,6 @@ func wait_for_game_event(params: Dictionary) -> Dictionary:
 	return {"error": "Unknown event format: %s (use signal:, node:, or property:)" % event}
 
 
-## Helper: Get the current scene root.
-func _get_scene_root() -> Node:
-	if _plugin == null:
-		return null
-	return _plugin.get_editor_interface().get_edited_scene_root()
-
-
 ## Helper: Capture current input state.
 func _capture_input_state() -> Dictionary:
 	var state: Dictionary = {}
@@ -570,7 +563,7 @@ func _action_click(params: Dictionary) -> Dictionary:
 	if button_text.is_empty():
 		return {"error": "button text is required"}
 
-	var root: Node = _get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -598,30 +591,13 @@ func _action_assert(root: Node, params: Dictionary) -> Dictionary:
 		return {"error": "Node not found: %s" % path}
 
 	var actual: Variant = node.get(property)
-	var passed: bool = _compare_values(actual, expected, operator)
+	var passed: bool = MCPCommandHelpers.compare_values(actual, expected, operator)
 	return {
 		"passed": passed,
 		"actual": actual,
 		"expected": expected,
 		"operator": operator,
 	}
-
-
-## Helper: Compare values.
-func _compare_values(actual: Variant, expected: Variant, operator: String) -> bool:
-	match operator:
-		"==":
-			return actual == expected
-		"!=":
-			return actual != expected
-		">":
-			return float(actual) > float(expected)
-		"<":
-			return float(actual) < float(expected)
-		">=":
-			return float(actual) >= float(expected)
-		"<=":
-			return float(actual) <= float(expected)
 		"contains":
 			if actual is String:
 				return (actual as String).find(str(expected)) != -1

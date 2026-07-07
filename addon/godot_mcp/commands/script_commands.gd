@@ -42,39 +42,9 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 
 ## List all .gd scripts in the project with class info.
 func _list_scripts(params: Dictionary) -> Dictionary:
-	var max_depth: int = params.get("max_depth", 10)
 	var results: Array = []
-	_scan_scripts("res://", results, 0, max_depth)
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["gd"]), func(path, name): results.append({"path": path, "name": name}))
 	return {"result": {"scripts": results, "count": results.size()}}
-
-
-func _scan_scripts(path: String, results: Array, depth: int, max_depth: int) -> void:
-	if depth >= max_depth:
-		return
-	var dir: DirAccess = DirAccess.open(path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
-	while file_name != "":
-		if file_name.begins_with("."):
-			file_name = dir.get_next()
-			continue
-		var full_path: String = path.path_join(file_name)
-		if dir.current_is_dir():
-			_scan_scripts(full_path, results, depth + 1, max_depth)
-		else:
-			var ext: String = file_name.get_extension().to_lower()
-			if ext == "gd":
-				var script_info: Dictionary = {
-					"path": full_path,
-					"name": file_name,
-				}
-				# Note: base_class and class_name_str omitted during scan
-				# to avoid loading every .gd file. Use read_script for details.
-				results.append(script_info)
-		file_name = dir.get_next()
-	dir.list_dir_end()
 
 
 ## Read a script file's content.
@@ -335,6 +305,4 @@ func _matches_pattern(file_name: String, pattern: String) -> bool:
 	return file_name == pattern
 
 
-## Helper: recursively create directories.
-func _ensure_dir(path: String) -> void:
-	MCPCommandHelpers.ensure_dir(path)
+

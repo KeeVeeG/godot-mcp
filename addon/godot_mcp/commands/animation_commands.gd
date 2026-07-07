@@ -28,23 +28,12 @@ func get_commands() -> Dictionary:
 	}
 
 
-func _get_root() -> Node:
-	return MCPCommandHelpers.get_edited_scene_root(_plugin)
-
-
-func _get_node(path: String) -> Node:
-	var root: Node = _get_root()
-	if root == null:
-		return null
-	return root.get_node_or_null(path)
-
-
 ## List all animations in an AnimationPlayer.
 func list_animations(params: Dictionary) -> Dictionary:
 	var path: String = params.get("player_path", params.get("path", ""))
 	if path.is_empty():
 		return {"error": "AnimationPlayer path is required"}
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 	if not node is AnimationPlayer:
@@ -70,7 +59,7 @@ func create_animation(params: Dictionary) -> Dictionary:
 	var anim_name: String = params.get("name", "NewAnimation")
 	if path.is_empty():
 		return {"error": "AnimationPlayer path is required"}
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null or not node is AnimationPlayer:
 		return {"error": "AnimationPlayer not found: %s" % path}
 	var player: AnimationPlayer = node as AnimationPlayer
@@ -128,7 +117,7 @@ func add_animation_track(params: Dictionary) -> Dictionary:
 	if path.is_empty() or anim_name.is_empty():
 		return {"error": "path and anim_name are required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null or not node is AnimationPlayer:
 		return {"error": "AnimationPlayer not found: %s" % path}
 	var player: AnimationPlayer = node as AnimationPlayer
@@ -190,7 +179,7 @@ func set_animation_keyframe(params: Dictionary) -> Dictionary:
 	if path.is_empty() or anim_name.is_empty():
 		return {"error": "path and anim_name are required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null or not node is AnimationPlayer:
 		return {"error": "AnimationPlayer not found: %s" % path}
 	var player: AnimationPlayer = node as AnimationPlayer
@@ -237,7 +226,7 @@ func get_animation_info(params: Dictionary) -> Dictionary:
 	if path.is_empty() or anim_name.is_empty():
 		return {"error": "path and anim_name are required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null or not node is AnimationPlayer:
 		return {"error": "AnimationPlayer not found: %s" % path}
 	var player: AnimationPlayer = node as AnimationPlayer
@@ -278,7 +267,7 @@ func remove_animation(params: Dictionary) -> Dictionary:
 	if path.is_empty() or anim_name.is_empty():
 		return {"error": "path and anim_name are required"}
 
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null or not node is AnimationPlayer:
 		return {"error": "AnimationPlayer not found: %s" % path}
 	var player: AnimationPlayer = node as AnimationPlayer
@@ -300,16 +289,16 @@ func create_animation_tree(params: Dictionary) -> Dictionary:
 	var props: Dictionary = params.get("properties", {})
 	var root_type: String = params.get("root_type", props.get("root_type", "AnimationNodeBlendTree"))
 
-	var parent: Node = _get_root()
+	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if parent_path != "":
-		parent = _get_node(parent_path)
+		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
 	if parent == null:
 		return {"error": "Parent not found"}
 
 	var tree: AnimationTree = AnimationTree.new()
 	tree.name = props.get("name", "AnimationTree")
 	if not player_path.is_empty():
-		var player: Node = _get_node(player_path)
+		var player: Node = MCPCommandHelpers.resolve_node_path(_plugin, player_path)
 		if player and player is AnimationPlayer:
 			tree.anim_player = NodePath(player_path)
 
@@ -335,7 +324,7 @@ func create_animation_tree(params: Dictionary) -> Dictionary:
 		_undo_helper.add_node_with_undo(tree, parent)
 	else:
 		parent.add_child(tree)
-		tree.set_owner(_get_root())
+		tree.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	return {"result": {"name": str(tree.name), "path": str(tree.get_path()), "root_type": root_type}}
 
@@ -345,7 +334,7 @@ func get_animation_tree_structure(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", params.get("player_path", ""))
 	if path.is_empty():
 		return {"error": "path is required"}
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null or not node is AnimationTree:
 		return {"error": "AnimationTree not found: %s" % path}
 	var tree: AnimationTree = node as AnimationTree
@@ -392,7 +381,7 @@ func set_tree_parameter(params: Dictionary) -> Dictionary:
 	var value: Variant = params.get("value")
 	if path.is_empty() or parameter.is_empty():
 		return {"error": "path and parameter are required"}
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null or not node is AnimationTree:
 		return {"error": "AnimationTree not found: %s" % path}
 	var tree: AnimationTree = node as AnimationTree
@@ -408,7 +397,7 @@ func add_state_machine_state(params: Dictionary) -> Dictionary:
 	var position: Dictionary = params.get("position", {})
 	if path.is_empty() or state_name.is_empty():
 		return {"error": "path and state_name are required"}
-	var node: Node = _get_node(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null or not node is AnimationTree:
 		return {"error": "AnimationTree not found: %s" % path}
 	var tree: AnimationTree = node as AnimationTree

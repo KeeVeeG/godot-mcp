@@ -33,9 +33,8 @@ func read_resource(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var path_err: String = _validate_path(path)
-	if not path_err.is_empty():
-		return {"error": path_err}
+	if not MCPCommandHelpers.validate_path(path):
+		return {"error": "Invalid path"}
 	if not FileAccess.file_exists(path):
 		return {"error": "Resource not found: %s" % path}
 
@@ -80,7 +79,7 @@ func edit_resource(params: Dictionary) -> Dictionary:
 		else:
 			res.set(prop, val)
 
-	_ensure_dir(path.get_base_dir())
+	MCPCommandHelpers.ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(res, path)
 	if err != OK:
 		return {"error": "Failed to save resource: %s" % error_string(err)}
@@ -94,9 +93,8 @@ func create_resource(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 	if type_name.is_empty() or path.is_empty():
 		return {"error": "type and path are required"}
-	var path_err: String = _validate_path(path)
-	if not path_err.is_empty():
-		return {"error": path_err}
+	if not MCPCommandHelpers.validate_path(path):
+		return {"error": "Invalid path"}
 
 	var res: Resource = null
 	match type_name:
@@ -129,12 +127,12 @@ func create_resource(params: Dictionary) -> Dictionary:
 		return {"error": "Unknown resource type: %s" % type_name}
 
 	for prop: String in properties:
-		if _has_property(res, prop):
+		if MCPCommandHelpers.has_property(res, prop):
 			res.set(prop, properties[prop])
 
 	if not path.ends_with(".tres"):
 		path += ".tres"
-	_ensure_dir(path.get_base_dir())
+	MCPCommandHelpers.ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(res, path)
 	if err != OK:
 		return {"error": "Failed to save resource: %s" % error_string(err)}
@@ -205,12 +203,10 @@ func duplicate_resource(params: Dictionary) -> Dictionary:
 	var new_path: String = params.get("dest_path", params.get("new_path", ""))
 	if source_path.is_empty() or new_path.is_empty():
 		return {"error": "source_path and new_path are required"}
-	var path_err: String = _validate_path(source_path)
-	if not path_err.is_empty():
-		return {"error": "source: " + path_err}
-	path_err = _validate_path(new_path)
-	if not path_err.is_empty():
-		return {"error": "dest: " + path_err}
+	if not MCPCommandHelpers.validate_path(source_path):
+		return {"error": "Invalid source path"}
+	if not MCPCommandHelpers.validate_path(new_path):
+		return {"error": "Invalid destination path"}
 	if not FileAccess.file_exists(source_path):
 		return {"error": "Source resource not found: %s" % source_path}
 	var res: Resource = ResourceLoader.load(source_path)
@@ -219,7 +215,7 @@ func duplicate_resource(params: Dictionary) -> Dictionary:
 	var dup: Resource = res.duplicate()
 	if dup == null:
 		return {"error": "Failed to duplicate resource"}
-	_ensure_dir(new_path.get_base_dir())
+	MCPCommandHelpers.ensure_dir(new_path.get_base_dir())
 	var err: Error = ResourceSaver.save(dup, new_path)
 	if err != OK:
 		return {"error": "Failed to save duplicate: %s" % error_string(err)}
@@ -253,7 +249,7 @@ func list_resources(params: Dictionary) -> Dictionary:
 	var type_filter: String = params.get("type", "")
 	var path: String = params.get("directory", params.get("path", "res://"))
 	var files: Array = []
-	_collect_resource_files(path, files)
+	MCPCommandHelpers.walk_directory(path, PackedStringArray(["tres", "res"]), func(fp, _name): files.append(fp))
 	if not type_filter.is_empty():
 		var filtered: Array = []
 		for f: String in files:
@@ -264,24 +260,7 @@ func list_resources(params: Dictionary) -> Dictionary:
 	return {"result": {"resources": files, "count": files.size(), "type_filter": type_filter}}
 
 
-## Helper: recursively collect resource files.
-func _collect_resource_files(dir_path: String, results: Array) -> void:
-	var global_path: String = ProjectSettings.globalize_path(dir_path) if dir_path.begins_with("res://") else dir_path
-	var dir: DirAccess = DirAccess.open(global_path)
-	if dir == null:
-		return
-	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
-	while file_name != "":
-		if not file_name.begins_with("."):
-			var full_path: String = dir_path.path_join(file_name)
-			if dir.current_is_dir():
-				if file_name != ".godot" and file_name != ".import":
-					_collect_resource_files(full_path, results)
-			elif file_name.ends_with(".tres") or file_name.ends_with(".res"):
-				results.append(full_path)
-		file_name = dir.get_next()
-	dir.list_dir_end()
+
 
 
 ## Delete a resource file from the project.
@@ -289,9 +268,8 @@ func delete_resource_file(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"error": "Path is required"}
-	var path_err: String = _validate_path(path)
-	if not path_err.is_empty():
-		return {"error": path_err}
+	if not MCPCommandHelpers.validate_path(path):
+		return {"error": "Invalid path"}
 	if not (path.ends_with(".tres") or path.ends_with(".res")):
 		return {"error": "Not a valid resource file. Only .tres and .res files can be deleted."}
 	if not FileAccess.file_exists(path):
@@ -343,21 +321,7 @@ func _find_resource_refs_in_scene(node: Node, resource_path: String, depth: int 
 	return result
 
 
-func _has_property(obj: Object, prop: String) -> bool:
-	return MCPCommandHelpers.has_property(obj, prop)
 
 
-func _ensure_dir(path: String) -> void:
-	MCPCommandHelpers.ensure_dir(path)
 
 
-## Validate path to prevent path traversal attacks.
-## Returns empty string if valid, error message if invalid.
-func _validate_path(path: String) -> String:
-	if path.is_empty():
-		return ""
-	if path.contains(".."):
-		return "Invalid path: path traversal ('..') not allowed"
-	if path.contains("//") and not path.begins_with("res://"):
-		return "Invalid path: double slash '//' not allowed"
-	return ""
