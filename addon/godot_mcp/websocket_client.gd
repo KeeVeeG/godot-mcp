@@ -298,6 +298,8 @@ func _send_ping() -> void:
 	if not _is_connected:
 		return
 	_ws.send_text(JSON.stringify({"jsonrpc": "2.0", "method": "ping"}))
+	# Reset idle timer — successful send means physical connection is alive
+	_last_received_time = Time.get_unix_time_from_system()
 
 
 ## Whether we are connected.
