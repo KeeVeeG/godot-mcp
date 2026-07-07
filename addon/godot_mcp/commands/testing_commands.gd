@@ -392,16 +392,16 @@ func _find_text_recursive(node: Node, search_text: String, results: Array) -> vo
 	if node is Label:
 		if (node as Label).text.find(search_text) != -1:
 			results.append(MCPCommandHelpers.get_node_path(node, _plugin))
-		elif node is Button:
+	elif node is Button:
 		if (node as Button).text.find(search_text) != -1:
 			results.append(MCPCommandHelpers.get_node_path(node, _plugin))
-		elif node is RichTextLabel:
+	elif node is RichTextLabel:
 		if (node as RichTextLabel).get_parsed_text().find(search_text) != -1:
 			results.append(MCPCommandHelpers.get_node_path(node, _plugin))
-		elif node is LineEdit:
+	elif node is LineEdit:
 		if (node as LineEdit).text.find(search_text) != -1:
 			results.append(MCPCommandHelpers.get_node_path(node, _plugin))
-		elif node is TextEdit:
+	elif node is TextEdit:
 		if (node as TextEdit).text.find(search_text) != -1:
 			results.append(MCPCommandHelpers.get_node_path(node, _plugin))
 	for child: Node in node.get_children():
