@@ -64,10 +64,13 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 			}
 		}
 
-	# Use await for all handlers — in Godot 4, await on a non-coroutine
-	# returns the value immediately with no error. This correctly handles
-	# both sync and async handlers (e.g., runtime IPC tools).
-	var result: Variant = await handler.call(params)
+	var result: Variant = handler.call(params)
+
+	# Detect async handlers — they return GDScriptFunctionState (internal class,
+	# not available as type). Await to get actual result.
+	if typeof(result) == TYPE_OBJECT and result != null \
+			and result.get_class() == "GDScriptFunctionState":
+		result = await result
 
 	# Guard: if handler returned null, it likely hit a runtime error
 	if result == null:
