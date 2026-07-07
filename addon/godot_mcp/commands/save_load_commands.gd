@@ -52,7 +52,7 @@ func save_game_state(params: Dictionary) -> Dictionary:
 
 	_ensure_save_dir()
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open to save"}
 
@@ -133,7 +133,7 @@ func load_game_state(params: Dictionary) -> Dictionary:
 	if scene_tree_data.is_empty():
 		return {"error": "Save file contains no scene tree data"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open to load into"}
 

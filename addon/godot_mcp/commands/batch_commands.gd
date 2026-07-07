@@ -31,7 +31,7 @@ func find_nodes_by_type(params: Dictionary) -> Dictionary:
 	if type_name.is_empty():
 		return {"error": "Type is required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -58,7 +58,7 @@ func _find_by_type_recursive(node: Node, type_name: String, include_inactive: bo
 ## Find all signal connections in the scene tree. Recursively walks all nodes
 ## and reports their connected signals.
 func find_signal_connections(_params: Dictionary) -> Dictionary:
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -116,7 +116,7 @@ func batch_set_property(params: Dictionary) -> Dictionary:
 	if property.is_empty():
 		return {"error": "Property is required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 

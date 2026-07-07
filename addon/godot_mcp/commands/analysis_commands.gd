@@ -23,7 +23,7 @@ func get_commands() -> Dictionary:
 ## Analyze the current scene's complexity: node count, type breakdown,
 ## estimated draw calls, script count, and depth.
 func analyze_scene_complexity(_params: Dictionary) -> Dictionary:
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -97,7 +97,7 @@ func _analyze_node_recursive(node: Node, depth: int, stats: Dictionary) -> void:
 
 ## Map all signal connections in the scene as a graph.
 func analyze_signal_flow(_params: Dictionary) -> Dictionary:
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 

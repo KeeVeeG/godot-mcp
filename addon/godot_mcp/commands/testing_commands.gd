@@ -107,7 +107,7 @@ func assert_node_state(params: Dictionary) -> Dictionary:
 	if path.is_empty() or property.is_empty():
 		return {"error": "Path and property are required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -144,7 +144,7 @@ func assert_screen_text(params: Dictionary) -> Dictionary:
 	if expected_text.is_empty():
 		return {"error": "Text is required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -175,7 +175,7 @@ func run_stress_test(params: Dictionary) -> Dictionary:
 	var parent_path: String = params.get("parent_path", "")
 	var properties: Dictionary = params.get("properties", {})
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -255,7 +255,7 @@ func _step_add_node(params: Dictionary) -> Dictionary:
 	var node_name: String = params.get("name", type_name)
 	var properties: Dictionary = params.get("properties", {})
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -290,7 +290,7 @@ func _step_delete_node(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -322,7 +322,7 @@ func _step_set_property(params: Dictionary) -> Dictionary:
 	if path.is_empty() or property.is_empty():
 		return {"error": "Path and property required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -357,7 +357,7 @@ func _step_connect_signal(params: Dictionary) -> Dictionary:
 	if source_path.is_empty() or signal_name.is_empty() or target_path.is_empty() or method_name.is_empty():
 		return {"error": "source, signal, target, and method are required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 

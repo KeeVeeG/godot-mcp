@@ -40,7 +40,7 @@ func simulate_gameplay_scenario(params: Dictionary) -> Dictionary:
 	if scenario.is_empty():
 		return {"error": "scenario array is required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -98,7 +98,7 @@ func record_gameplay(params: Dictionary) -> Dictionary:
 	var include_input: bool = params.get("include_input", true)
 	var include_state: bool = params.get("include_state", false)
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -195,7 +195,7 @@ func replay_gameplay(params: Dictionary) -> Dictionary:
 	if events.is_empty():
 		return {"error": "Recording contains no events"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -251,7 +251,7 @@ func create_test_character(params: Dictionary) -> Dictionary:
 	if instance == null:
 		return {"error": "Failed to instantiate scene"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		instance.free()
 		return {"error": "No scene open"}
@@ -286,7 +286,7 @@ func navigate_character(params: Dictionary) -> Dictionary:
 	if character_path.is_empty():
 		return {"error": "character_path is required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -345,7 +345,7 @@ func assert_game_state(params: Dictionary) -> Dictionary:
 	if conditions.is_empty():
 		return {"error": "conditions array is required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -394,7 +394,7 @@ func wait_for_game_event(params: Dictionary) -> Dictionary:
 	if event.is_empty():
 		return {"error": "event is required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -563,7 +563,7 @@ func _action_click(params: Dictionary) -> Dictionary:
 	if button_text.is_empty():
 		return {"error": "button text is required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -598,14 +598,6 @@ func _action_assert(root: Node, params: Dictionary) -> Dictionary:
 		"expected": expected,
 		"operator": operator,
 	}
-		"contains":
-			if actual is String:
-				return (actual as String).find(str(expected)) != -1
-			if actual is Array:
-				return (actual as Array).has(expected)
-			return false
-		_:
-			return actual == expected
 
 
 ## Helper: Find buttons by text recursively.

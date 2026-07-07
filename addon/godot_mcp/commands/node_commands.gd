@@ -66,7 +66,7 @@ func _add_node(params: Dictionary) -> Dictionary:
 	var node_name: String = params.get("name", type_name)
 	var properties: Dictionary = params.get("properties", {})
 
-	var parent: Node = MCPCommandHelpers.get_scene_root()
+	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if parent == null:
 		return {"error": "No scene open"}
 	if parent_path != "":
@@ -92,7 +92,7 @@ func _add_node(params: Dictionary) -> Dictionary:
 		_undo_helper.add_node_with_undo(node, parent)
 	else:
 		parent.add_child(node)
-		node.set_owner(MCPCommandHelpers.get_scene_root())
+		node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	return {"result": {"name": str(node.name), "path": str(node.get_path()), "type": type_name}}
 
@@ -100,7 +100,7 @@ func _add_node(params: Dictionary) -> Dictionary:
 ## Delete a node from the scene tree with UndoRedo support.
 func _delete_node(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
@@ -119,7 +119,7 @@ func _delete_node(params: Dictionary) -> Dictionary:
 ## Duplicate a node with UndoRedo support.
 func _duplicate_node(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
@@ -136,7 +136,7 @@ func _duplicate_node(params: Dictionary) -> Dictionary:
 		if dupe2 == null:
 			return {"error": "Duplication failed"}
 		node.get_parent().add_child(dupe2)
-		dupe2.set_owner(MCPCommandHelpers.get_scene_root())
+		dupe2.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 		return {"result": {"original": path, "duplicate": str(dupe2.get_path()), "name": str(dupe2.name)}}
 
 
@@ -145,7 +145,7 @@ func _move_node(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var new_parent_path: String = params.get("new_parent", "")
 	var index: int = params.get("index", -1)
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
@@ -162,7 +162,7 @@ func _move_node(params: Dictionary) -> Dictionary:
 		new_parent.add_child(node)
 		if index >= 0:
 			new_parent.move_child(node, index)
-		node.set_owner(MCPCommandHelpers.get_scene_root())
+		node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	var display_parent: String = new_parent_path
 	if display_parent == "." or display_parent == "/":
@@ -178,7 +178,7 @@ func _update_property(params: Dictionary) -> Dictionary:
 	var value: Variant = params.get("value")
 	if property.is_empty():
 		return {"error": "Property name is required"}
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
@@ -202,7 +202,7 @@ func _update_property(params: Dictionary) -> Dictionary:
 func _get_node_properties(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var filter_props: Array = params.get("properties", [])
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
@@ -244,7 +244,7 @@ func _add_resource(params: Dictionary) -> Dictionary:
 	if resource_type.is_empty():
 		return {"error": "Resource type is required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
@@ -339,7 +339,7 @@ func _set_anchor_preset(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var raw_preset = params.get("preset", 0)
 	var preset: int = _resolve_preset(raw_preset)
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
@@ -382,7 +382,7 @@ func _rename_node(params: Dictionary) -> Dictionary:
 	var new_name: String = params.get("new_name", "")
 	if new_name.is_empty():
 		return {"error": "New name is required"}
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
@@ -405,7 +405,7 @@ func _connect_signal(params: Dictionary) -> Dictionary:
 	if signal_name.is_empty() or method_name.is_empty():
 		return {"error": "Signal name and method name are required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var source: Node = _resolve_node(source_path, root)
@@ -437,7 +437,7 @@ func _disconnect_signal(params: Dictionary) -> Dictionary:
 	if signal_name.is_empty() or method_name.is_empty():
 		return {"error": "Signal name and method name are required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var source: Node = _resolve_node(source_path, root)
@@ -463,7 +463,7 @@ func _disconnect_signal(params: Dictionary) -> Dictionary:
 ## Get groups a node belongs to.
 func _get_node_groups(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
@@ -478,7 +478,7 @@ func _get_node_groups(params: Dictionary) -> Dictionary:
 func _set_node_groups(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var groups: Array = params.get("groups", [])
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	var node: Node = _resolve_node(path, root)
@@ -504,7 +504,7 @@ func _find_nodes_in_group(params: Dictionary) -> Dictionary:
 	var group: String = params.get("group", "")
 	if group.is_empty():
 		return {"error": "Group name is required"}
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -536,7 +536,7 @@ func _get_editor_selection() -> Dictionary:
 ## Select specific nodes in the editor.
 func _select_nodes(params: Dictionary) -> Dictionary:
 	var paths: Array = params.get("paths", [])
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 

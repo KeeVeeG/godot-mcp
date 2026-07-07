@@ -154,7 +154,7 @@ func find_memory_leaks(_params: Dictionary) -> Dictionary:
 		})
 
 	# Scan scene tree for nodes with scripts that might leak
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root != null:
 		var suspicious: Array = _find_suspicious_nodes(root, 0)
 		for entry: Dictionary in suspicious:
@@ -253,7 +253,7 @@ func force_garbage_collection(_params: Dictionary) -> Dictionary:
 ## Helper: Count objects of a specific class.
 func _count_objects_of_class(cls_name: String) -> int:
 	var count: int = 0
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root != null:
 		count = _count_class_recursive(root, cls_name)
 	return count

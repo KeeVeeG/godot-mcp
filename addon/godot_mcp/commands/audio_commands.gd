@@ -30,7 +30,7 @@ func add_audio_player(params: Dictionary) -> Dictionary:
 	var stream_path: String = params.get("stream_path", params.get("stream", ""))
 	var properties: Dictionary = params.get("properties", {})
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -89,7 +89,7 @@ func _remove_audio_player(params: Dictionary) -> Dictionary:
 	if node_path.is_empty():
 		return {"error": "node_path is required"}
 	
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 	
@@ -270,7 +270,7 @@ func get_audio_info(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "Path is required"}
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 

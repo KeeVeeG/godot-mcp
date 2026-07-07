@@ -631,7 +631,18 @@ static func parse_for_property(value: Variant, expected_type: int) -> Variant:
 
 ## Serialize an InputEvent to a dictionary for JSON transport.
 static func serialize_input_event(event: InputEvent) -> Dictionary:
-	var d: Dictionary = {"type": event.get_class()}
+	var type_name: String = event.get_class()
+	if event is InputEventKey:
+		type_name = "key"
+	elif event is InputEventMouseButton:
+		type_name = "mouse_button"
+	elif event is InputEventJoypadButton:
+		type_name = "joypad_button"
+	elif event is InputEventJoypadMotion:
+		type_name = "joypad_motion"
+	elif event is InputEventAction:
+		type_name = "action"
+	var d: Dictionary = {"type": type_name}
 	if event is InputEventKey:
 		d["keycode"] = event.keycode
 		d["key_label"] = event.key_label

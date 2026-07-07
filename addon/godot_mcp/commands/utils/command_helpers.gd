@@ -114,6 +114,12 @@ static func compare_values(actual: Variant, expected: Variant, operator: String)
 		"<=":
 			if actual is float or actual is int:
 				return actual <= float(expected)
+		"contains":
+			if actual is String:
+				return (actual as String).find(str(expected)) != -1
+			if actual is Array:
+				return (actual as Array).has(expected)
+			return false
 		"==", _:
 			var a_str: String = str(actual)
 			var e_str: String = str(expected)

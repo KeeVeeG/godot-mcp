@@ -52,7 +52,7 @@ func take_screenshot_with_context(params: Dictionary) -> Dictionary:
 
 	_ensure_dirs()
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
@@ -281,7 +281,7 @@ func record_visual_regression(params: Dictionary) -> Dictionary:
 	if not DirAccess.dir_exists_absolute(recording_dir):
 		DirAccess.make_dir_recursive_absolute(recording_dir)
 
-	var root: Node = MCPCommandHelpers.get_scene_root()
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
