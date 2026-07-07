@@ -770,12 +770,28 @@ func _simulate_input(params: Dictionary) -> Dictionary:
 
 
 ## Simulate a keyboard key press/release.
+## Accepts keycode as string ("Space", "KEY_ENTER") or integer keycode.
 func _simulate_key_event(params: Dictionary) -> Dictionary:
-	var keycode_str: String = params.get("keycode", "")
-	if keycode_str.is_empty():
+	var raw_keycode: Variant = params.get("keycode", "")
+	var keycode_str: String = ""
+	var keycode: Key = KEY_NONE
+	if raw_keycode is String:
+		keycode_str = raw_keycode as String
+		keycode = OS.find_keycode_from_string(keycode_str)
+	elif raw_keycode is int:
+		keycode = raw_keycode as Key
+		keycode_str = str(keycode)
+	elif raw_keycode is float:
+		keycode = int(raw_keycode) as Key
+		keycode_str = str(int(raw_keycode))
+	else:
+		return {"error": "Invalid keycode type: %s" % typeof(raw_keycode)}
+	if keycode_str.is_empty() and keycode == KEY_NONE:
 		return {"error": "Keycode is required"}
 	
-	var keycode: Key = OS.find_keycode_from_string(keycode_str)
+	# If numeric keycode was provided, search alias only if unrecognized
+	if keycode == KEY_NONE and not keycode_str.is_empty():
+		keycode = OS.find_keycode_from_string(keycode_str)
 	if keycode == KEY_NONE and keycode_str != "None":
 		# Try common aliases
 		match keycode_str.to_lower():
