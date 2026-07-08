@@ -233,13 +233,18 @@ func _get_project_settings(params: Dictionary) -> Dictionary:
 
 
 ## Set a project setting and save.
+## Pass null as value to delete the setting (returns "deleted" message).
 func _set_project_setting(params: Dictionary) -> Dictionary:
 	var key: String = params.get("key", "")
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
 	var value: Variant = params.get("value", null)
 	if value == null:
-		return {"success": false, "error": "Value cannot be null. To reset a setting, use ProjectSettings.clear() or set an explicit value."}
+		ProjectSettings.set_setting(key, null)
+		var err: Error = ProjectSettings.save()
+		if err != OK:
+			return {"success": false, "error": "Failed to save project settings: %s" % error_string(err)}
+		return {"success": true, "message": "Setting '%s' deleted" % key}
 	ProjectSettings.set_setting(key, value)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
@@ -253,6 +258,8 @@ func _uid_to_project_path(params: Dictionary) -> Dictionary:
 	var uid_str: String = params.get("uid", "")
 	if uid_str.is_empty():
 		return {"success": false, "error": "UID cannot be empty"}
+	if not uid_str.begins_with("uid://"):
+		return {"success": false, "error": "Malformed UID: %s. UID must start with 'uid://' prefix." % uid_str}
 	var path: String = ResourceUID.uid_to_path(uid_str)
 	if path.is_empty() or path == uid_str:
 		return {"success": false, "error": "UID not found: %s. Ensure the resource file exists in the project." % uid_str}
