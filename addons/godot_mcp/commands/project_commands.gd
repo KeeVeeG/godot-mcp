@@ -77,6 +77,8 @@ func _get_project_info() -> Dictionary:
 ## Get filesystem tree recursively.
 func _get_filesystem_tree(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "res://")
+	if not path.begins_with("res://") and not path.begins_with("user://"):
+		return {"success": false, "error": "Path must start with 'res://' or 'user://', got: " + path}
 	var filters: Array = params.get("filters", [])
 	var max_depth: int = params.get("max_depth", 10)
 	var tree: Dictionary = _build_file_tree(path, filters, 0, max_depth)
@@ -129,13 +131,13 @@ func _build_file_tree(path: String, filters: Array, depth: int, max_depth: int) 
 
 
 ## Search files by name or content query.
-## Set "search_content": true to search inside file contents (text files only).
+## Supports glob patterns (*, ?) for filename search. Content search reads inside text files.
 func _search_files(params: Dictionary) -> Dictionary:
 	var query: String = params.get("query", "").to_lower()
 	if query.is_empty():
 		return {"success": false, "error": "Query cannot be empty"}
-	var search_content: bool = params.get("search_content", false)
-	var max_content_results: int = params.get("max_results", 50)
+	var search_content: bool = params.get("search_content", true)
+	var max_results: int = params.get("max_results", 50)
 	var results: Array = []
 	# Support glob patterns (*, ?) by converting to regex
 	var regex: RegEx = null
@@ -143,7 +145,7 @@ func _search_files(params: Dictionary) -> Dictionary:
 		var regex_str: String = "^" + query.replace(".", "\\.").replace("*", ".*").replace("?", ".") + "$"
 		regex = RegEx.new()
 		regex.compile(regex_str)
-	_search_recursive("res://", query, regex, results, 0, 8, search_content, max_content_results)
+	_search_recursive("res://", query, regex, results, 0, 8, search_content, max_results)
 	return {"success": true, "matches": results, "count": results.size(), "search_content": search_content}
 
 
@@ -190,8 +192,8 @@ func _search_recursive(path: String, query: String, regex: RegEx, results: Array
 ## Helper: Check if a text file's content contains the query string.
 func _file_content_matches(file_path: String, query: String) -> bool:
 	var ext: String = file_path.get_extension().to_lower()
-	# Only search text-based files
-	if ext not in ["gd", "tscn", "tres", "cfg", "json", "txt", "md", "cs", "shader", "gdshader", "import"]:
+	# Only search text-based files (avoid large binaries)
+	if ext not in ["gd", "tscn", "tres", "res", "cfg", "json", "txt", "md", "cs", "shader", "gdshader", "import", "theme", "etf", "resource", "editor", "godot", "rml", "svg", "html", "xml", "css", "ini", "toml", "yaml", "yml"]:
 		return false
 	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
 	if file == null:
@@ -233,9 +235,11 @@ func _get_project_settings(params: Dictionary) -> Dictionary:
 ## Set a project setting and save.
 func _set_project_setting(params: Dictionary) -> Dictionary:
 	var key: String = params.get("key", "")
-	var value: Variant = params.get("value")
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
+	var value: Variant = params.get("value", null)
+	if value == null:
+		return {"success": false, "error": "Value cannot be null. To reset a setting, use ProjectSettings.clear() or set an explicit value."}
 	ProjectSettings.set_setting(key, value)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
@@ -244,27 +248,30 @@ func _set_project_setting(params: Dictionary) -> Dictionary:
 
 
 ## Convert uid:// to res:// path.
-## Uses Godot's built-in ResourceUID.text_to_id() for proper decoding.
+## Uses ResourceUID.uid_to_path() static convenience method.
 func _uid_to_project_path(params: Dictionary) -> Dictionary:
 	var uid_str: String = params.get("uid", "")
 	if uid_str.is_empty():
 		return {"success": false, "error": "UID cannot be empty"}
-	var uid_value: int = ResourceUID.text_to_id(uid_str)
-	if uid_value == ResourceUID.INVALID_ID:
-		return {"success": false, "error": "Malformed UID: %s" % uid_str}
-	if not ResourceUID.has_id(uid_value):
-		return {"success": false, "error": "UID not found: %s" % uid_str}
-	var path: String = ResourceUID.get_id_path(uid_value)
+	var path: String = ResourceUID.uid_to_path(uid_str)
+	if path.is_empty() or path == uid_str:
+		return {"success": false, "error": "UID not found: %s. Ensure the resource file exists in the project." % uid_str}
 	return {"success": true, "uid": uid_str, "path": path}
 
 
 ## Convert res:// path to uid://.
+## Uses ResourceUID.path_to_uid() static convenience method.
 func _project_path_to_uid(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"success": false, "error": "Path cannot be empty"}
-	var uid_value: int = ResourceLoader.get_resource_uid(path)
-	if uid_value == -1:
-		return {"success": false, "error": "No UID for path: %s" % path}
-	var uid_str: String = "uid://%d" % uid_value
+	if not path.begins_with("res://"):
+		return {"success": false, "error": "Path must start with 'res://', got: '%s'. Use resource paths like 'res://scenes/main.tscn'" % path}
+	# Special case: project.godot is a config file, not a resource — it has no UID
+	if path == "res://project.godot":
+		return {"success": false, "error": "project.godot is a configuration file, not a resource — it has no UID"}
+	var uid_str: String = ResourceUID.path_to_uid(path)
+	if uid_str == path:
+		# path_to_uid returns the original path when no UID is found
+		return {"success": false, "error": "No UID for path: %s. The file may not be indexed — ensure it exists in the project and the editor has scanned it." % path}
 	return {"success": true, "path": path, "uid": uid_str}

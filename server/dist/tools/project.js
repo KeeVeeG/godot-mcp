@@ -20,9 +20,11 @@ export function registerProjectTools(server, bridge) {
     }, async (args) => callGodot(bridge, 'project/get_filesystem_tree', args));
     // 3. search_files
     server.registerTool('search_files', {
-        description: 'Search for files in the project by name pattern or content',
+        description: 'Search for files in the project by name pattern or content. Supports glob patterns (*, ?) for filename search. Set search_content=true to also search inside file contents.',
         inputSchema: {
             query: SearchQuery,
+            search_content: z.boolean().optional().default(true).describe('Whether to search inside file contents (default: true). Set to false for filename-only search.'),
+            max_results: z.number().int().positive().optional().default(50).describe('Maximum number of results (default: 50)'),
         },
     }, async (args) => callGodot(bridge, 'project/search_files', args));
     // 4. get_project_settings
