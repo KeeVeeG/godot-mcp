@@ -6,13 +6,34 @@
  * for communicating with Godot EditorPlugin.
  */
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { InitializeRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { GodotBridge } from './godot-bridge.js';
 import { createServer } from './server.js';
 import { registerAllTools } from './tools/index.js';
-import { SERVER_NAME, SERVER_VERSION } from './config.js';
+import { SERVER_NAME, SERVER_VERSION, isGodotProject } from './config.js';
 async function main() {
     // Log to stderr (stdout is reserved for MCP protocol)
     console.error(`[${SERVER_NAME}] Starting v${SERVER_VERSION}...`);
+    // Must run from a Godot project root directory
+    if (!isGodotProject()) {
+        console.error(`[${SERVER_NAME}] Not a Godot project — will reject MCP handshake with error`);
+        // Create a minimal server and intercept the initialize handshake.
+        // By throwing an McpError during initialization, the MCP client displays
+        // a descriptive error instead of generic "Connection closed (-32000)".
+        const server = createServer(null);
+        server.server.removeRequestHandler('initialize');
+        server.server.setRequestHandler(InitializeRequestSchema, () => {
+            throw new Error('Not a Godot project directory.');
+        });
+        const transport = new StdioServerTransport();
+        await server.connect(transport);
+        // Keep process alive until stdin closes, then exit
+        await new Promise((resolve) => {
+            process.stdin.on('close', resolve);
+        });
+        await server.close();
+        return;
+    }
     // Create the Godot bridge (WebSocket server)
     const bridge = new GodotBridge();
     const port = await bridge.start();

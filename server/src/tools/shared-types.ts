@@ -92,10 +92,10 @@ export const Pressed = z.boolean().optional().default(true).describe('Whether pr
 // ────────────────────────────────────────────────────────────
 
 /** 2D position as [x, y] */
-export const Position2D = z.tuple([z.number(), z.number()]).describe('Position as [x, y]');
+export const Position2D = z.array(z.number()).length(2).describe('Position as [x, y]');
 
 /** 3D position as [x, y, z] */
-export const Position3D = z.tuple([z.number(), z.number(), z.number()]).describe('Position as [x, y, z]');
+export const Position3D = z.array(z.number()).length(3).describe('Position as [x, y, z]');
 
 /** 2D integer coordinates [x, y] (e.g. tilemap cells). Accepts arrays of 2+ elements (extra elements are ignored). */
 export const Coord2D = z
@@ -112,7 +112,7 @@ export const Coord3D = z
   .describe('Integer coordinates [x, y, z]');
 
 /** 2D size as [width, height] */
-export const Size2D = z.tuple([z.number().int(), z.number().int()]).describe('Size as [width, height]');
+export const Size2D = z.array(z.number().int()).length(2).describe('Size as [width, height]');
 
 // ────────────────────────────────────────────────────────────
 // Record / properties schemas

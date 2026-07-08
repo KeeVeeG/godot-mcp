@@ -14,7 +14,7 @@ export const PING_TIMEOUT_MS = 15_000;
 /** Maximum message size in bytes (10MB) */
 export const MAX_MESSAGE_SIZE = 10 * 1024 * 1024;
 /** Server version */
-export const SERVER_VERSION = '1.0.0';
+export const SERVER_VERSION = '1.0.6';
 /** Server name for MCP identification */
 export const SERVER_NAME = 'godot-mcp';
 /** JSON-RPC version used for communication */
@@ -25,4 +25,14 @@ export const RECONNECT_DELAY_MS = 1_000;
 export const MAX_RECONNECT_ATTEMPTS = 5;
 /** Current log level */
 export const LOG_LEVEL = 'info';
+/** Godot project detection */
+import { existsSync } from 'fs';
+import { resolve } from 'path';
+/**
+ * Check if the current working directory is a Godot project root.
+ * A Godot project is identified by the presence of a `project.godot` file.
+ */
+export function isGodotProject() {
+    return existsSync(resolve(process.cwd(), 'project.godot'));
+}
 //# sourceMappingURL=config.js.map
