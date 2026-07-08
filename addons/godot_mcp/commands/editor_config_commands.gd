@@ -4,6 +4,7 @@ class_name MCPEditorConfigCommands
 extends RefCounted
 
 var _plugin: EditorPlugin
+var _current_tab: String = "2D"
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
@@ -40,14 +41,23 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 
 ## Get all editor settings.
 func _get_settings() -> Dictionary:
+	var es: EditorSettings = EditorInterface.get_editor_settings()
+	var color_preset: String = es.get_setting("interface/theme/color_preset") if es.has_setting("interface/theme/color_preset") else "Default"
+	# Reverse mapping: Godot preset name → user-friendly name
+	var theme_name: String
+	match color_preset:
+		"Default": theme_name = "dark"
+		"Light": theme_name = "light"
+		"Black (OLED)": theme_name = "amoled"
+		_: theme_name = "custom"
 	var settings: Dictionary = {
 		"interface": {
-			"theme": EditorInterface.get_editor_settings().get_setting("interface/theme/color_preset") if EditorInterface.get_editor_settings().has_setting("interface/theme/color_preset") else "default",
-			"font_size": EditorInterface.get_editor_settings().get_setting("interface/editor/fonts/main_font_size") if EditorInterface.get_editor_settings().has_setting("interface/editor/fonts/main_font_size") else 14,
-			"scale": EditorInterface.get_editor_settings().get_setting("interface/editor/appearance/custom_display_scale") if EditorInterface.get_editor_settings().has_setting("interface/editor/appearance/custom_display_scale") else 1.0,
+			"theme": theme_name,
+			"font_size": es.get_setting("interface/editor/fonts/main_font_size") if es.has_setting("interface/editor/fonts/main_font_size") else 14,
+			"scale": es.get_setting("interface/editor/appearance/custom_display_scale") if es.has_setting("interface/editor/appearance/custom_display_scale") else 1.0,
 		},
 		"layout": {
-			"current": "default",
+			"current": _current_tab,
 			"saved_layouts": _get_saved_layouts(),
 		},
 	}
@@ -66,8 +76,7 @@ func _set_theme(params: Dictionary) -> Dictionary:
 		"light":
 			es.set_setting("interface/theme/color_preset", "Light")
 		"amoled":
-			es.set_setting("interface/theme/color_preset", "Default")
-			es.set_setting("interface/theme/base_color", Color(0.0, 0.0, 0.0, 1.0))
+			es.set_setting("interface/theme/color_preset", "Black (OLED)")
 		_:
 			return {"success": false, "error": "Unknown theme: %s (use: dark, light, amoled)" % theme}
 	return {"success": true, "theme": theme, "message": "Editor theme set to %s" % theme}
@@ -80,12 +89,16 @@ func _set_layout(params: Dictionary) -> Dictionary:
 	match layout:
 		"default":
 			EditorInterface.set_main_screen_editor("2D")
+			_current_tab = "default"
 		"2d":
 			EditorInterface.set_main_screen_editor("2D")
+			_current_tab = "2d"
 		"3d":
 			EditorInterface.set_main_screen_editor("3D")
+			_current_tab = "3d"
 		"script":
 			EditorInterface.set_main_screen_editor("Script")
+			_current_tab = "script"
 		_:
 			return {"success": false, "error": "Unknown layout: %s (use: default, 2d, 3d, script)" % layout}
 	return {"success": true, "layout": layout, "message": "Main screen tab switched to %s. NOTE: This only switches the active editor tab (2D/3D/Script), not a full window layout." % layout}
@@ -115,24 +128,32 @@ func _set_scale(params: Dictionary) -> Dictionary:
 	return {"success": true, "scale": scale, "message": "Editor scale set to %.1f%%" % (scale * 100)}
 
 
-## Save the current main screen tab to a named config file.
-## NOTE: Only saves which main screen tab is active, not a full window layout.
+## Save the current editor configuration (theme, font, scale, tab) to a named config file.
 func _save_layout(params: Dictionary) -> Dictionary:
 	var name: String = params.get("name", "")
 	if name.is_empty():
 		return {"success": false, "error": "Layout name cannot be empty"}
+	var es: EditorSettings = EditorInterface.get_editor_settings()
+	if es == null:
+		return {"success": false, "error": "Cannot access editor settings"}
 	var layout_path: String = "user://editor_layout_%s.cfg" % name
 	var config: ConfigFile = ConfigFile.new()
-	# Save current main screen
-	config.set_value("layout", "main_screen", "2D")  # Default
+	# Theme
+	config.set_value("theme", "color_preset", es.get_setting("interface/theme/color_preset"))
+	config.set_value("theme", "base_color", es.get_setting("interface/theme/base_color"))
+	# Font
+	config.set_value("font", "main_font_size", es.get_setting("interface/editor/fonts/main_font_size"))
+	# Scale
+	config.set_value("scale", "custom_display_scale", es.get_setting("interface/editor/appearance/custom_display_scale"))
+	# Active tab
+	config.set_value("layout", "main_screen", _current_tab)
 	var err: Error = config.save(layout_path)
 	if err != OK:
 		return {"success": false, "error": "Failed to save layout: %s" % error_string(err)}
-	return {"success": true, "name": name, "path": layout_path, "message": "Main screen tab config '%s' saved. NOTE: Only the active tab (2D/3D/Script) is stored, not a full window layout." % name}
+	return {"success": true, "name": name, "path": layout_path, "message": "Editor config '%s' saved (theme, font, scale, tab)" % name}
 
 
-## Load a saved main screen tab config.
-## NOTE: Only restores which main screen tab is active, not a full window layout.
+## Load a saved editor configuration.
 func _load_layout(params: Dictionary) -> Dictionary:
 	var name: String = params.get("name", "")
 	if name.is_empty():
@@ -144,9 +165,22 @@ func _load_layout(params: Dictionary) -> Dictionary:
 	var err: Error = config.load(layout_path)
 	if err != OK:
 		return {"success": false, "error": "Failed to load layout: %s" % error_string(err)}
+	var es: EditorSettings = EditorInterface.get_editor_settings()
+	if es == null:
+		return {"success": false, "error": "Cannot access editor settings"}
+	# Theme
+	var color_preset: String = config.get_value("theme", "color_preset", "Default") as String
+	es.set_setting("interface/theme/color_preset", color_preset)
+	es.set_setting("interface/theme/base_color", config.get_value("theme", "base_color", Color(0.14, 0.14, 0.14)))
+	# Font
+	es.set_setting("interface/editor/fonts/main_font_size", config.get_value("font", "main_font_size", 14))
+	# Scale
+	es.set_setting("interface/editor/appearance/custom_display_scale", config.get_value("scale", "custom_display_scale", 1.0))
+	# Active tab
 	var main_screen: String = config.get_value("layout", "main_screen", "2D") as String
 	EditorInterface.set_main_screen_editor(main_screen)
-	return {"success": true, "name": name, "message": "Main screen tab config '%s' loaded" % name}
+	_current_tab = main_screen
+	return {"success": true, "name": name, "message": "Editor config '%s' loaded (theme, font, scale, tab). Scale changes require editor restart." % name}
 
 
 ## Reset layout to defaults.
@@ -158,6 +192,7 @@ func _reset_layout() -> Dictionary:
 	es.set_setting("interface/editor/fonts/main_font_size", 14)
 	es.set_setting("interface/editor/appearance/custom_display_scale", 1.0)
 	EditorInterface.set_main_screen_editor("2D")
+	_current_tab = "default"
 	return {"success": true, "message": "Editor layout reset to defaults"}
 
 
