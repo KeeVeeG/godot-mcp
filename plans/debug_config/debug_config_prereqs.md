@@ -3,7 +3,7 @@
 **Source plan:** `server/src/test_plans/debug_config_test_plan.md`
 **Generated:** 2026-07-08
 
-All 6 tools in this plan use `callGodot(bridge, '<endpoint>', args)` — they are simple pass-throughs. The Zod schemas are validated server-side; all domain logic and state mutation happen in the Godot editor plugin (`addon/godot_mcp/commands/debug_config_commands.gd`).
+All 6 tools in this plan use `callGodot(bridge, '<endpoint>', args)` — they are simple pass-throughs. The Zod schemas are validated server-side; all domain logic and state mutation happen in the Godot editor plugin (`addons/godot_mcp/commands/debug_config_commands.gd`).
 
 ---
 

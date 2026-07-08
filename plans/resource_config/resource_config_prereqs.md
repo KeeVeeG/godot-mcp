@@ -2,7 +2,7 @@
 
 > **Source test plan:** `resource_config_test_plan.md`  
 > **Source tool:** `server/src/tools/resource_config.ts`  
-> **Godot handler:** `addon/godot_mcp/commands/resource_config_commands.gd`  
+> **Godot handler:** `addons/godot_mcp/commands/resource_config_commands.gd`  
 > **Tools covered:** `get_resource_types`, `get_resource_properties`, `create_resource_from_template`, `import_resource`, `get_resource_import_settings`, `set_resource_import_settings`  
 > **Generated:** 2026-07-08
 

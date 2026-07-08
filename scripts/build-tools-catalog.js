@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const ROOT = path.join(__dirname, '..');
 const TS_DIR = path.join(ROOT, 'server', 'src', 'tools');
-const GD_DIR = path.join(ROOT, 'addon', 'godot_mcp', 'commands');
+const GD_DIR = path.join(ROOT, 'addons', 'godot_mcp', 'commands');
 const TEST_DIR = path.join(ROOT, 'tests', 'cases');
 
 const GD_FILE_MAP = {
@@ -139,7 +139,7 @@ function main() {
         tool_id,
         description,
         godot_command,
-        gd_file: `addon/godot_mcp/commands/${gdFile}`,
+        gd_file: `addons/godot_mcp/commands/${gdFile}`,
         gd_function: gdFunction,
         ts_file: `server/src/tools/${tsFile}`,
         test_file: testFile,

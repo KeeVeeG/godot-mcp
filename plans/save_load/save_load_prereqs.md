@@ -1,14 +1,14 @@
 # Prerequisites for Save/Load Test Plan
 
 > **Source plan:** `server/src/test_plans/save_load_test_plan.md`
-> **Source implementation:** `addon/godot_mcp/commands/save_load_commands.gd`
+> **Source implementation:** `addons/godot_mcp/commands/save_load_commands.gd`
 > **Generated:** 2026-07-08
 
 ---
 
 ## Required Project State
 
-- **Godot 4.x project** with the Godot MCP plugin (`addon/godot_mcp/`) installed and **active** in Project Settings → Plugins.
+- **Godot 4.x project** with the Godot MCP plugin (`addons/godot_mcp/`) installed and **active** in Project Settings → Plugins.
 - **Project root** must have `project.godot` with the runtime autoload registered in `[autoload]`:
   ```
   mcp_runtime="*res://addons/godot_mcp/services/mcp_runtime.gd"
