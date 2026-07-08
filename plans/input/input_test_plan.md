@@ -166,7 +166,7 @@
 - **Params:** `{}`
 - **Expected result:** Validation error (missing required field `position`).
 
-#### 12. Invalid position — wrong tuple size
+#### 12. Invalid position — wrong array length
 - **Description:** Pass a single number instead of [x, y].
 - **Params:** `{ "position": [100] }`
 - **Expected result:** Validation error (expected exactly 2 elements).
@@ -247,7 +247,7 @@
 - **Params:** `{}`
 - **Expected result:** Validation error (missing required field `position`).
 
-#### 10. Invalid position — wrong tuple size
+#### 10. Invalid position — wrong array length
 - **Description:** Single-element array.
 - **Params:** `{ "position": [100] }`
 - **Expected result:** Validation error.

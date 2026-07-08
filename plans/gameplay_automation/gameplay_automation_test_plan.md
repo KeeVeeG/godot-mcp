@@ -584,7 +584,7 @@
     "position": [0, 0]
   }
   ```
-- **Expected result:** Zod validation error: tuple expects exactly 3 elements.
+- **Expected result:** Zod validation error: array must have exactly 3 elements.
 
 #### 4.10 Invalid `position` type — non-number values
 - **Description:** Provide a position with non-number values.
@@ -707,7 +707,7 @@
     "target": [10, 0]
   }
   ```
-- **Expected result:** Zod validation error: tuple expects exactly 3 elements.
+- **Expected result:** Zod validation error: array must have exactly 3 elements.
 
 #### 5.9 Non-existent character node
 - **Description:** Navigate a character that does not exist in the scene.

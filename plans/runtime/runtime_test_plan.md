@@ -376,8 +376,8 @@
 | 6 | **Position with varying values** | `{"position": [-50.5, 25.3, 100.7], "radius": 5.0}` | Returns nodes near that world point | Floating-point coords |
 | 7 | **Missing required `position`** | `{"radius": 10.0}` | Schema validation error | Required param |
 | 8 | **Missing required `radius`** | `{"position": [0, 0, 0]}` | Schema validation error | Required param |
-| 9 | **Position with wrong length (2 elements)** | `{"position": [0, 0], "radius": 10.0}` | Schema validation error — expected tuple of 3 numbers | Tuple length validation |
-| 10 | **Position with wrong length (4 elements)** | `{"position": [0, 0, 0, 0], "radius": 10.0}` | Schema validation error — expected tuple of 3 numbers | Tuple length validation |
+| 9 | **Position with wrong length (2 elements)** | `{"position": [0, 0], "radius": 10.0}` | Schema validation error — expected array of exactly 3 numbers | Array length validation |
+| 10 | **Position with wrong length (4 elements)** | `{"position": [0, 0, 0, 0], "radius": 10.0}` | Schema validation error — expected array of exactly 3 numbers | Array length validation |
 | 11 | **String in position** | `{"position": ["zero", 0, 0], "radius": 10.0}` | Schema validation error — expected number | Type validation |
 
 ---
@@ -487,7 +487,7 @@ These scenarios apply across multiple tools:
 |------|-----------|---------|
 | `NodePath` | `z.string()` — Node path in scene tree | 2, 3, 6, 15, 17, 18, 19 |
 | `ScriptPath` | `z.string()` — Script file path (`res://...`) | 10 |
-| `Position3D` | `z.tuple([z.number(), z.number(), z.number()])` — [x, y, z] | 16, 17, 18 |
+| `Position3D` | `z.array(z.number()).length(3)` — [x, y, z] | 16, 17, 18 |
 | `PositiveNumber` | `z.number().positive()` — Number > 0 | 9, 16 |
 | `Timeout` | `z.number().optional()` — Optional timeout in seconds | 6, 14, 15, 19 |
 | `GDScriptCode` | `z.string()` — GDScript code string | 4 |

@@ -36,7 +36,7 @@
 - [ ] 9. Click at negative screen position
 - [ ] 10. Click at large position values
 - [ ] 11. Missing position — validation error expected
-- [ ] 12. Wrong tuple size — validation error expected
+- [ ] 12. Wrong array length — validation error expected
 - [ ] 13. String elements in position — validation error
 - [ ] 14. Invalid button enum — validation error expected
 - [ ] 15. Three-element position array — validation error
@@ -53,7 +53,7 @@
 - [ ] 7. Large absolute position
 - [ ] 8. Negative absolute position
 - [ ] 9. Missing position — validation error expected
-- [ ] 10. Wrong tuple size — validation error expected
+- [ ] 10. Wrong array length — validation error expected
 - [ ] 11. Non-number elements — validation error expected
 - [ ] 12. String instead of boolean relative — validation error
 

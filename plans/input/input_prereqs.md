@@ -153,7 +153,7 @@ for action in expected_actions:
 | S9 — Negative position | Game running |
 | S10 — Large position [99999,99999] | Game running |
 | S11 — Missing position | None (server-side validation) |
-| S12 — Wrong tuple size [100] | None (server-side validation) |
+| S12 — Wrong array length [100] | None (server-side validation) |
 | S13 — String elements | None (server-side validation) |
 | S14 — Invalid button enum | None (server-side validation) |
 | S15 — 3-element array | None (server-side validation) |
@@ -171,7 +171,7 @@ for action in expected_actions:
 | S7 — Large position [99999,99999] | Game running |
 | S8 — Negative absolute [-500,-500] | Game running |
 | S9 — Missing position | None (server-side validation) |
-| S10 — Wrong tuple size | None (server-side validation) |
+| S10 — Wrong array length | None (server-side validation) |
 | S11 — Non-number elements | None (server-side validation) |
 | S12 — Invalid relative type | None (server-side validation) |
 
