@@ -173,18 +173,21 @@ func _set_input_map(params: Dictionary) -> Dictionary:
 	for action_name: String in actions:
 		var action_data: Variant = actions[action_name]
 		var event_list: Array
+		var deadzone: float = 0.2
 		if action_data is Dictionary and action_data.has("events"):
 			# Nested format: {deadzone, events} — from get_input_map roundtrip
 			event_list = action_data["events"]
+			deadzone = float(action_data.get("deadzone", 0.2))
 		elif action_data is Array:
 			# Flat format: [events]
 			event_list = action_data
 		else:
 			continue
 		if not InputMap.has_action(action_name):
-			InputMap.add_action(action_name)
+			InputMap.add_action(action_name, deadzone)
 		else:
 			InputMap.action_erase_events(action_name)
+			InputMap.action_set_deadzone(action_name, deadzone)
 		for event_data: Dictionary in event_list:
 			var event: InputEvent = MCPVariantCodec.create_input_event(event_data)
 			if event:

@@ -192,7 +192,7 @@ func get_input_actions(params: Dictionary) -> Dictionary:
 func set_input_action(params: Dictionary) -> Dictionary:
 	var action: String = params.get("action", "")
 	var events: Array = params.get("events", [])
-	var deadzone: float = params.get("deadzone", 0.5)
+	var deadzone: float = params.get("deadzone", 0.2)
 	if action.is_empty():
 		return {"error": "Action name is required"}
 
