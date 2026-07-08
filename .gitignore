@@ -1,22 +1,3 @@
-# === WHITELIST: ignore everything, then un-ignore only these paths ===
-*
-!*/
-!/.github/
-!/.husky/
-!/addons/
-!/plans/
-!/scripts/
-!/tests/
-!/web/
-!/.gitignore
-!/.prettierignore
-!/.prettierrc
-!/LICENSE
-!/package.json
-!/README.md
-
-# === PATH-SPECIFIC RULES (apply within tracked paths) ===
-
 # Dependencies
 node_modules/
 package-lock.json
