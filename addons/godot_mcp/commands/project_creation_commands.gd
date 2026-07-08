@@ -519,9 +519,9 @@ renderer/rendering_method="%s"
 
 func _get_template_folders(template: String) -> PackedStringArray:
 	match template:
-		"minimal":
+		"empty":
 			return PackedStringArray(["scenes", "scripts"])
-		"full":
+		"custom":
 			return PackedStringArray([
 				"scenes", "scripts", "assets/sprites", "assets/textures",
 				"assets/models", "assets/audio/sfx", "assets/audio/music",
