@@ -56,6 +56,16 @@ func _create_project(params: Dictionary) -> Dictionary:
 	if not MCPCommandHelpers.validate_path(path):
 		return {"success": false, "error": "Invalid path"}
 
+	# Check if project already exists at this path
+	var config_path: String = path.path_join("project.godot")
+	var overwrite: bool = params.get("overwrite", false)
+	if FileAccess.file_exists(config_path) and not overwrite:
+		return {
+			"success": false,
+			"error": "project.godot already exists at '%s'. Pass overwrite=true to replace it." % path,
+			"existing_project": true,
+		}
+
 	# Create project directory
 	var err: Error = DirAccess.make_dir_recursive_absolute(path)
 	if err != OK:
@@ -63,7 +73,6 @@ func _create_project(params: Dictionary) -> Dictionary:
 
 	# Create project.godot
 	var config_content: String = _generate_project_godot(name, renderer, godot_version)
-	var config_path: String = path.path_join("project.godot")
 	var file: FileAccess = FileAccess.open(config_path, FileAccess.WRITE)
 	if file == null:
 		return {"success": false, "error": "Failed to create project.godot"}
@@ -111,6 +120,18 @@ func _create_project_from_template(params: Dictionary) -> Dictionary:
 	if not DirAccess.dir_exists_absolute(template_path):
 		return {"success": false, "error": "Template path not found: %s" % template_path}
 
+	# Prevent self-copy: normalize paths for comparison (handle / vs \ on Windows)
+	var normalized_path: String = path.replace("\\", "/").trim_suffix("/")
+	var normalized_template: String = template_path.replace("\\", "/").trim_suffix("/")
+	if normalized_path == normalized_template:
+		return {"success": false, "error": "Cannot copy template into itself (path equals template_path)"}
+	if normalized_path.begins_with(normalized_template + "/"):
+		return {"success": false, "error": "Cannot copy template into a subdirectory of itself"}
+
+	# Validate template is a Godot project
+	if not FileAccess.file_exists(template_path.path_join("project.godot")):
+		return {"success": false, "error": "Template path is not a valid Godot project (missing project.godot)"}
+
 	# Copy template to new location
 	var err: Error = MCPCommandHelpers.copy_directory_recursive(template_path, path)
 	if err != OK:
@@ -120,15 +141,11 @@ func _create_project_from_template(params: Dictionary) -> Dictionary:
 	if not name.is_empty():
 		var config_path: String = path.path_join("project.godot")
 		if FileAccess.file_exists(config_path):
-			var file: FileAccess = FileAccess.open(config_path, FileAccess.READ)
-			if file:
-				var content: String = file.get_as_text()
-				file.close()
-				content = content.replace('"application/config/name": _PLACEHOLDER_', '"application/config/name": "%s"' % name)
-				var write_file: FileAccess = FileAccess.open(config_path, FileAccess.WRITE)
-				if write_file:
-					write_file.store_string(content)
-					write_file.close()
+			var cfg: ConfigFile = ConfigFile.new()
+			var cfg_err: Error = cfg.load(config_path)
+			if cfg_err == OK:
+				cfg.set_value("application", "config/name", name)
+				cfg.save(config_path)
 
 	return {"success": true, "path": path, "template": template_path, "name": name}
 
@@ -233,6 +250,9 @@ func _initialize_git_repository(params: Dictionary) -> Dictionary:
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
 
+	if not FileAccess.file_exists(project_path.path_join("project.godot")):
+		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
+
 	# Create .gitignore if requested
 	if include_gitignore:
 		var gitignore_content: String = _get_godot_gitignore()
@@ -270,6 +290,9 @@ func _create_project_readme(params: Dictionary) -> Dictionary:
 
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
+
+	if not FileAccess.file_exists(project_path.path_join("project.godot")):
+		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
 
 	# Get project name for template
 	var project_name: String = ProjectSettings.get_setting("application/config/name", "Godot Project")
@@ -519,9 +542,9 @@ renderer/rendering_method="%s"
 
 func _get_template_folders(template: String) -> PackedStringArray:
 	match template:
-		"empty":
+		"empty", "minimal":
 			return PackedStringArray(["scenes", "scripts"])
-		"custom":
+		"custom", "full":
 			return PackedStringArray([
 				"scenes", "scripts", "assets/sprites", "assets/textures",
 				"assets/models", "assets/audio/sfx", "assets/audio/music",

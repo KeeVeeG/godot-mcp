@@ -59,4 +59,5 @@ mcp-srv-out.txt
 
 # Test project addon (synced copy from addon/)
 test_project/addons/godot_mcp/
+*_results.md
 
