@@ -76,7 +76,7 @@ func export_for_platform(params: Dictionary) -> Dictionary:
 		# Auto-create the preset so export_for_platform works out of the box
 		var auto_result: Dictionary = create_export_preset({"platform": platform, "name": preset_name})
 		if auto_result.has("error"):
-			return {"error": "Failed to auto-create export preset for %s: %s" % [platform_name, auto_result["error"]}
+			return {"error": "Failed to auto-create export preset for %s: %s" % [platform_name, auto_result["error"]]}
 		# Reload config so the rest of this function sees the new preset
 		config = ConfigFile.new()
 		config.load(config_path)
