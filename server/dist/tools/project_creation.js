@@ -13,6 +13,7 @@ export function registerProjectCreationTools(server, bridge) {
             template: z.enum(['empty', '2d', '3d', 'ui', 'custom']).optional().describe('Project template type'),
             godot_version: z.string().optional().describe("Target Godot version (e.g. '4.3')"),
             renderer: z.enum(['forward_plus', 'mobile', 'gl_compatibility']).optional().describe('Rendering engine'),
+            overwrite: z.boolean().optional().describe('Allow overwriting an existing project.godot (default: false)'),
         },
     }, async (args) => callGodot(bridge, 'project_creation/create_project', args));
     // 2. create_project_from_template
