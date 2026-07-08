@@ -119,8 +119,8 @@ func _set_font_size(params: Dictionary) -> Dictionary:
 ## Set editor UI scale.
 func _set_scale(params: Dictionary) -> Dictionary:
 	var scale: float = params.get("scale", 1.0)
-	if scale < 0.5 or scale > 4.0:
-		return {"success": false, "error": "Scale must be between 0.5 and 4.0"}
+	if scale < 0.5 or scale > 3.0:
+		return {"success": false, "error": "Scale must be between 0.5 and 3.0"}
 	var es: EditorSettings = EditorInterface.get_editor_settings()
 	if es == null:
 		return {"success": false, "error": "Cannot access editor settings"}
@@ -168,10 +168,11 @@ func _load_layout(params: Dictionary) -> Dictionary:
 	var es: EditorSettings = EditorInterface.get_editor_settings()
 	if es == null:
 		return {"success": false, "error": "Cannot access editor settings"}
-	# Theme
+	# Theme: set preset first; only restore base_color for custom presets
 	var color_preset: String = config.get_value("theme", "color_preset", "Default") as String
 	es.set_setting("interface/theme/color_preset", color_preset)
-	es.set_setting("interface/theme/base_color", config.get_value("theme", "base_color", Color(0.14, 0.14, 0.14)))
+	if color_preset == "Custom":
+		es.set_setting("interface/theme/base_color", config.get_value("theme", "base_color", Color(0.14, 0.14, 0.14)))
 	# Font
 	es.set_setting("interface/editor/fonts/main_font_size", config.get_value("font", "main_font_size", 14))
 	# Scale

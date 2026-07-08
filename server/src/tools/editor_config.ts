@@ -60,7 +60,7 @@ export function registerEditorConfigTools(server: McpServer, bridge: GodotBridge
     {
       description: 'Set the editor UI scale factor',
       inputSchema: {
-        scale: z.number().min(0.5).max(4.0).describe('UI scale factor (1.0 = 100%)'),
+        scale: z.number().min(0.5).max(3.0).describe('UI scale factor (1.0 = 100%)'),
       },
     },
     async (args) => callGodot(bridge, 'editor_config/set_scale', args as Record<string, unknown>),
