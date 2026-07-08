@@ -67,19 +67,37 @@ func _set_setting(params: Dictionary) -> Dictionary:
 	# Defect 2: Validate key exists in ProjectSettings registry
 	if not ProjectSettings.has_setting(key):
 		return {"success": false, "error": "Setting '%s' does not exist. Check the key spelling or list valid keys with get_all_project_settings." % key}
-	# Defect 4: Handle JSON string "null" sent as actual null
-	if value is String and (value as String) == "null":
-		ProjectSettings.set_setting(key, null)
+	# Defect 4/13: Handle null (or string "null") as reset-to-default using property_get_revert.
+	# This preserves the key in ProjectSettings.props, so has_setting() still returns true.
+	var is_null: bool = (value == null) or (value is String and (value as String) == "null")
+	if is_null:
+		if not ProjectSettings.property_can_revert(key):
+			# Not a revertable setting — fall back to deletion (custom settings)
+			ProjectSettings.set_setting(key, null)
+			var err: Error = ProjectSettings.save()
+			if err != OK:
+				return {"success": false, "error": "Failed to save: %s" % error_string(err)}
+			return {"success": true, "key": key, "message": "Setting '%s' removed" % key}
+		var default_value: Variant = ProjectSettings.property_get_revert(key)
+		ProjectSettings.set_setting(key, default_value)
 		var err: Error = ProjectSettings.save()
 		if err != OK:
 			return {"success": false, "error": "Failed to save: %s" % error_string(err)}
 		return {"success": true, "key": key, "message": "Setting '%s' reset to default" % key}
-	# Defect 3: Validate value type matches the setting's expected type
+	# Resolve expected type for this setting
 	var expected_type: int = TYPE_NIL
 	for p: Dictionary in ProjectSettings.get_property_list():
 		if p["name"] == key:
 			expected_type = p["type"] as int
 			break
+	# Defect 14: Coerce JSON float to int when setting expects int (JSON has no integer type)
+	if expected_type == TYPE_INT and typeof(value) == TYPE_FLOAT:
+		var f: float = value as float
+		if f == floor(f):
+			value = int(f)
+		else:
+			return {"success": false, "error": "Type mismatch for '%s': expected int, but got float %s (has fractional part). Use .0-free values for integer settings." % [key, str(f)]}
+	# Defect 3: Validate value type matches the setting's expected type
 	if expected_type != TYPE_NIL and typeof(value) != expected_type:
 		return {"success": false, "error": "Type mismatch for '%s': expected %s, got %s" % [key, _type_name(expected_type), _type_name(typeof(value))]}
 	ProjectSettings.set_setting(key, value)
