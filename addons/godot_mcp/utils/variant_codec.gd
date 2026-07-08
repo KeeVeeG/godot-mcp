@@ -487,6 +487,9 @@ static func serialize_value(value: Variant) -> Variant:
 		if value is Node:
 			var node: Node = value as Node
 			return {"type": "Node", "name": node.name, "path": str(node.get_path())}
+		# Defect 12: Serialize InputEvent with full event data, not just Resource reference
+		elif value is InputEvent:
+			return serialize_input_event(value as InputEvent)
 		elif value is Resource:
 			var res: Resource = value as Resource
 			var result: Dictionary = {"type": "Resource", "class": res.get_class()}

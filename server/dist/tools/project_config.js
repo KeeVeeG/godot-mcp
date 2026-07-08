@@ -38,13 +38,19 @@ export function registerProjectConfigTools(server, bridge) {
         description: 'Get all input actions and their mapped events from the InputMap',
         inputSchema: {},
     }, async () => callGodot(bridge, 'project_config/get_input_map'));
-    // 6. set_input_map
+    // 6. set_input_map — accepts both flat [events] and nested {deadzone, events} for roundtrip
     server.registerTool('set_input_map', {
         description: 'Replace the entire input map with the given actions and events',
         inputSchema: {
             actions: z
-                .record(z.array(z.object({ type: z.string() }).passthrough().describe('Input event (type: key, mouse_button, joypad_button, etc.)')))
-                .describe('Map of action name to array of input events'),
+                .record(z.union([
+                z.array(z.object({ type: z.string() }).passthrough().describe('Input event')),
+                z.object({
+                    deadzone: z.number().min(0).max(1).optional().describe('Deadzone value (0-1)'),
+                    events: z.array(z.object({ type: z.string() }).passthrough().describe('Input event')),
+                }),
+            ]))
+                .describe('Map of action name to array of input events, or {deadzone, events} object (from get_input_map)'),
         },
     }, async (args) => callGodot(bridge, 'project_config/set_input_map', args));
     // 7. add_input_action
