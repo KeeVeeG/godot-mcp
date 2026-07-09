@@ -49,10 +49,12 @@ func _get_settings() -> Dictionary:
 		"gravity_2d": {
 			"vector": {"x": gravity_2d.x, "y": gravity_2d.y},
 			"magnitude": gravity_2d_val,
+			"effective_vector": {"x": gravity_2d.x * gravity_2d_val, "y": gravity_2d.y * gravity_2d_val},
 		},
 		"gravity_3d": {
 			"vector": {"x": gravity_3d.x, "y": gravity_3d.y, "z": gravity_3d.z},
 			"magnitude": gravity_3d_val,
+			"effective_vector": {"x": gravity_3d.x * gravity_3d_val, "y": gravity_3d.y * gravity_3d_val, "z": gravity_3d.z * gravity_3d_val},
 		},
 		"default_linear_damp_2d": ProjectSettings.get_setting("physics/2d/default_linear_damp", 0.0),
 		"default_angular_damp_2d": ProjectSettings.get_setting("physics/2d/default_angular_damp", 1.0),
@@ -70,17 +72,21 @@ func _set_gravity(params: Dictionary) -> Dictionary:
 	var x: float = params.get("x", 0.0)
 	var y: float = params.get("y", 9.8)
 	var z: float = params.get("z", 0.0)
-	# Set 2D gravity (vector and magnitude)
-	ProjectSettings.set_setting("physics/2d/default_gravity_vector", Vector2(x, y).normalized())
-	ProjectSettings.set_setting("physics/2d/default_gravity", Vector2(x, y).length())
-	# Set 3D gravity (vector and magnitude)
-	var vec3: Vector3 = Vector3(x, y, z)
-	ProjectSettings.set_setting("physics/3d/default_gravity_vector", vec3.normalized())
-	ProjectSettings.set_setting("physics/3d/default_gravity", vec3.length())
+	var dimension: String = params.get("dimension", "")
+	if dimension == "2d":
+		var vec2: Vector2 = Vector2(x, y)
+		ProjectSettings.set_setting("physics/2d/default_gravity_vector", vec2.normalized())
+		ProjectSettings.set_setting("physics/2d/default_gravity", vec2.length())
+	elif dimension == "3d":
+		var vec3: Vector3 = Vector3(x, y, z)
+		ProjectSettings.set_setting("physics/3d/default_gravity_vector", vec3.normalized())
+		ProjectSettings.set_setting("physics/3d/default_gravity", vec3.length())
+	else:
+		return {"success": false, "error": "Missing or invalid 'dimension'. Must be '2d' or '3d'."}
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-	return {"success": true, "gravity": {"x": x, "y": y, "z": z}}
+	return {"success": true, "dimension": dimension, "gravity": {"x": x, "y": y, "z": z}}
 
 
 ## Set physics FPS.
@@ -98,6 +104,9 @@ func _set_fps(params: Dictionary) -> Dictionary:
 ## Set physics engine.
 func _set_engine(params: Dictionary) -> Dictionary:
 	var engine: String = params.get("engine", "default")
+	var dimension: String = params.get("dimension", "")
+	if dimension != "2d" and dimension != "3d":
+		return {"success": false, "error": "Missing or invalid 'dimension'. Must be '2d' or '3d'."}
 	var engine_map: Dictionary = {
 		"default": "DEFAULT",
 		"godot_physics": "GodotPhysics3D",
@@ -106,11 +115,12 @@ func _set_engine(params: Dictionary) -> Dictionary:
 	if not engine_map.has(engine):
 		return {"success": false, "error": "Unknown engine: %s (use: default, godot_physics, jolt)" % engine}
 	var engine_name: String = engine_map[engine] as String
-	ProjectSettings.set_setting("physics/3d/physics_engine", engine_name)
+	var key: String = "physics/%s/physics_engine" % dimension
+	ProjectSettings.set_setting(key, engine_name)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-	return {"success": true, "engine": engine, "message": "Physics engine set to %s" % engine_name}
+	return {"success": true, "dimension": dimension, "engine": engine, "message": "Physics engine set to %s" % engine_name}
 
 
 ## Set a collision layer name.
@@ -138,22 +148,29 @@ func _get_layers() -> Dictionary:
 ## Set default gravity magnitude.
 func _set_default_gravity(params: Dictionary) -> Dictionary:
 	var value: float = params.get("value", 9.8)
-	ProjectSettings.set_setting("physics/2d/default_gravity", value)
-	ProjectSettings.set_setting("physics/3d/default_gravity", value)
+	var dimension: String = params.get("dimension", "")
+	if dimension != "2d" and dimension != "3d":
+		return {"success": false, "error": "Missing or invalid 'dimension'. Must be '2d' or '3d'."}
+	var key: String = "physics/%s/default_gravity" % dimension
+	ProjectSettings.set_setting(key, value)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-	return {"success": true, "value": value, "message": "Default gravity set to %f" % value}
+	return {"success": true, "dimension": dimension, "value": value, "message": "Default gravity set to %f" % value}
 
 
 ## Set default linear damping.
 func _set_default_linear_damp(params: Dictionary) -> Dictionary:
 	var value: float = params.get("value", 0.1)
-	ProjectSettings.set_setting("physics/3d/default_linear_damp", value)
+	var dimension: String = params.get("dimension", "")
+	if dimension != "2d" and dimension != "3d":
+		return {"success": false, "error": "Missing or invalid 'dimension'. Must be '2d' or '3d'."}
+	var key: String = "physics/%s/default_linear_damp" % dimension
+	ProjectSettings.set_setting(key, value)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-	return {"success": true, "value": value, "message": "Default linear damp set to %f" % value}
+	return {"success": true, "dimension": dimension, "value": value, "message": "Default linear damp set to %f" % value}
 
 
 ## Internal helper: get layer names dictionary.

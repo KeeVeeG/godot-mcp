@@ -11,8 +11,9 @@ export function registerPhysicsConfigTools(server, bridge) {
     }, async () => callGodot(bridge, 'physics_config/get_settings'));
     // 2. set_gravity
     server.registerTool('set_gravity', {
-        description: 'Set the default gravity vector for the physics world',
+        description: 'Set the default gravity vector for the physics world (choose 2D or 3D dimension)',
         inputSchema: {
+            dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d"'),
             x: z.number().describe('Gravity X component'),
             y: z.number().describe('Gravity Y component'),
             z: z.number().optional().default(0).describe('Gravity Z component (for 3D, default 0)'),
@@ -27,8 +28,9 @@ export function registerPhysicsConfigTools(server, bridge) {
     }, async (args) => callGodot(bridge, 'physics_config/set_fps', args));
     // 4. set_physics_engine
     server.registerTool('set_physics_engine', {
-        description: 'Set which physics engine backend to use',
+        description: 'Set which physics engine backend to use for a specific dimension (choose 2D or 3D)',
         inputSchema: {
+            dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d"'),
             engine: z.enum(['default', 'godot_physics', 'jolt']).describe('Physics engine backend'),
         },
     }, async (args) => callGodot(bridge, 'physics_config/set_engine', args));
@@ -47,15 +49,17 @@ export function registerPhysicsConfigTools(server, bridge) {
     }, async () => callGodot(bridge, 'physics_config/get_layers'));
     // 7. set_default_gravity
     server.registerTool('set_default_gravity', {
-        description: 'Set the default gravity magnitude in project settings',
+        description: 'Set the default gravity magnitude for a specific dimension (choose 2D or 3D)',
         inputSchema: {
+            dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d"'),
             value: z.number().describe('Gravity value (980.0 for 2D, 9.8 for 3D)'),
         },
     }, async (args) => callGodot(bridge, 'physics_config/set_default_gravity', args));
     // 8. set_default_linear_damp
     server.registerTool('set_default_linear_damp', {
-        description: 'Set the default linear damping for physics bodies',
+        description: 'Set the default linear damping for physics bodies in a specific dimension (choose 2D or 3D)',
         inputSchema: {
+            dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d"'),
             value: z.number().min(0).optional().default(0.1).describe('Linear damping value (default 0.1)'),
         },
     }, async (args) => callGodot(bridge, 'physics_config/set_default_linear_damp', args));
