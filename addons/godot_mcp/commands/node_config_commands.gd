@@ -338,8 +338,12 @@ func _get_types(params: Dictionary) -> Dictionary:
 			continue
 		# Filter out editor-only classes (EditorPlugins, editor dialogs, etc.)
 		# API_CORE=0, API_EDITOR=1, API_EXTENSION=2, API_EDITOR_EXTENSION=3, API_NONE=4
+		# Use raw integers to avoid enum binding ambiguity across Godot versions
 		var api_type: int = ClassDB.class_get_api_type(cls)
-		if api_type == ClassDB.API_EDITOR or api_type == ClassDB.API_EDITOR_EXTENSION:
+		if api_type == 1 or api_type == 3:  # API_EDITOR or API_EDITOR_EXTENSION
+			continue
+		# Fallback: also filter EditorPlugin subclasses that might not have correct API type
+		if ClassDB.is_parent_class(cls, "EditorPlugin"):
 			continue
 		if category != "":
 			var matches: bool = false
