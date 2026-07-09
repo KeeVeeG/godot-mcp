@@ -181,10 +181,15 @@ func _clear_log() -> Dictionary:
 	# Try to find and clear the editor log UI
 	var base: Control = _plugin.get_editor_interface().get_base_control()
 	var editor_log: Node = MCPCommandHelpers.find_node_by_class(base, "EditorLog")
-	if editor_log and editor_log.has_method("clear"):
-		editor_log.clear()
+	if editor_log:
+		# Clear the RichTextLabel directly — EditorLog.clear() may not flush its content
+		var rich_text: RichTextLabel = MCPCommandHelpers.find_node_by_class(editor_log, "RichTextLabel") as RichTextLabel
+		if rich_text:
+			rich_text.clear()
+		if editor_log.has_method("clear"):
+			editor_log.clear()
 		return {"success": true, "message": "Editor log cleared"}
-	# Fallback
+	# Fallback: clear the log file on disk
 	var log_path: String = ProjectSettings.get_setting("debug/file_logging/log_path", "") as String
 	if log_path != "" and FileAccess.file_exists(log_path):
 		var file: FileAccess = FileAccess.open(log_path, FileAccess.WRITE)
