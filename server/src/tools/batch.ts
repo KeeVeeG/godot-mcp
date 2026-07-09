@@ -5,7 +5,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { GodotBridge } from '../godot-bridge.js';
 import { callGodot } from '../server.js';
-import { z, NodeType, ScriptPath, PropertyName, PropertyValue } from './shared-types.js';
+import { z, NodeType, ScriptPath, PropertyName } from './shared-types.js';
 
 export function registerBatchTools(server: McpServer, bridge: GodotBridge): void {
   // 1. find_nodes_by_type
@@ -38,7 +38,7 @@ export function registerBatchTools(server: McpServer, bridge: GodotBridge): void
       inputSchema: {
         type_name: NodeType,
         property: PropertyName,
-        value: PropertyValue,
+        value: z.unknown().refine((v) => v !== undefined, { message: 'Value is required' }),
       },
     },
     async (args) => callGodot(bridge, 'batch/set_property', args as Record<string, unknown>),
@@ -76,7 +76,7 @@ export function registerBatchTools(server: McpServer, bridge: GodotBridge): void
       inputSchema: {
         type_name: NodeType,
         property: PropertyName,
-        value: PropertyValue,
+        value: z.unknown().refine((v) => v !== undefined, { message: 'Value is required' }),
         confirm_no_undo: z.boolean().optional().default(false).describe('Set to true to acknowledge this is destructive and cannot be undone'),
       },
     },

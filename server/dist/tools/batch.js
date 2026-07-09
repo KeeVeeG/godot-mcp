@@ -2,7 +2,7 @@
  * Batch tools - 8 tools for batch operations and cross-scene analysis
  */
 import { callGodot } from '../server.js';
-import { z, NodeType, ScriptPath, PropertyName, PropertyValue } from './shared-types.js';
+import { z, NodeType, ScriptPath, PropertyName } from './shared-types.js';
 export function registerBatchTools(server, bridge) {
     // 1. find_nodes_by_type
     server.registerTool('find_nodes_by_type', {
@@ -22,7 +22,7 @@ export function registerBatchTools(server, bridge) {
         inputSchema: {
             type_name: NodeType,
             property: PropertyName,
-            value: PropertyValue,
+            value: z.unknown().refine(v => v !== undefined, { message: "Value is required" }),
         },
     }, async (args) => callGodot(bridge, 'batch/set_property', args));
     // 4. find_node_references
@@ -45,7 +45,7 @@ export function registerBatchTools(server, bridge) {
         inputSchema: {
             type_name: NodeType,
             property: PropertyName,
-            value: PropertyValue,
+            value: z.unknown().refine(v => v !== undefined, { message: "Value is required" }),
             confirm_no_undo: z.boolean().optional().default(false).describe('Set to true to acknowledge this is destructive and cannot be undone'),
         },
     }, async (args) => callGodot(bridge, 'batch/cross_scene_set', args));

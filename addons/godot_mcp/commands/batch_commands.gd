@@ -121,10 +121,19 @@ func batch_set_property(params: Dictionary) -> Dictionary:
 		return {"error": "Type is required"}
 	if property.is_empty():
 		return {"error": "Property is required"}
+	if not params.has("value"):
+		return {"error": "Value is required"}
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
+
+	# Pre-validate: check if any nodes of this type exist and the property is valid
+	var first_match: Node = _find_first_node_of_type(root, type_name)
+	if first_match == null:
+		return {"error": "No nodes of type '%s' found in scene" % type_name}
+	if not MCPCommandHelpers.has_property(first_match, property):
+		return {"error": "Property '%s' does not exist on %s" % [property, type_name]}
 
 	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
 	ur.create_action("MCP: Batch set %s.%s" % [type_name, property])
@@ -136,16 +145,27 @@ func batch_set_property(params: Dictionary) -> Dictionary:
 
 func _batch_set_recursive(node: Node, type_name: String, property: String, value: Variant, count: int, ur: EditorUndoRedoManager) -> int:
 	if node.is_class(type_name):
-		if MCPCommandHelpers.has_property(node, property):
-			var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
-			var parsed: Variant = MCPVariantCodec.parse_for_property(value, expected_type)
-			var old_val: Variant = node.get(property)
-			ur.add_do_method(node, "set", property, parsed)
-			ur.add_undo_property(node, property, old_val)
-			count += 1
+		# Property existence already pre-validated in batch_set_property
+		var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
+		var parsed: Variant = MCPVariantCodec.parse_for_property(value, expected_type)
+		var old_val: Variant = node.get(property)
+		ur.add_do_method(node, "set", property, parsed)
+		ur.add_undo_property(node, property, old_val)
+		count += 1
 	for child: Node in node.get_children():
 		count = _batch_set_recursive(child, type_name, property, value, count, ur)
 	return count
+
+
+## Helper: find the first node of a given type in the scene tree.
+func _find_first_node_of_type(node: Node, type_name: String) -> Node:
+	if node.is_class(type_name):
+		return node
+	for child: Node in node.get_children():
+		var found: Node = _find_first_node_of_type(child, type_name)
+		if found != null:
+			return found
+	return null
 
 
 ## Search for references to a node name or path across project .tscn and .gd files.
@@ -156,7 +176,8 @@ func find_node_references(params: Dictionary) -> Dictionary:
 
 	var project_dir: String = ProjectSettings.globalize_path("res://")
 	var results: Array = []
-	_search_files_recursive(project_dir, search_term, [".tscn", ".gd"], results)
+	var is_path_search: bool = search_term.contains("/")
+	_search_files_recursive(project_dir, search_term, [".tscn", ".gd"], results, is_path_search)
 	return {"result": {"search_term": search_term, "matches": results.size(), "files": results}}
 
 
@@ -233,7 +254,10 @@ func cross_scene_set_property(params: Dictionary) -> Dictionary:
 		if modified:
 			modified_scenes.append(scene_path)
 
-	return {"result": {"type": type_name, "property": property, "scenes_modified": modified_scenes.size(), "scenes": modified_scenes, "warning": "DESTRUCTIVE: These .tscn files were modified on disk directly. Changes CANNOT be undone via the editor undo system (Ctrl+Z). This is a best-effort text-based edit — complex scenes with sub-resources or inherited scenes may be corrupted. Use batch/set_property for undoable in-scene changes."}}
+	var result: Dictionary = {"type": type_name, "property": property, "scenes_modified": modified_scenes.size(), "scenes": modified_scenes}
+	if modified_scenes.size() > 0:
+		result["warning"] = "DESTRUCTIVE: These .tscn files were modified on disk directly. Changes CANNOT be undone via the editor undo system (Ctrl+Z). This is a best-effort text-based edit — complex scenes with sub-resources or inherited scenes may be corrupted. Use batch/set_property for undoable in-scene changes."
+	return {"result": result}
 
 
 ## Search for script path references across the project.
@@ -329,7 +353,8 @@ func _extract_script_dependencies(path: String) -> Array:
 
 
 ## Helper: search files recursively for a text pattern.
-func _search_files_recursive(dir_path: String, search_term: String, extensions: Array, results: Array) -> void:
+## When is_path_search is true, .tscn files are searched using parent= + name= attribute matching.
+func _search_files_recursive(dir_path: String, search_term: String, extensions: Array, results: Array, is_path_search: bool = false) -> void:
 	var dir: DirAccess = DirAccess.open(dir_path)
 	if dir == null:
 		return
@@ -339,11 +364,16 @@ func _search_files_recursive(dir_path: String, search_term: String, extensions: 
 		var full_path: String = dir_path.path_join(file_name)
 		if dir.current_is_dir():
 			if not file_name.begins_with(".") and file_name != ".godot":
-				_search_files_recursive(full_path, search_term, extensions, results)
+				_search_files_recursive(full_path, search_term, extensions, results, is_path_search)
 		else:
 			var ext: String = file_name.get_extension()
 			if extensions.has("." + ext):
-				if _file_contains(full_path, search_term):
+				var found: bool
+				if is_path_search and ext == "tscn":
+					found = _tscn_contains_node_path(full_path, search_term)
+				else:
+					found = _file_contains(full_path, search_term)
+				if found:
 					results.append({
 						"path": ProjectSettings.localize_path(full_path),
 						"file": file_name,
@@ -352,8 +382,38 @@ func _search_files_recursive(dir_path: String, search_term: String, extensions: 
 	dir.list_dir_end()
 
 
-## Helper: check if a file contains a search term.
-func _file_contains(file_path: String, term: String) -> bool:
+## Helper: check if a .tscn file contains a node matching the given path.
+## Splits "Player/Sprites/MainSprite" into parent="Player/Sprites" + name="MainSprite"
+## and matches against [node ...] header lines.
+func _tscn_contains_node_path(file_path: String, node_path: String) -> bool:
+	var last_slash: int = node_path.rfind("/")
+	var node_name: String
+	var parent_path: String
+	if last_slash == -1:
+		node_name = node_path
+		parent_path = ""
+	else:
+		node_name = node_path.substr(last_slash + 1)
+		parent_path = node_path.substr(0, last_slash)
+
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
+	if file == null:
+		return false
+	var content: String = file.get_as_text()
+	file.close()
+
+	for line: String in content.split("\n"):
+		var trimmed: String = line.strip_edges()
+		if not trimmed.begins_with("[node "):
+			continue
+		if trimmed.contains('name="' + node_name + '"'):
+			if parent_path.is_empty():
+				return true
+			if trimmed.contains('parent="' + parent_path + '"'):
+				return true
+
+	# Also check for literal path in connection lines and other references
+	return content.contains(node_path)
 	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
 	if file == null:
 		return false
@@ -377,26 +437,44 @@ func _modify_scene_file(scene_path: String, type_name: String, property: String,
 	var modified: bool = false
 	var output: PackedStringArray = PackedStringArray()
 	var in_matching_node: bool = false
+	var prop_found_in_node: bool = false
 	var current_type: String = ""
 
 	for line: String in lines:
 		var trimmed: String = line.strip_edges()
 		if trimmed.begins_with("[node"):
+			# Exiting previous node — insert property if it wasn't found
+			if in_matching_node and not prop_found_in_node:
+				output.append(property + " = " + _serialize_for_tscn(value))
+				modified = true
+
 			in_matching_node = false
+			prop_found_in_node = false
 			current_type = _extract_attr(trimmed, "type")
 			if current_type == type_name or (current_type.is_empty() and type_name == "Node"):
 				in_matching_node = true
 		elif trimmed.begins_with("[") and not trimmed.begins_with("[node"):
+			# Exiting node section — insert property if it wasn't found
+			if in_matching_node and not prop_found_in_node:
+				output.append(property + " = " + _serialize_for_tscn(value))
+				modified = true
 			in_matching_node = false
+			prop_found_in_node = false
 
 		if in_matching_node and trimmed.begins_with(property + " = "):
 			# Replace the property value
 			var serialized: String = _serialize_for_tscn(value)
 			output.append(property + " = " + serialized)
+			prop_found_in_node = true
 			modified = true
 			continue
 
 		output.append(line)
+
+	# Handle last node at end of file
+	if in_matching_node and not prop_found_in_node:
+		output.append(property + " = " + _serialize_for_tscn(value))
+		modified = true
 
 	if modified:
 		var write_file := FileAccess.open(scene_path, FileAccess.WRITE)
@@ -421,6 +499,18 @@ func _extract_attr(line: String, attr_name: String) -> String:
 
 ## Helper: serialize a value for .tscn format.
 func _serialize_for_tscn(value: Variant) -> String:
+	# If value is a String, try to parse it as a Variant constructor
+	# (e.g., "Vector2(999, 888)") since JSON doesn't distinguish these types.
+	if value is String:
+		var s: String = value as String
+		var paren: int = s.find("(")
+		# Only attempt str_to_var for constructor-like strings (Type(name, ...))
+		# where the prefix starts with an uppercase letter (Godot type names).
+		if paren != -1 and s.ends_with(")") and s[0] >= "A" and s[0] <= "Z":
+			var parsed: Variant = str_to_var(s)
+			if parsed != null and typeof(parsed) != TYPE_STRING:
+				value = parsed
+
 	if value is bool:
 		return "true" if value else "false"
 	elif value is int:
@@ -428,16 +518,16 @@ func _serialize_for_tscn(value: Variant) -> String:
 	elif value is float:
 		return str(value)
 	elif value is String:
-		return '"' + (value as String).replace('"', '\\"') + '"'
+		return '"' + (value as String).c_escape() + '"'
 	elif value is Vector2:
 		var v: Vector2 = value as Vector2
-		return "Vector2(%f, %f)" % [v.x, v.y]
+		return "Vector2(%s, %s)" % [str(v.x), str(v.y)]
 	elif value is Vector3:
 		var v: Vector3 = value as Vector3
-		return "Vector3(%f, %f, %f)" % [v.x, v.y, v.z]
+		return "Vector3(%s, %s, %s)" % [str(v.x), str(v.y), str(v.z)]
 	elif value is Color:
 		var c: Color = value as Color
-		return "Color(%f, %f, %f, %f)" % [c.r, c.g, c.b, c.a]
+		return "Color(%s, %s, %s, %s)" % [str(c.r), str(c.g), str(c.b), str(c.a)]
 	else:
 		return str(value)
 
