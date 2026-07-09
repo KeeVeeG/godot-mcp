@@ -369,12 +369,6 @@ func _search_text_recursive(path: String, query: String, pattern: String, result
 	var dir: DirAccess = DirAccess.open(path)
 	if dir == null:
 		return
-	
-	# Escape regex special characters for literal text search
-	var esc_query: String = MCPCommandHelpers.escape_regex(query)
-	var re: RegEx = RegEx.new()
-	re.compile(esc_query)
-	
 	dir.list_dir_begin()
 	var file_name: String = dir.get_next()
 	while file_name != "":
@@ -392,7 +386,7 @@ func _search_text_recursive(path: String, query: String, pattern: String, result
 					file.close()
 					var lines: PackedStringArray = content.split("\n")
 					for i: int in range(lines.size()):
-						if re.search(lines[i]) != null:
+						if lines[i].find(query) != -1:
 							results.append({
 								"path": full_path,
 								"line": i + 1,
