@@ -63,21 +63,25 @@ func edit_resource(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
+	if not FileAccess.file_exists(path):
+		return {"success": false, "error": "Resource not found: %s" % path}
 	var res: Resource = ResourceLoader.load(path)
 	if res == null:
-		return {"success": false, "error": "Resource not found: %s" % path}
+		return {"success": false, "error": "Failed to load resource: %s" % path}
 
 	var not_found: Array = []
 	for prop: String in properties:
 		var val: Variant = properties[prop]
 		var found: bool = false
-		# Try to parse for the correct type
 		for p: Dictionary in res.get_property_list():
 			if p["name"] as String == prop:
+				if not (p["usage"] as int) & PROPERTY_USAGE_STORAGE:
+					not_found.append(prop)
+					break
 				val = MCPVariantCodec.parse_for_property(val, p["type"] as int)
 				found = true
 				break
-		if not found:
+		if not found and not not_found.has(prop):
 			not_found.append(prop)
 			continue
 		if _undo_helper:
@@ -137,9 +141,16 @@ func create_resource(params: Dictionary) -> Dictionary:
 
 	var not_found: Array = []
 	for prop: String in properties:
-		if MCPCommandHelpers.has_property(res, prop):
-			res.set(prop, properties[prop])
-		else:
+		var parsed: bool = false
+		for p: Dictionary in res.get_property_list():
+			if p["name"] as String == prop:
+				if not (p["usage"] as int) & PROPERTY_USAGE_STORAGE:
+					break
+				var val: Variant = MCPVariantCodec.parse_for_property(properties[prop], p["type"] as int)
+				res.set(prop, val)
+				parsed = true
+				break
+		if not parsed:
 			not_found.append(prop)
 
 	if not path.get_extension():
@@ -165,6 +176,8 @@ class _PreviewReceiver:
 	var done: bool = false
 
 	func _on_preview_done(_path: String, tex: Texture2D, _small: Texture2D, _ud: Variant) -> void:
+		if is_queued_for_deletion():
+			return
 		preview = tex
 		done = true
 
@@ -227,13 +240,13 @@ func add_autoload(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if name_str.is_empty() or path.is_empty():
 		return {"success": false, "error": "name and path are required"}
+	# Strip existing * prefix before validation (users may pass editor-only paths)
+	if path.begins_with("*"):
+		path = path.substr(1)
 	if not FileAccess.file_exists(path):
 		return {"success": false, "error": "Script/scene not found: %s" % path}
 
 	# Use the autoload name as the key (Godot standard format)
-	# Strip existing * prefix to avoid double-prefixing
-	if path.begins_with("*"):
-		path = path.substr(1)
 	var editor_only: bool = params.get("editor_only", false)
 	if ProjectSettings.has_setting("autoload/" + name_str):
 		return {"success": false, "error": "Autoload '%s' already exists" % name_str}
@@ -316,18 +329,25 @@ func get_resource_dependencies(params: Dictionary) -> Dictionary:
 func list_resources(params: Dictionary) -> Dictionary:
 	var type_filter: String = params.get("type", "")
 	var path: String = params.get("directory", params.get("path", "res://"))
+	# Common Godot resource extensions (avoids loading every file)
+	var resource_exts := PackedStringArray(["tres", "res", "gdshader", "gdshaderinc",
+		"material", "theme", "tileset", "shader", "tpf", "atlastex", "escn"])
 	var files: Array = []
-	MCPCommandHelpers.walk_directory(path, PackedStringArray(), func(fp, _name):
-		var res: Resource = load(fp)
-		if res != null:
+	MCPCommandHelpers.walk_directory(path, resource_exts, func(fp, _name):
+		if not type_filter.is_empty():
+			var res: Resource = load(fp)
+			if res != null and res.is_class(type_filter):
+				files.append(fp)
+		else:
 			files.append(fp))
-	if not type_filter.is_empty():
-		var filtered: Array = []
+	if type_filter.is_empty():
+		# Filter out files that aren't actually loadable resources
+		var valid: Array = []
 		for f: String in files:
 			var res: Resource = load(f)
-			if res != null and res.is_class(type_filter):
-				filtered.append(f)
-		files = filtered
+			if res != null:
+				valid.append(f)
+		files = valid
 	return {"result": {"resources": files, "count": files.size(), "type_filter": type_filter}}
 
 

@@ -149,6 +149,9 @@ static func walk_directory(dir_path: String, extensions: PackedStringArray, call
 			continue
 		var full_path := dir_path.path_join(file_name)
 		if dir.current_is_dir():
+			if file_name.begins_with("."):
+				file_name = dir.get_next()
+				continue
 			walk_directory(full_path, extensions, callback)
 		else:
 			if extensions.is_empty():
