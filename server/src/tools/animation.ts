@@ -1,5 +1,5 @@
 /**
- * Animation tools — 15 tools for animation management
+ * Animation tools — 16 tools for animation management
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -148,7 +148,20 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
     async (args) => callGodot(bridge, 'animation/set_tree_parameter', args as Record<string, unknown>),
   );
 
-  // 10. add_state_machine_state — {path: string, state_name: string, animation?: string} -> success
+  // 10. reset_tree_parameter — {path, parameter} -> success
+  server.registerTool(
+    'reset_tree_parameter',
+    {
+      description: 'Reset an AnimationTree parameter to its type-based default (0.0, false, 0, "", Vector2.ZERO). NOTE: Godot does not expose per-parameter defaults to GDScript — this uses pragmatic type inference.',
+      inputSchema: {
+        path: NodePath.describe('AnimationTree node path'),
+        parameter: z.string().describe("Parameter path (e.g. 'parameters/blend_position')"),
+      },
+    },
+    async (args) => callGodot(bridge, 'animation/reset_tree_parameter', args as Record<string, unknown>),
+  );
+
+  // 11. add_state_machine_state — {path: string, state_name: string, animation?: string} -> success
   server.registerTool(
     'add_state_machine_state',
     {
@@ -162,7 +175,7 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
     async (args) => callGodot(bridge, 'animation/add_state', args as Record<string, unknown>),
   );
 
-  // 11. remove_state_machine_state — {path, state_name} -> success
+  // 12. remove_state_machine_state — {path, state_name} -> success
   server.registerTool(
     'remove_state_machine_state',
     {
@@ -175,7 +188,7 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
     async (args) => callGodot(bridge, 'animation/remove_state', args as Record<string, unknown>),
   );
 
-  // 12. add_state_machine_transition — {path, from, to, advance_mode?, switch_mode?, xfade_time?} -> success
+  // 13. add_state_machine_transition — {path, from, to, advance_mode?, switch_mode?, xfade_time?} -> success
   server.registerTool(
     'add_state_machine_transition',
     {
@@ -201,7 +214,7 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
     async (args) => callGodot(bridge, 'animation/add_transition', args as Record<string, unknown>),
   );
 
-  // 13. remove_state_machine_transition — {path, from, to} -> success
+  // 14. remove_state_machine_transition — {path, from, to} -> success
   server.registerTool(
     'remove_state_machine_transition',
     {
@@ -215,7 +228,7 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
     async (args) => callGodot(bridge, 'animation/remove_transition', args as Record<string, unknown>),
   );
 
-  // 14. remove_animation_track — {player_path, animation, track_index} -> success
+  // 15. remove_animation_track — {player_path, animation, track_index} -> success
   server.registerTool(
     'remove_animation_track',
     {
@@ -230,7 +243,7 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
     async (args) => callGodot(bridge, 'animation/remove_track', args as Record<string, unknown>),
   );
 
-  // 15. remove_animation_keyframe — {player_path, animation, track_index, time} -> success
+  // 16. remove_animation_keyframe — {player_path, animation, track_index, time} -> success
   server.registerTool(
     'remove_animation_keyframe',
     {

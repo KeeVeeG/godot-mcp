@@ -1,5 +1,5 @@
 /**
- * Animation tools — 15 tools for animation management
+ * Animation tools — 16 tools for animation management
  */
 import { callGodot } from '../server.js';
 import { z, NodePath, PositiveNumber, PropertyValue } from './shared-types.js';
@@ -94,7 +94,15 @@ export function registerAnimationTools(server, bridge) {
             value: z.unknown().refine((v) => v !== null, { message: 'Parameter value cannot be null. AnimationTree parameters require typed values (float, int, bool, string, Vector2, etc.). Use reset_tree_parameter to reset to default.' }).describe('Parameter value (cannot be null)'),
         },
     }, async (args) => callGodot(bridge, 'animation/set_tree_parameter', args));
-    // 10. add_state_machine_state — {path: string, state_name: string, animation?: string} -> success
+    // 10. reset_tree_parameter — {path, parameter} -> success
+    server.registerTool('reset_tree_parameter', {
+        description: 'Reset an AnimationTree parameter to its type-based default (0.0, false, 0, "", Vector2.ZERO). NOTE: Godot does not expose per-parameter defaults to GDScript — this uses pragmatic type inference.',
+        inputSchema: {
+            path: NodePath.describe('AnimationTree node path'),
+            parameter: z.string().describe("Parameter path (e.g. 'parameters/blend_position')"),
+        },
+    }, async (args) => callGodot(bridge, 'animation/reset_tree_parameter', args));
+    // 11. add_state_machine_state — {path: string, state_name: string, animation?: string} -> success
     server.registerTool('add_state_machine_state', {
         description: 'Add a state to an AnimationNodeStateMachine',
         inputSchema: {
@@ -103,7 +111,7 @@ export function registerAnimationTools(server, bridge) {
             animation: z.string().optional().describe('Animation name to assign to this state'),
         },
     }, async (args) => callGodot(bridge, 'animation/add_state', args));
-    // 11. remove_state_machine_state — {path, state_name} -> success
+    // 12. remove_state_machine_state — {path, state_name} -> success
     server.registerTool('remove_state_machine_state', {
         description: 'Remove a state (and all its transitions) from an AnimationNodeStateMachine',
         inputSchema: {
@@ -111,7 +119,7 @@ export function registerAnimationTools(server, bridge) {
             state_name: z.string().describe('Name of the state to remove'),
         },
     }, async (args) => callGodot(bridge, 'animation/remove_state', args));
-    // 12. add_state_machine_transition — {path, from, to, advance_mode?, switch_mode?, xfade_time?} -> success
+    // 13. add_state_machine_transition — {path, from, to, advance_mode?, switch_mode?, xfade_time?} -> success
     server.registerTool('add_state_machine_transition', {
         description: 'Add a transition between two states in an AnimationNodeStateMachine',
         inputSchema: {
@@ -132,7 +140,7 @@ export function registerAnimationTools(server, bridge) {
                 .describe('Reset target animation on transition'),
         },
     }, async (args) => callGodot(bridge, 'animation/add_transition', args));
-    // 13. remove_state_machine_transition — {path, from, to} -> success
+    // 14. remove_state_machine_transition — {path, from, to} -> success
     server.registerTool('remove_state_machine_transition', {
         description: 'Remove a transition between two states in an AnimationNodeStateMachine',
         inputSchema: {
@@ -141,7 +149,7 @@ export function registerAnimationTools(server, bridge) {
             to: z.string().describe('Target state name'),
         },
     }, async (args) => callGodot(bridge, 'animation/remove_transition', args));
-    // 14. remove_animation_track — {player_path, animation, track_index} -> success
+    // 15. remove_animation_track — {player_path, animation, track_index} -> success
     server.registerTool('remove_animation_track', {
         description: 'Remove a track from an animation',
         inputSchema: {
@@ -151,7 +159,7 @@ export function registerAnimationTools(server, bridge) {
             library: z.string().optional().describe('Animation library name (empty for default)'),
         },
     }, async (args) => callGodot(bridge, 'animation/remove_track', args));
-    // 15. remove_animation_keyframe — {player_path, animation, track_index, time} -> success
+    // 16. remove_animation_keyframe — {player_path, animation, track_index, time} -> success
     server.registerTool('remove_animation_keyframe', {
         description: 'Remove a keyframe from an animation track at a specific time',
         inputSchema: {

@@ -1,4 +1,4 @@
-﻿## Animation commands module - 15 tools.
+﻿## Animation commands module - 16 tools.
 ## Handles AnimationPlayer, AnimationTree, and state machines.
 class_name MCPAnimationCommands
 extends RefCounted
@@ -26,6 +26,7 @@ func get_commands() -> Dictionary:
 		"animation/create_tree": create_animation_tree,
 		"animation/get_tree_structure": get_animation_tree_structure,
 		"animation/set_tree_parameter": set_tree_parameter,
+		"animation/reset_tree_parameter": reset_tree_parameter,
 		"animation/add_state": add_state_machine_state,
 		"animation/remove_state": remove_state_machine_state,
 		"animation/add_transition": add_state_machine_transition,
@@ -488,6 +489,72 @@ func set_tree_parameter(params: Dictionary) -> Dictionary:
 
 	tree.set(parameter, value)
 	return {"result": "Parameter '%s' set on %s" % [parameter, path]}
+
+
+## Reset a parameter on an AnimationTree to its type-based default.
+## NOTE: Godot does not expose get_parameter_default_value() to GDScript,
+## so defaults are inferred from the current value's type plus hardcoded
+## exceptions for known parameters (closest=-1, time_to_restart=-1.0, scale=1.0).
+## Object parameters (e.g. StateMachine.playback) cannot be reset — see error.
+func reset_tree_parameter(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", params.get("player_path", ""))
+	var parameter: String = params.get("parameter", "")
+	if path.is_empty() or parameter.is_empty():
+		return {"error": "path and parameter are required"}
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null or not node is AnimationTree:
+		return {"error": "AnimationTree not found: %s" % path}
+	var tree: AnimationTree = node as AnimationTree
+	# Validate parameter exists
+	var param_exists: bool = false
+	for prop: Dictionary in tree.get_property_list():
+		if prop.get("name", "") == parameter:
+			param_exists = true
+			break
+	if not param_exists:
+		return {"error": "Parameter '%s' does not exist on AnimationTree at '%s'. Use get_animation_tree_structure to see available parameters." % [parameter, path]}
+	# Read current value to infer type, then reset to type-based default
+	var current: Variant = tree.get(parameter)
+	var default: Variant = _type_default(current)
+	if typeof(default) == TYPE_OBJECT:
+		return {"error": "Parameter '%s' is an object type (e.g. StateMachine.playback). Object parameters cannot be reset from GDScript — Godot does not expose get_parameter_default_value()." % parameter}
+	# Apply name-specific hardcoded overrides (closest=-1, time_to_restart=-1.0, scale=1.0)
+	default = _param_default(parameter, default)
+	tree.set(parameter, default)
+	return {"result": "Parameter '%s' reset to default (%s)" % [parameter, default]}
+
+
+## Infer a type-based default value for pragmatic parameter reset.
+## Exceptions hardcoded from Godot source (get_parameter_default_value in C++):
+##   closest → -1, time_to_restart → -1.0, TimeScale → 1.0
+static func _type_default(value: Variant) -> Variant:
+	match typeof(value):
+		TYPE_FLOAT:   return 0.0
+		TYPE_INT:     return 0
+		TYPE_BOOL:    return false
+		TYPE_STRING, TYPE_STRING_NAME:
+			return ""
+		TYPE_VECTOR2: return Vector2.ZERO
+		TYPE_VECTOR3: return Vector3.ZERO
+		TYPE_VECTOR4: return Vector4()
+		TYPE_COLOR:   return Color.WHITE
+		_:            return value  # object/array — can't determine safe default
+
+
+## Override for specific parameter names with non-zero defaults.
+static func _param_default(param_name: String, fallback: Variant) -> Variant:
+	var tail: String = param_name.get_file()
+	match tail:
+		"closest":
+			if typeof(fallback) == TYPE_INT:
+				return -1
+		"time_to_restart":
+			if typeof(fallback) == TYPE_FLOAT:
+				return -1.0
+		"scale":
+			if typeof(fallback) == TYPE_FLOAT:
+				return 1.0  # TimeScale default for all float params
+	return fallback
 
 
 ## Add a state to a state machine AnimationTree.
