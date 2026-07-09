@@ -69,7 +69,7 @@ func _set_setting(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Setting '%s' does not exist. Check the key spelling or list valid keys with get_all_project_settings." % key}
 	# Defect 4/13: Handle null (or string "null") as reset-to-default using property_get_revert.
 	# This preserves the key in ProjectSettings.props, so has_setting() still returns true.
-	var is_null: bool = (value == null) or (value is String and (value as String) == "null")
+	var is_null: bool = MCPCommandHelpers.is_null(value)
 	if is_null:
 		if not ProjectSettings.property_can_revert(key):
 			# Not a revertable setting — fall back to deletion (custom settings)

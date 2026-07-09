@@ -198,7 +198,7 @@ func _set_meta(params: Dictionary) -> Dictionary:
 	var value: Variant = params.get("value")
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
-	if value == null:
+	if MCPCommandHelpers.is_null(value):
 		return {"success": false, "error": "Value cannot be null. Godot treats set_meta(key, null) as remove_meta(key). Use remove_scene_meta to delete a key, or provide a non-null value."}
 	var root: Node = null
 	if scene_path.is_empty():

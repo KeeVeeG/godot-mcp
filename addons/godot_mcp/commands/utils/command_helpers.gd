@@ -249,3 +249,9 @@ static func escape_regex(text: String) -> String:
 		else:
 			result += c
 	return result
+
+
+## Check if a value is null, including string "null" from JSON via MCP bridge.
+## JSON null arrives as TYPE_STRING "null", not TYPE_NIL, due to bridge serialization.
+static func is_null(value: Variant) -> bool:
+	return (value == null) or (value is String and (value as String) == "null")

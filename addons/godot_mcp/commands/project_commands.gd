@@ -239,7 +239,7 @@ func _set_project_setting(params: Dictionary) -> Dictionary:
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
 	var value: Variant = params.get("value", null)
-	if value == null:
+	if MCPCommandHelpers.is_null(value):
 		ProjectSettings.set_setting(key, null)
 		var err: Error = ProjectSettings.save()
 		if err != OK:

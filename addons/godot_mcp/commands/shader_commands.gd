@@ -150,7 +150,7 @@ func set_shader_param(params: Dictionary) -> Dictionary:
 		return {"error": "node_path and param are required"}
 	if not params.has("value"):
 		return {"error": "value is required"}
-	if params.get("value") == null:
+	if MCPCommandHelpers.is_null(params.get("value")):
 		return {"error": "value cannot be null — use reset_shader_param to reset to default"}
 
 	var value: Variant = params.get("value")

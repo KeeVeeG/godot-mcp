@@ -8,7 +8,7 @@ extends RefCounted
 ## Parse a value with an optional type hint.
 ## Supports auto-detection from string formats.
 static func parse_value(value: Variant, type_hint: String = "") -> Variant:
-	if value == null:
+	if MCPCommandHelpers.is_null(value):
 		return null
 
 	# If a type hint is provided, try to parse according to it
@@ -431,7 +431,7 @@ static func _parse_aabb(value: Variant) -> AABB:
 
 ## Serialize a Variant to a JSON-friendly representation.
 static func serialize_value(value: Variant) -> Variant:
-	if value == null:
+	if MCPCommandHelpers.is_null(value):
 		return null
 
 	if value is Vector2:

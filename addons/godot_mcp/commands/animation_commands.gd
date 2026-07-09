@@ -467,7 +467,7 @@ func set_tree_parameter(params: Dictionary) -> Dictionary:
 
 	# Reject null and missing values — AnimationTree parameters require typed values (BUG-6)
 	var value: Variant = params.get("value", null)
-	if (value == null) or (value is String and (value as String) == "null"):
+	if MCPCommandHelpers.is_null(value):
 		return {"error": "Parameter value cannot be null. AnimationTree parameters require typed values (float, int, bool, string, Vector2, etc.). Use reset_tree_parameter to reset to default."}
 
 	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
