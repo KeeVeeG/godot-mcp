@@ -48,7 +48,6 @@ func _get_settings() -> Dictionary:
 		},
 		"error_handling": {
 			"break_on_error": ProjectSettings.get_setting("debug/gdscript/warnings/enable", true),
-			"break_on_warning": false,
 		},
 		"stdout": {
 			"disable_stdout": ProjectSettings.get_setting("application/run/disable_stdout", false),
@@ -112,16 +111,15 @@ func _set_profilers(params: Dictionary) -> Dictionary:
 
 
 ## Configure error handling behavior.
+## Note: Godot 4.x has no runtime "break on warning" mechanism.
+## Warnings are compile-time only (IGNORE/WARN/ERROR levels) and controlled
+## via debug/gdscript/warnings/<name> ProjectSettings keys.
 func _set_error_handling(params: Dictionary) -> Dictionary:
 	var changed: Dictionary = {}
 	if params.has("break_on_error"):
 		var boe: bool = params["break_on_error"] as bool
 		ProjectSettings.set_setting("debug/gdscript/warnings/enable", boe)
 		changed["break_on_error"] = boe
-	if params.has("break_on_warning"):
-		var bow: bool = params["break_on_warning"] as bool
-		changed["break_on_warning"] = bow
-		changed["note"] = "Break on warning is controlled by the editor debugger"
 	if changed.is_empty():
 		return {"success": false, "error": "No error handling settings provided"}
 	var err: Error = ProjectSettings.save()

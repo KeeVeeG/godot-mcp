@@ -15,7 +15,7 @@ export function registerDebugConfigTools(server, bridge) {
         inputSchema: {
             enabled: z.boolean().describe('Enable/disable remote debugging'),
             host: z.string().optional().default('127.0.0.1').describe("Debug host address (default: '127.0.0.1')"),
-            port: z.number().int().optional().default(6007).describe('Debug port (default: 6007)'),
+            port: z.number().int().min(1).max(65535).optional().default(6007).describe('Debug port (default: 6007)'),
         },
     }, async (args) => callGodot(bridge, 'debug_config/set_remote_debug', args));
     // 3. set_profiler_settings
@@ -24,14 +24,17 @@ export function registerDebugConfigTools(server, bridge) {
         inputSchema: {
             max_functions: z.number().int().optional().describe('Max functions tracked by script profiler (range: 16-512)'),
             max_timestamp_query_elements: z.number().int().optional().describe('Max timestamp query elements (default: 256)'),
+            cpu: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
+            gpu: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
+            memory: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
+            network: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
         },
     }, async (args) => callGodot(bridge, 'debug_config/set_profilers', args));
     // 4. set_error_handling
     server.registerTool('set_error_handling', {
-        description: 'Configure how the editor handles errors and warnings during gameplay',
+        description: 'Configure how the editor handles errors during gameplay. Note: Godot 4.x has no "break on warning" mechanism — warnings are compile-time only (IGNORE/WARN/ERROR levels in ProjectSettings). To treat warnings as errors that prevent compilation, use set_project_setting on debug/gdscript/warnings/<name> keys.',
         inputSchema: {
-            break_on_error: z.boolean().optional().describe('Break into debugger on error'),
-            break_on_warning: z.boolean().optional().describe('Break into debugger on warning'),
+            break_on_error: z.boolean().optional().describe('Break into debugger on runtime error'),
         },
     }, async (args) => callGodot(bridge, 'debug_config/set_error_handling', args));
     // 5. get_editor_log
