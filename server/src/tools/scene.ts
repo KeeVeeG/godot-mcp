@@ -40,6 +40,7 @@ export function registerSceneTools(server: McpServer, bridge: GodotBridge): void
       inputSchema: {
         path: ScenePath.describe("Path to save the scene (e.g. 'res://scenes/new.tscn')"),
         root_node_type: z.string().optional().describe("Root node type (e.g. 'Node2D', 'Control')"),
+        overwrite: z.boolean().optional().describe('Allow overwriting an existing scene file'),
       },
     },
     async (args) => callGodot(bridge, 'scene/create', args as Record<string, unknown>),
@@ -113,6 +114,7 @@ export function registerSceneTools(server: McpServer, bridge: GodotBridge): void
       description: 'Save the current scene or save it to a new path',
       inputSchema: {
         path: z.string().optional().describe('Path of the scene to save (defaults to current)'),
+        save_as: z.boolean().optional().describe('Allow saving to a different path (save as copy)'),
       },
     },
     async (args) => callGodot(bridge, 'scene/save', args as Record<string, unknown>),
