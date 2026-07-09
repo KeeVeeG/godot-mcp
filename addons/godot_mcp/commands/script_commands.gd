@@ -42,8 +42,19 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 
 ## List all .gd scripts in the project with class info.
 func _list_scripts(params: Dictionary) -> Dictionary:
+	var max_depth: int = params.get("max_depth", 10)
 	var results: Array = []
 	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["gd"]), func(path, name): results.append({"path": path, "name": name}))
+	
+	# Filter by directory depth: count "/" in path relative to res://
+	if max_depth > 0:
+		var filtered: Array = []
+		for r in results:
+			var rel: String = r["path"].trim_prefix("res://")
+			if rel.count("/") < max_depth:
+				filtered.append(r)
+		results = filtered
+	
 	return {"result": {"scripts": results, "count": results.size()}}
 
 
@@ -77,6 +88,17 @@ func _create_script(params: Dictionary) -> Dictionary:
 	var dir_path: String = path.get_base_dir()
 	MCPCommandHelpers.ensure_dir(dir_path)
 
+	# Prepend extends line when content is provided without one
+	var has_extends: bool = false
+	if not content.is_empty():
+		for line: String in content.split("\n"):
+			if line.strip_edges().begins_with("extends "):
+				has_extends = true
+				break
+	
+	if not has_extends and base_class != "RefCounted":
+		content = "extends %s\n%s" % [base_class, content]
+	
 	if content.is_empty():
 		var lifecycle_method: String = "_ready"
 		# Use _init() for non-Node classes (RefCounted, Resource, etc.)
@@ -92,17 +114,16 @@ func _create_script(params: Dictionary) -> Dictionary:
 
 	_plugin.safe_scan_filesystem()
 
-	# Infer base_class from content if not explicitly provided
+	# Infer base_class from content
 	var inferred_class: String = base_class
-	if not content.is_empty():
-		var lines: PackedStringArray = content.split("\n")
-		for line: String in lines:
-			var stripped: String = line.strip_edges()
-			if stripped.begins_with("extends "):
-				var extends_name: String = stripped.trim_prefix("extends ").strip_edges()
-				if not extends_name.is_empty():
-					inferred_class = extends_name
-				break
+	var lines: PackedStringArray = content.split("\n")
+	for line: String in lines:
+		var stripped: String = line.strip_edges()
+		if stripped.begins_with("extends "):
+			var extends_name: String = stripped.trim_prefix("extends ").strip_edges()
+			if not extends_name.is_empty():
+				inferred_class = extends_name
+			break
 	return {"result": {"path": path, "base_class": inferred_class}}
 
 
@@ -204,13 +225,18 @@ func _edit_script(params: Dictionary) -> Dictionary:
 func _attach_script(params: Dictionary) -> Dictionary:
 	var script_path: String = params.get("script_path", "")
 	var node_path: String = params.get("node_path", "")
-	if script_path.is_empty() or node_path.is_empty():
-		return {"error": "script_path and node_path are required"}
+	if script_path.is_empty():
+		return {"error": "script_path is required"}
 
 	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
 	if root == null:
 		return {"error": "No scene open"}
-	var node: Node = root.get_node_or_null(node_path)
+
+	var node: Node
+	if node_path.is_empty():
+		node = root
+	else:
+		node = root.get_node_or_null(node_path)
 	if node == null:
 		return {"error": "Node not found: %s" % node_path}
 
@@ -246,6 +272,8 @@ func _get_open_scripts() -> Dictionary:
 
 
 ## Validate a script by reloading it and checking for compilation errors.
+## NOTE: Godot's Script API does not expose error line/column/message to GDScript.
+## Detailed errors are printed to the Godot output console — check there for specifics.
 func _validate_script(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
@@ -262,7 +290,15 @@ func _validate_script(params: Dictionary) -> Dictionary:
 	if err != OK:
 		if err == ERR_ALREADY_IN_USE:
 			return {"result": {"valid": true, "warning": "Script has live instances, cannot reload while in use"}}
-		return {"result": {"valid": false, "error": "Compilation error (code: %d)" % err}}
+		return {
+			"result": {
+				"valid": false,
+				"error_code": err,
+				"error_name": error_string(err),
+				"path": path,
+				"message": "%s: %s. Check Godot output console for line/column details." % [path, error_string(err)]
+			}
+		}
 
 	return {"result": {"valid": true, "path": path, "base_class": script.get_instance_base_type()}}
 

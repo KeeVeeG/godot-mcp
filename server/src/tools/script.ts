@@ -17,7 +17,7 @@ export function registerScriptTools(server: McpServer, bridge: GodotBridge): voi
         max_depth: z.number().int().positive().optional().default(10).describe('Maximum directory depth to scan (default: 10)'),
       },
     },
-    async () => callGodot(bridge, 'script/list'),
+    async (args) => callGodot(bridge, 'script/list', args as Record<string, unknown>),
   );
 
   // 2. read_script
@@ -53,6 +53,7 @@ export function registerScriptTools(server: McpServer, bridge: GodotBridge): voi
       description: 'Delete a GDScript file from the project',
       inputSchema: {
         path: ScriptPath.describe('Script file path to delete'),
+        force: z.boolean().optional().describe('Force delete even if script is attached to nodes'),
       },
     },
     async (args) => callGodot(bridge, 'script/delete', args as Record<string, unknown>),
