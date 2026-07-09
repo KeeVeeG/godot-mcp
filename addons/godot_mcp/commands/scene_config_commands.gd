@@ -117,7 +117,12 @@ func _get_groups(params: Dictionary) -> Dictionary:
 	if root == null:
 		return {"success": false, "error": "No scene available"}
 	var groups_dict: Dictionary = {}
-	_collect_groups(root, groups_dict)
+	if scene_path.is_empty():
+		_collect_groups(root, groups_dict)
+	else:
+		# File-based: nodes are orphaned (not in scene tree), get_path() returns empty.
+		# Collect node names instead of scene-relative paths.
+		_collect_groups_orphan(root, groups_dict)
 	var groups: Array = []
 	for group_name: String in groups_dict:
 		groups.append({"name": group_name, "nodes": groups_dict[group_name]})
@@ -221,9 +226,12 @@ func _set_meta(params: Dictionary) -> Dictionary:
 
 ## Remove metadata from the current scene's root node.
 func _remove_meta(params: Dictionary) -> Dictionary:
+	var scene_path: String = params.get("scene_path", "")
 	var key: String = params.get("key", "")
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
+	if not scene_path.is_empty():
+		return {"success": false, "error": "Removing meta on non-current scenes is not supported (leave scene_path empty for current scene)"}
 	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
 	if root == null:
 		return {"success": false, "error": "No scene open"}
@@ -253,3 +261,16 @@ func _collect_groups(node: Node, groups: Dictionary) -> void:
 		groups[group].append(MCPCommandHelpers.get_node_path(node, _plugin))
 	for child: Node in node.get_children():
 		_collect_groups(child, groups)
+
+
+## Collect groups from orphan nodes (instantiated from file, not in scene tree).
+## Uses node.name instead of get_path() since get_path() returns empty for orphan nodes.
+func _collect_groups_orphan(node: Node, groups: Dictionary) -> void:
+	for group: String in node.get_groups():
+		if group.begins_with("_"):
+			continue
+		if not groups.has(group):
+			groups[group] = []
+		groups[group].append(str(node.name))
+	for child: Node in node.get_children():
+		_collect_groups_orphan(child, groups)
