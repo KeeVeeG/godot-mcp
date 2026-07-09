@@ -13,6 +13,11 @@ func set_plugin(plugin: EditorPlugin) -> void:
 		_undo_helper = _plugin.get_undo_helper()
 
 
+## Validate that theme_type is a real Control-derived class.
+func _is_valid_theme_type(type_name: String) -> bool:
+	return ClassDB.class_exists(type_name) and ClassDB.is_parent_class(type_name, "Control")
+
+
 func get_commands() -> Dictionary:
 	return {
 		"theme/create": create_theme,
@@ -92,8 +97,17 @@ func set_theme_color(params: Dictionary) -> Dictionary:
 	var theme_type: String = params.get("theme_type", "")
 	var name_str: String = params.get("name", "")
 	var color: Variant = params.get("color")
-	if path.is_empty() or theme_type.is_empty() or name_str.is_empty():
-		return {"error": "path, theme_type, and name are required"}
+	if path.is_empty():
+		return {"error": "path is required"}
+	if theme_type.is_empty():
+		return {"error": "theme_type is required"}
+	if name_str.is_empty():
+		return {"error": "name is required"}
+	if not _is_valid_theme_type(theme_type):
+		return {"error": "Invalid theme_type: '%s' is not a valid Control class" % theme_type}
+
+	if color is String and not MCPVariantCodec.is_valid_color_string(color as String):
+		return {"error": "Invalid color: '%s'" % color}
 
 	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
 	if theme == null:
@@ -114,8 +128,14 @@ func set_theme_constant(params: Dictionary) -> Dictionary:
 	var theme_type: String = params.get("theme_type", "")
 	var name_str: String = params.get("name", "")
 	var value: int = params.get("value", 0)
-	if path.is_empty() or theme_type.is_empty() or name_str.is_empty():
-		return {"error": "path, theme_type, and name are required"}
+	if path.is_empty():
+		return {"error": "path is required"}
+	if theme_type.is_empty():
+		return {"error": "theme_type is required"}
+	if name_str.is_empty():
+		return {"error": "name is required"}
+	if not _is_valid_theme_type(theme_type):
+		return {"error": "Invalid theme_type: '%s' is not a valid Control class" % theme_type}
 
 	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
 	if theme == null:
@@ -135,8 +155,14 @@ func set_theme_font_size(params: Dictionary) -> Dictionary:
 	var theme_type: String = params.get("theme_type", "")
 	var name_str: String = params.get("name", "")
 	var size: int = params.get("size", 16)
-	if path.is_empty() or theme_type.is_empty() or name_str.is_empty():
-		return {"error": "path, theme_type, and name are required"}
+	if path.is_empty():
+		return {"error": "path is required"}
+	if theme_type.is_empty():
+		return {"error": "theme_type is required"}
+	if name_str.is_empty():
+		return {"error": "name is required"}
+	if not _is_valid_theme_type(theme_type):
+		return {"error": "Invalid theme_type: '%s' is not a valid Control class" % theme_type}
 
 	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
 	if theme == null:
@@ -156,8 +182,14 @@ func set_theme_stylebox(params: Dictionary) -> Dictionary:
 	var theme_type: String = params.get("theme_type", "")
 	var name_str: String = params.get("name", "")
 	var properties: Dictionary = params.get("properties", {})
-	if path.is_empty() or theme_type.is_empty() or name_str.is_empty():
-		return {"error": "path, theme_type, and name are required"}
+	if path.is_empty():
+		return {"error": "path is required"}
+	if theme_type.is_empty():
+		return {"error": "theme_type is required"}
+	if name_str.is_empty():
+		return {"error": "name is required"}
+	if not _is_valid_theme_type(theme_type):
+		return {"error": "Invalid theme_type: '%s' is not a valid Control class" % theme_type}
 
 	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
 	if theme == null:
@@ -169,8 +201,14 @@ func set_theme_stylebox(params: Dictionary) -> Dictionary:
 		"Flat":
 			var flat: StyleBoxFlat = StyleBoxFlat.new()
 			if properties.has("bg_color"):
+				var bg_str: String = properties["bg_color"] as String
+				if not MCPVariantCodec.is_valid_color_string(bg_str):
+					return {"error": "Invalid bg_color: '%s'" % bg_str}
 				flat.bg_color = MCPVariantCodec._parse_color(properties["bg_color"])
 			if properties.has("border_color"):
+				var bc_str: String = properties["border_color"] as String
+				if not MCPVariantCodec.is_valid_color_string(bc_str):
+					return {"error": "Invalid border_color: '%s'" % bc_str}
 				flat.border_color = MCPVariantCodec._parse_color(properties["border_color"])
 			if properties.has("border_width_left"):
 				flat.border_width_left = properties["border_width_left"] as int
@@ -200,6 +238,9 @@ func set_theme_stylebox(params: Dictionary) -> Dictionary:
 		"Line":
 			var line: StyleBoxLine = StyleBoxLine.new()
 			if properties.has("color"):
+				var clr_str: String = properties["color"] as String
+				if not MCPVariantCodec.is_valid_color_string(clr_str):
+					return {"error": "Invalid color: '%s'" % clr_str}
 				line.color = MCPVariantCodec._parse_color(properties["color"])
 			if properties.has("thickness"):
 				line.thickness = properties["thickness"] as int

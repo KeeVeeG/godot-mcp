@@ -279,6 +279,19 @@ static func _parse_color(value: Variant) -> Color:
 	return Color.WHITE
 
 
+## Validate whether a string represents a valid Godot Color (hex or named).
+## Uses Color.html_is_valid() for hex and Color.from_string() with sentinel for named colors.
+static func is_valid_color_string(s: String) -> bool:
+	var stripped: String = s.strip_edges()
+	if stripped.is_empty():
+		return false
+	if Color.html_is_valid(stripped):
+		return true
+	# Named color: Color.from_string() returns the sentinel when neither hex nor named match
+	const SENTINEL := Color(-1, -1, -1, -1)
+	return Color.from_string(stripped, SENTINEL) != SENTINEL
+
+
 static func _parse_rect2(value: Variant) -> Rect2:
 	if value is Rect2:
 		return value as Rect2
