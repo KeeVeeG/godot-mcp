@@ -625,7 +625,7 @@ func _resolve_preset(raw) -> int:
 			return raw
 		return -1
 	if raw is float:
-		var as_int := int(raw)
+		var as_int: int = int(raw)
 		if as_int >= 0 and as_int <= 15:
 			return as_int
 		return -1
@@ -653,7 +653,7 @@ func _resolve_preset(raw) -> int:
 			return enum_map[lower]
 		# Try parsing as int string
 		if raw.is_valid_int():
-			var as_int := raw.to_int()
+			var as_int: int = raw.to_int()
 			if as_int >= 0 and as_int <= 15:
 				return as_int
 		return -1
