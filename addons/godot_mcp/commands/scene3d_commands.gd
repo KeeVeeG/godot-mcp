@@ -197,10 +197,10 @@ func setup_camera_3d(params: Dictionary) -> Dictionary:
 		cam.projection = properties["projection"] as int
 	if properties.has("current") or properties.has("make_current"):
 		cam.current = properties.get("current", properties.get("make_current", false)) as bool
-	if properties.has("look_at"):
-		cam.look_at(MCPVariantCodec._parse_vector3(properties["look_at"]))
 	if properties.has("position"):
 		cam.position = MCPVariantCodec._parse_vector3(properties["position"])
+	if properties.has("look_at"):
+		cam.look_at_from_position(cam.position, MCPVariantCodec._parse_vector3(properties["look_at"]))
 	if properties.has("rotation"):
 		cam.rotation = MCPVariantCodec._parse_vector3(properties["rotation"])
 
@@ -478,10 +478,11 @@ func set_material_3d(params: Dictionary) -> Dictionary:
 		return {"error": "Node not found: %s" % path}
 
 	var mat: Material = null
-	if properties.has("material_path"):
-		mat = ResourceLoader.load(properties["material_path"] as String) as Material
+	var mat_path: String = properties.get("material_path", properties.get("shader_path", "")) as String
+	if mat_path != "":
+		mat = ResourceLoader.load(mat_path) as Material
 		if mat == null:
-			return {"error": "Material resource not found: %s" % properties["material_path"]}
+			return {"error": "Material resource not found: %s" % mat_path}
 	else:
 		var sm: StandardMaterial3D = StandardMaterial3D.new()
 		if properties.has("albedo_color"):
