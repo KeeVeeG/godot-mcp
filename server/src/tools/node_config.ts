@@ -26,7 +26,7 @@ export function registerNodeConfigTools(server: McpServer, bridge: GodotBridge):
     {
       description: "Apply a configuration preset to a node (e.g. 'platformer_body', 'top_down_camera')",
       inputSchema: {
-        type: NodeType.describe('Node type to configure'),
+        path: NodePath.describe('Node path in the scene to configure'),
         preset: z.string().describe('Preset name to apply'),
       },
     },
