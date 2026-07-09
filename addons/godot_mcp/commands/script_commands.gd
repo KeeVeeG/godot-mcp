@@ -320,8 +320,8 @@ func _parse_script_error_from_log(script_path: String) -> Dictionary:
 		result["message"] = "Compilation failed. Cannot read EditorLog."
 		return result
 	
-	# get_text() returns plain text without BBCode
-	var content: String = label.get_text()
+	# get_parsed_text() walks item tree, strips BBCode — get_text() only returns set_text() data (empty when append_text() is used)
+	var content: String = label.get_parsed_text()
 	if content.is_empty():
 		result["message"] = "Compilation failed. EditorLog is empty."
 		return result
