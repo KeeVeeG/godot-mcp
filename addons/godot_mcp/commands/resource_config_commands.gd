@@ -269,25 +269,29 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 		for key: String in config.get_section_keys("params"):
 			existing_params[key] = config.get_value("params", key)
 
-	var warnings: Array = []
+	# Validate ALL keys before writing anything
+	var errors: Array = []
 	for key: String in settings:
-		var section: String = "params"
 		var option_key: String = key
-		# Strip params/ prefix for round-trip compatibility with _get_import_settings
 		if key.begins_with("params/"):
-			option_key = key.substr(7)  # remove "params/"
-		# Type validation: compare with existing value if key is known
+			option_key = key.substr(7)
 		if existing_params.has(option_key):
 			var expected_type: int = typeof(existing_params[option_key])
 			if typeof(settings[key]) != expected_type:
-				warnings.append("Type mismatch for '%s': expected %s, got %s" % [
+				errors.append("Type mismatch for '%s': expected %s, got %s" % [
 					option_key, type_string(expected_type), type_string(typeof(settings[key]))
 				])
 		else:
-			# Key not in existing .import — may be unknown/typo
-			warnings.append("Unknown option '%s' — not found in existing import settings, may be ignored" % option_key)
+			errors.append("Unknown import option '%s' — not found in existing import settings" % option_key)
+	if not errors.is_empty():
+		return {"error": "Invalid import settings", "details": errors}
 
-		config.set_value(section, option_key, settings[key])
+	# All keys validated — write to [params] section
+	for key: String in settings:
+		var option_key: String = key
+		if key.begins_with("params/"):
+			option_key = key.substr(7)
+		config.set_value("params", option_key, settings[key])
 	var err: Error = config.save(import_file)
 	if err != OK:
 		return {"error": "Failed to save import settings: %s" % error_string(err)}
@@ -300,11 +304,7 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 	var applied: Dictionary = {}
 	if verify_result.has("result"):
 		applied = verify_result["result"].get("settings", {})
-	var result: Dictionary = {"path": path, "message": "Import settings updated and reimport triggered"}
-	if not warnings.is_empty():
-		result["warnings"] = warnings
-	result["applied"] = applied
-	return {"result": result}
+	return {"result": {"path": path, "message": "Import settings updated and reimport triggered", "applied": applied}}
 
 
 
