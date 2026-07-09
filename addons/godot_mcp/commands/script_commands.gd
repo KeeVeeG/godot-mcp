@@ -272,8 +272,7 @@ func _get_open_scripts() -> Dictionary:
 
 
 ## Validate a script by reloading it and checking for compilation errors.
-## NOTE: Godot's Script API does not expose error line/column/message to GDScript.
-## Detailed errors are printed to the Godot output console — check there for specifics.
+## Uses the editor log to extract line/column/message since Script API doesn't expose them.
 func _validate_script(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
@@ -290,17 +289,56 @@ func _validate_script(params: Dictionary) -> Dictionary:
 	if err != OK:
 		if err == ERR_ALREADY_IN_USE:
 			return {"result": {"valid": true, "warning": "Script has live instances, cannot reload while in use"}}
-		return {
-			"result": {
-				"valid": false,
-				"error_code": err,
-				"error_name": error_string(err),
-				"path": path,
-				"message": "%s: %s. Check Godot output console for line/column details." % [path, error_string(err)]
-			}
-		}
+		
+		# Attempt to extract error details from the editor log
+		var details: Dictionary = _parse_script_error_from_log(path)
+		details["valid"] = false
+		details["error_code"] = err
+		details["error_name"] = error_string(err)
+		details["path"] = path
+		return {"result": details}
 
 	return {"result": {"valid": true, "path": path, "base_class": script.get_instance_base_type()}}
+
+
+## Helper: parse the most recent compilation error for a script from the log file.
+## Godot log format: "ERROR: res://path:LINE - Parse Error: MESSAGE"
+func _parse_script_error_from_log(script_path: String) -> Dictionary:
+	var log_path: String = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log")
+	if not FileAccess.file_exists(log_path):
+		return {"message": "Compilation failed. No log file available for details."}
+	
+	var file: FileAccess = FileAccess.open(log_path, FileAccess.READ)
+	if file == null:
+		return {"message": "Compilation failed. Cannot read log file."}
+	
+	var content: String = file.get_as_text()
+	file.close()
+	
+	# Search only the last ~4000 chars — error is recent
+	if content.length() > 4000:
+		content = content.substr(content.length() - 4000)
+	
+	var result: Dictionary = {}
+	var lines: PackedStringArray = content.split("\n")
+	
+	# Build regex: "ERROR: <path>:<line> - <message>"
+	var re: RegEx = RegEx.new()
+	re.compile("ERROR:\\s*" + RegEx.escape(script_path) + ":(\\d+)\\s*-\\s*(.+)")
+	
+	# Reverse search: find most recent reference to our script
+	for i: int in range(lines.size() - 1, -1, -1):
+		var line: String = lines[i].strip_edges()
+		var match: RegExMatch = re.search(line)
+		if match:
+			result["line"] = match.get_string(1).to_int()
+			result["message"] = match.get_string(2).strip_edges()
+			break
+	
+	if result.is_empty():
+		result["message"] = "Compilation failed. Check Godot output console for details."
+	
+	return result
 
 
 ## Search for text across files matching a pattern.
