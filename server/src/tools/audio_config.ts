@@ -95,7 +95,7 @@ export function registerAudioConfigTools(server: McpServer, bridge: GodotBridge)
     {
       description: 'Set the audio driver (takes effect on next Godot restart). Valid values: WASAPI, XAudio2, PulseAudio, ALSA, CoreAudio, Android, Web, Dummy',
       inputSchema: {
-        driver: z.string().describe('Audio driver name (e.g. WASAPI, PulseAudio, CoreAudio)'),
+        driver: z.enum(['WASAPI', 'XAudio2', 'PulseAudio', 'ALSA', 'CoreAudio', 'Android', 'Web', 'AudioWorklet', 'ScriptProcessor', 'Dummy']).describe('Audio driver name (platform-dependent)'),
       },
     },
     async (args) => callGodot(bridge, 'audio_config/set_driver', args as Record<string, unknown>),
