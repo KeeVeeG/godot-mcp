@@ -117,6 +117,14 @@ func add_animation_track(params: Dictionary) -> Dictionary:
 	if path.is_empty() or anim_name.is_empty():
 		return {"error": "path and anim_name are required"}
 
+	# ALL track types require a property path to resolve to a target node.
+	# Without it, the AnimationMixer silently skips the track during playback (BUG-4).
+	if property.is_empty():
+		return {"error": "property (track path) is required for all track types. " +
+			"Examples: 'NodePath:property' for value/bezier, " +
+			"'NodePath' for position/rotation/scale/method/audio/animation, " +
+			"'MeshInstance:blend_shape_name' for blend_shape"}
+
 	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null or not node is AnimationPlayer:
 		return {"error": "AnimationPlayer not found: %s" % path}
@@ -136,34 +144,33 @@ func add_animation_track(params: Dictionary) -> Dictionary:
 	match track_type:
 		0:  # VALUE
 			track_idx = anim.add_track(Animation.TYPE_VALUE)
-			if not property.is_empty():
-				anim.track_set_path(track_idx, NodePath(property))
+			anim.track_set_path(track_idx, NodePath(property))
 		1:  # POSITION_3D
 			track_idx = anim.add_track(Animation.TYPE_POSITION_3D)
-			if not property.is_empty():
-				anim.track_set_path(track_idx, NodePath(property))
+			anim.track_set_path(track_idx, NodePath(property))
 		2:  # ROTATION_3D
 			track_idx = anim.add_track(Animation.TYPE_ROTATION_3D)
-			if not property.is_empty():
-				anim.track_set_path(track_idx, NodePath(property))
+			anim.track_set_path(track_idx, NodePath(property))
 		3:  # SCALE_3D
 			track_idx = anim.add_track(Animation.TYPE_SCALE_3D)
-			if not property.is_empty():
-				anim.track_set_path(track_idx, NodePath(property))
+			anim.track_set_path(track_idx, NodePath(property))
 		4:  # BLEND_SHAPE
 			track_idx = anim.add_track(Animation.TYPE_BLEND_SHAPE)
+			anim.track_set_path(track_idx, NodePath(property))
 		5:  # METHOD
 			track_idx = anim.add_track(Animation.TYPE_METHOD)
-			if not property.is_empty():
-				anim.track_set_path(track_idx, NodePath(property))
+			anim.track_set_path(track_idx, NodePath(property))
 		6:  # BEZIER
 			track_idx = anim.add_track(Animation.TYPE_BEZIER)
-			if not property.is_empty():
-				anim.track_set_path(track_idx, NodePath(property))
+			anim.track_set_path(track_idx, NodePath(property))
 		7:  # AUDIO
 			track_idx = anim.add_track(Animation.TYPE_AUDIO)
+			anim.track_set_path(track_idx, NodePath(property))
 		8:  # ANIMATION
 			track_idx = anim.add_track(Animation.TYPE_ANIMATION)
+			anim.track_set_path(track_idx, NodePath(property))
+		_:
+			return {"error": "Unsupported track type: %d" % track_type}
 
 	return {"result": {"track_index": track_idx, "animation": anim_name}}
 
@@ -324,6 +331,11 @@ func create_animation_tree(params: Dictionary) -> Dictionary:
 			node_name = path
 		if parent == null:
 			return {"error": "Parent not found"}
+		# Check for duplicate node name (BUG-5)
+		# add_child() silently renames duplicates (AnimTree@2) instead of erroring
+		if parent.has_node(node_name):
+			var existing_child: Node = parent.get_node(node_name)
+			return {"error": "Node '%s' already exists under parent '%s' (type: %s)" % [node_name, parent.name, existing_child.get_class()]}
 		tree = AnimationTree.new()
 		tree.name = node_name
 		if _undo_helper:
@@ -410,10 +422,26 @@ func set_tree_parameter(params: Dictionary) -> Dictionary:
 	var value: Variant = params.get("value")
 	if path.is_empty() or parameter.is_empty():
 		return {"error": "path and parameter are required"}
+
+	# Reject null values — AnimationTree parameters require typed values (BUG-6)
+	if value == null:
+		return {"error": "Parameter value cannot be null. AnimationTree parameters require typed values (float, int, bool, string, Vector2, etc.)"}
+
 	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 	if node == null or not node is AnimationTree:
 		return {"error": "AnimationTree not found: %s" % path}
 	var tree: AnimationTree = node as AnimationTree
+
+	# Validate parameter exists using Godot's property list (BUG-2)
+	# Object::set() silently discards r_valid=false in GDScript, so we must check manually
+	var param_exists: bool = false
+	for prop: Dictionary in tree.get_property_list():
+		if prop.get("name", "") == parameter:
+			param_exists = true
+			break
+	if not param_exists:
+		return {"error": "Parameter '%s' does not exist on AnimationTree at '%s'. Use get_animation_tree_structure to see available parameters." % [parameter, path]}
+
 	tree.set(parameter, value)
 	return {"result": "Parameter '%s' set on %s" % [parameter, path]}
 
@@ -430,10 +458,15 @@ func add_state_machine_state(params: Dictionary) -> Dictionary:
 	if node == null or not node is AnimationTree:
 		return {"error": "AnimationTree not found: %s" % path}
 	var tree: AnimationTree = node as AnimationTree
-	# Auto-convert root to StateMachine if needed (tool implies state machine usage)
-	if tree.tree_root == null or not tree.tree_root is AnimationNodeStateMachine:
-		tree.tree_root = AnimationNodeStateMachine.new()
+	# Refuse auto-conversion to prevent data loss (BUG-1)
+	if tree.tree_root == null:
+		return {"error": "AnimationTree at '%s' has no root node. Create a root via create_animation_tree first." % path}
+	if not tree.tree_root is AnimationNodeStateMachine:
+		return {"error": "AnimationTree root is '%s', not AnimationNodeStateMachine. Refusing to auto-convert — would destroy existing configuration. Set root_type='AnimationNodeStateMachine' in create_animation_tree instead." % tree.tree_root.get_class()}
 	var sm: AnimationNodeStateMachine = tree.tree_root as AnimationNodeStateMachine
+	# Check for duplicate state (BUG-3)
+	if sm.has_node(state_name):
+		return {"error": "State '%s' already exists in state machine at '%s'" % [state_name, path]}
 	var anim_node: AnimationNodeAnimation = AnimationNodeAnimation.new()
 	if not animation.is_empty():
 		anim_node.animation = animation

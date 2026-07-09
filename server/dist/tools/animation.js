@@ -22,14 +22,19 @@ export function registerAnimationTools(server, bridge) {
             loop_mode: z.enum(['none', 'loop', 'pingpong']).optional().default('none').describe('Animation loop mode'),
         },
     }, async (args) => callGodot(bridge, 'animation/create', args));
-    // 3. add_animation_track — {player_path: string, animation: string, track_type: "value"|"position"|"rotation"|"scale"|"method"|"bezier", property?: string} -> track index
+    // 3. add_animation_track — {player_path, animation, track_type, property} -> track index
     server.registerTool('add_animation_track', {
-        description: 'Add a track to an animation',
+        description: 'Add a track to an animation. property is REQUIRED for all track types — specifies NodePath to target node (+ sub-property for value/bezier/blend_shape).',
         inputSchema: {
             player_path: NodePath.describe('AnimationPlayer node path'),
             animation: z.string().describe('Animation name'),
-            track_type: z.enum(['value', 'position', 'rotation', 'scale', 'method', 'bezier']).describe('Type of track to add'),
-            property: z.string().optional().describe("Property path for value/bezier tracks (e.g. 'position:x')"),
+            track_type: z.enum([
+                'value', 'position_3d', 'rotation_3d', 'scale_3d',
+                'blend_shape', 'method', 'bezier', 'audio', 'animation',
+            ]).describe('Type of track to add'),
+            property: z.string().describe("NodePath to target node. REQUIRED for all track types. " +
+                "Format: 'NodePath:sub_property' for value/bezier/blend_shape, " +
+                "or 'NodePath' for position/rotation/scale/method/audio/animation."),
             library: z.string().optional().describe('Animation library name (empty for default)'),
         },
     }, async (args) => callGodot(bridge, 'animation/add_track', args));
