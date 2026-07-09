@@ -150,7 +150,7 @@ project_creation → project → scene → node → script → runtime → expor
 - [x] 16. `resource_test_plan.md`
 - [x] 17. `save_load_test_plan.md`
 - [x] 18. `node_test_plan.md`
-- [ ] 19. `batch_test_plan.md`
+- [x] 19. `batch_test_plan.md`
 - [ ] 20. `script_test_plan.md`
 - [ ] 21. `theme_test_plan.md`
 - [ ] 22. `shader_test_plan.md`
