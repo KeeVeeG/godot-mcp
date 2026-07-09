@@ -52,7 +52,9 @@ export async function callGodot(bridge: GodotBridge, method: string, params: Rec
     if (result && typeof result === 'object' && (result as Record<string, unknown>).success === false) {
       const errorData = result as Record<string, unknown>;
       const errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData);
-      return createErrorResult(errorMessage);
+      // Format as JSON to match the success-result pattern: content[0].text is always parseable JSON
+      const text = JSON.stringify({ success: false, error: errorMessage }, null, 2);
+      return { content: [{ type: 'text', text }], isError: true };
     }
     const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
     return { content: [{ type: 'text', text }] };
