@@ -141,7 +141,7 @@ project_creation → project → scene → node → script → runtime → expor
 - [x] 07. `physics_config_test_plan.md`
 - [x] 08. `audio_config_test_plan.md`
 - [x] 09. `rendering_config_test_plan.md`
-- [ ] 10. `node_config_test_plan.md`
+- [x] 10. `node_config_test_plan.md`
 - [ ] 11. `resource_config_test_plan.md`
 - [ ] 12. `platform_specific_test_plan.md`
 - [ ] 13. `scene_test_plan.md`
