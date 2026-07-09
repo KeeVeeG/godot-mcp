@@ -314,7 +314,8 @@ func _parse_script_error_from_log(script_path: String) -> Dictionary:
 		result["message"] = "Compilation failed. EditorLog not accessible."
 		return result
 	
-	var label: RichTextLabel = log_node.get_child(0) as RichTextLabel
+	# RichTextLabel is nested inside EditorLog (not always first child)
+	var label: RichTextLabel = MCPCommandHelpers.find_node_by_class(log_node, "RichTextLabel") as RichTextLabel
 	if label == null:
 		result["message"] = "Compilation failed. Cannot read EditorLog."
 		return result
