@@ -95,7 +95,7 @@ func edit_resource(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Failed to save resource: %s" % error_string(err)}
 	var result_msg: String = "Resource updated: %s" % path
 	if not not_found.is_empty():
-		return {"result": {"message": result_msg, "not_found_properties": not_found}}
+		return {"success": false, "error": "Unknown properties: " + str(not_found), "result": {"message": result_msg, "not_found_properties": not_found}}
 	return {"result": result_msg}
 
 
@@ -165,6 +165,7 @@ func create_resource(params: Dictionary) -> Dictionary:
 	var result_data: Dictionary = {"path": path, "type": type_name}
 	if not not_found.is_empty():
 		result_data["not_found_properties"] = not_found
+		return {"success": false, "error": "Unknown properties: " + str(not_found), "result": result_data}
 	return {"result": result_data}
 
 
@@ -314,12 +315,11 @@ func get_resource_dependencies(params: Dictionary) -> Dictionary:
 	var deps: PackedStringArray = ResourceLoader.get_dependencies(path)
 	var result: Array = []
 	for dep: String in deps:
-		var dep_path: String = dep
-		if dep.contains("::"):
-			dep_path = dep.substr(0, dep.find("::"))
-		if dep.contains(":") and not dep.begins_with("res://"):
-			var colon_pos: int = dep.find(":")
-			dep_path = dep.substr(colon_pos + 1)
+		# ResourceLoader.get_dependencies() returns:
+		#   "res://path" (no UID) or "uid://XXXX::::res://path" (with UID)
+		# Split by "::" — path is slice[0] if plain, slice[2] if UID format
+		var parts := dep.split("::")
+		var dep_path: String = parts[2] if parts.size() >= 3 else parts[0]
 		if not dep_path.is_empty():
 			result.append(dep_path)
 	return {"result": {"path": path, "dependencies": result, "count": result.size()}}
