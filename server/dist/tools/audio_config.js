@@ -28,7 +28,7 @@ export function registerAudioConfigTools(server, bridge) {
         description: 'Add a new audio bus at a specific position',
         inputSchema: {
             name: Name.describe('Bus name'),
-            index: z.number().int().optional().describe('Position in bus list (omit to append)'),
+            index: z.number().int().min(0).optional().describe('Position in bus list (omit to append)'),
         },
     }, async (args) => callGodot(bridge, 'audio_config/add_bus_config', args));
     // 4. remove_audio_bus

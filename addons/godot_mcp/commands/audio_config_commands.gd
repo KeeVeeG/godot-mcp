@@ -87,6 +87,8 @@ func _add_bus(params: Dictionary) -> Dictionary:
 	var at_index: int = params.get("index", -1)
 	if bus_name.is_empty():
 		return {"success": false, "error": "Bus name is required"}
+	if at_index < -1:
+		return {"success": false, "error": "Index must be -1 (append) or >= 0"}
 	for i: int in range(AudioServer.bus_count):
 		if AudioServer.get_bus_name(i) == bus_name:
 			return {"success": false, "error": "Bus already exists: %s" % bus_name}
@@ -104,7 +106,7 @@ func _add_bus(params: Dictionary) -> Dictionary:
 func _remove_bus(params: Dictionary) -> Dictionary:
 	var at_index: int = params.get("index", -1)
 	if at_index < 1:
-		return {"success": false, "error": "Cannot remove Master bus (index 0). Use index >= 1."}
+		return {"success": false, "error": "Cannot remove bus at index %d. Use index >= 1 (Master is at index 0)." % at_index}
 	if at_index >= AudioServer.bus_count:
 		return {"success": false, "error": "Index out of range: %d (bus count: %d)" % [at_index, AudioServer.bus_count]}
 	var name: String = AudioServer.get_bus_name(at_index)
