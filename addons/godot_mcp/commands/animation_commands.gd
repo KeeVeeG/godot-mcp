@@ -466,12 +466,8 @@ func set_tree_parameter(params: Dictionary) -> Dictionary:
 		return {"error": "path and parameter are required"}
 
 	# Reject null and missing values — AnimationTree parameters require typed values (BUG-6)
-	if not params.has("value"):
-		return {"error": "'value' parameter is required. AnimationTree parameters must be typed (float, int, bool, string, Vector2, etc.)"}
-	var value: Variant = params["value"]
-	# JSON null arrives as typeof=4 (TYPE_STRING "null") via MCP bridge, not TYPE_NIL.
-	# Check all null forms: TYPE_NIL, TYPE_OBJECT falsy, string "null".
-	if typeof(value) == TYPE_NIL or (typeof(value) == TYPE_OBJECT and not value) or (typeof(value) == TYPE_STRING and (value == "null" or value == "Nil")):
+	var value: Variant = params.get("value", null)
+	if (value == null) or (value is String and (value as String) == "null"):
 		return {"error": "Parameter value cannot be null. AnimationTree parameters require typed values (float, int, bool, string, Vector2, etc.). Use reset_tree_parameter to reset to default."}
 
 	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
