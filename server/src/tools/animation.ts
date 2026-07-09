@@ -1,5 +1,5 @@
 /**
- * Animation tools — 10 tools for animation management
+ * Animation tools — 15 tools for animation management
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -157,5 +157,89 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
       },
     },
     async (args) => callGodot(bridge, 'animation/add_state', args as Record<string, unknown>),
+  );
+
+  // 11. remove_state_machine_state — {path, state_name} -> success
+  server.registerTool(
+    'remove_state_machine_state',
+    {
+      description: 'Remove a state (and all its transitions) from an AnimationNodeStateMachine',
+      inputSchema: {
+        path: NodePath.describe('AnimationTree node path'),
+        state_name: z.string().describe('Name of the state to remove'),
+      },
+    },
+    async (args) => callGodot(bridge, 'animation/remove_state', args as Record<string, unknown>),
+  );
+
+  // 12. add_state_machine_transition — {path, from, to, advance_mode?, switch_mode?, xfade_time?} -> success
+  server.registerTool(
+    'add_state_machine_transition',
+    {
+      description: 'Add a transition between two states in an AnimationNodeStateMachine',
+      inputSchema: {
+        path: NodePath.describe('AnimationTree node path'),
+        from: z.string().describe('Source state name'),
+        to: z.string().describe('Target state name'),
+        advance_mode: z.enum(['disabled', 'enabled', 'auto']).optional().default('enabled')
+          .describe('When transition fires: disabled=never, enabled=when condition met, auto=automatically'),
+        switch_mode: z.enum(['immediate', 'sync', 'at_end']).optional().default('immediate')
+          .describe('Switch mode: immediate=now, sync=synced time, at_end=wait for animation end'),
+        xfade_time: z.number().min(0).optional().default(0.0)
+          .describe('Cross-fade duration in seconds'),
+        advance_condition: z.string().optional().default('')
+          .describe('Advance condition name (for advance_mode=enabled)'),
+        priority: z.number().int().min(0).optional().default(1)
+          .describe('Priority (lower = higher priority)'),
+        reset: z.boolean().optional().default(true)
+          .describe('Reset target animation on transition'),
+      },
+    },
+    async (args) => callGodot(bridge, 'animation/add_transition', args as Record<string, unknown>),
+  );
+
+  // 13. remove_state_machine_transition — {path, from, to} -> success
+  server.registerTool(
+    'remove_state_machine_transition',
+    {
+      description: 'Remove a transition between two states in an AnimationNodeStateMachine',
+      inputSchema: {
+        path: NodePath.describe('AnimationTree node path'),
+        from: z.string().describe('Source state name'),
+        to: z.string().describe('Target state name'),
+      },
+    },
+    async (args) => callGodot(bridge, 'animation/remove_transition', args as Record<string, unknown>),
+  );
+
+  // 14. remove_animation_track — {player_path, animation, track_index} -> success
+  server.registerTool(
+    'remove_animation_track',
+    {
+      description: 'Remove a track from an animation',
+      inputSchema: {
+        player_path: NodePath.describe('AnimationPlayer node path'),
+        animation: z.string().describe('Animation name'),
+        track_index: z.number().int().min(0).describe('Index of the track to remove'),
+        library: z.string().optional().describe('Animation library name (empty for default)'),
+      },
+    },
+    async (args) => callGodot(bridge, 'animation/remove_track', args as Record<string, unknown>),
+  );
+
+  // 15. remove_animation_keyframe — {player_path, animation, track_index, time} -> success
+  server.registerTool(
+    'remove_animation_keyframe',
+    {
+      description: 'Remove a keyframe from an animation track at a specific time',
+      inputSchema: {
+        player_path: NodePath.describe('AnimationPlayer node path'),
+        animation: z.string().describe('Animation name'),
+        track_index: z.number().int().min(0).describe('Track index'),
+        time: z.number().min(0).describe('Keyframe time in seconds'),
+        library: z.string().optional().describe('Animation library name (empty for default)'),
+      },
+    },
+    async (args) => callGodot(bridge, 'animation/remove_keyframe', args as Record<string, unknown>),
   );
 }

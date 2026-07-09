@@ -1,4 +1,4 @@
-﻿## Animation commands module - 10 tools.
+﻿## Animation commands module - 15 tools.
 ## Handles AnimationPlayer, AnimationTree, and state machines.
 class_name MCPAnimationCommands
 extends RefCounted
@@ -18,13 +18,18 @@ func get_commands() -> Dictionary:
 		"animation/list": list_animations,
 		"animation/create": create_animation,
 		"animation/add_track": add_animation_track,
+		"animation/remove_track": remove_animation_track,
 		"animation/set_keyframe": set_animation_keyframe,
+		"animation/remove_keyframe": remove_animation_keyframe,
 		"animation/get_info": get_animation_info,
 		"animation/remove": remove_animation,
 		"animation/create_tree": create_animation_tree,
 		"animation/get_tree_structure": get_animation_tree_structure,
 		"animation/set_tree_parameter": set_tree_parameter,
 		"animation/add_state": add_state_machine_state,
+		"animation/remove_state": remove_state_machine_state,
+		"animation/add_transition": add_state_machine_transition,
+		"animation/remove_transition": remove_state_machine_transition,
 	}
 
 
@@ -473,3 +478,142 @@ func add_state_machine_state(params: Dictionary) -> Dictionary:
 	var pos: Vector2 = Vector2(position.get("x", 0.0) as float, position.get("y", 0.0) as float)
 	sm.add_node(state_name, anim_node, pos)
 	return {"result": "State '%s' added to state machine" % state_name}
+
+
+## Remove a state from a state machine AnimationTree.
+func remove_state_machine_state(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", params.get("player_path", ""))
+	var state_name: String = params.get("state_name", "")
+	if path.is_empty() or state_name.is_empty():
+		return {"error": "path and state_name are required"}
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null or not node is AnimationTree:
+		return {"error": "AnimationTree not found: %s" % path}
+	var tree: AnimationTree = node as AnimationTree
+	if tree.tree_root == null or not tree.tree_root is AnimationNodeStateMachine:
+		return {"error": "AnimationTree root is not a StateMachine"}
+	var sm: AnimationNodeStateMachine = tree.tree_root as AnimationNodeStateMachine
+	if not sm.has_node(state_name):
+		return {"error": "State '%s' does not exist in state machine at '%s'" % [state_name, path]}
+	sm.remove_node(state_name)
+	return {"result": "State '%s' removed from state machine (including all connected transitions)" % state_name}
+
+
+## Add a transition between two states in a state machine.
+func add_state_machine_transition(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var from_state: String = params.get("from", "")
+	var to_state: String = params.get("to", "")
+	if path.is_empty() or from_state.is_empty() or to_state.is_empty():
+		return {"error": "path, from, and to are required"}
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null or not node is AnimationTree:
+		return {"error": "AnimationTree not found: %s" % path}
+	var tree: AnimationTree = node as AnimationTree
+	if tree.tree_root == null or not tree.tree_root is AnimationNodeStateMachine:
+		return {"error": "AnimationTree root is not a StateMachine"}
+	var sm: AnimationNodeStateMachine = tree.tree_root as AnimationNodeStateMachine
+	if not sm.has_node(from_state):
+		return {"error": "Source state '%s' does not exist in state machine" % from_state}
+	if not sm.has_node(to_state):
+		return {"error": "Target state '%s' does not exist in state machine" % to_state}
+	if sm.has_transition(from_state, to_state):
+		return {"error": "Transition from '%s' to '%s' already exists" % [from_state, to_state]}
+	var trans: AnimationNodeStateMachineTransition = AnimationNodeStateMachineTransition.new()
+	# Parse advance_mode
+	var advance_mode_raw: String = params.get("advance_mode", "enabled")
+	match advance_mode_raw:
+		"disabled": trans.set_advance_mode(AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED)
+		"enabled": trans.set_advance_mode(AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED)
+		"auto": trans.set_advance_mode(AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO)
+	# Parse switch_mode
+	var switch_mode_raw: String = params.get("switch_mode", "immediate")
+	match switch_mode_raw:
+		"immediate": trans.set_switch_mode(AnimationNodeStateMachineTransition.SWITCH_MODE_IMMEDIATE)
+		"sync": trans.set_switch_mode(AnimationNodeStateMachineTransition.SWITCH_MODE_SYNC)
+		"at_end": trans.set_switch_mode(AnimationNodeStateMachineTransition.SWITCH_MODE_AT_END)
+	trans.set_xfade_time(float(params.get("xfade_time", 0.0)))
+	trans.set_priority(int(params.get("priority", 1)))
+	trans.set_reset(bool(params.get("reset", true)))
+	var advance_condition: String = params.get("advance_condition", "")
+	if not advance_condition.is_empty():
+		trans.set_advance_condition(advance_condition)
+	sm.add_transition(from_state, to_state, trans)
+	return {"result": "Transition '%s' -> '%s' added" % [from_state, to_state]}
+
+
+## Remove a transition between two states in a state machine.
+func remove_state_machine_transition(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var from_state: String = params.get("from", "")
+	var to_state: String = params.get("to", "")
+	if path.is_empty() or from_state.is_empty() or to_state.is_empty():
+		return {"error": "path, from, and to are required"}
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null or not node is AnimationTree:
+		return {"error": "AnimationTree not found: %s" % path}
+	var tree: AnimationTree = node as AnimationTree
+	if tree.tree_root == null or not tree.tree_root is AnimationNodeStateMachine:
+		return {"error": "AnimationTree root is not a StateMachine"}
+	var sm: AnimationNodeStateMachine = tree.tree_root as AnimationNodeStateMachine
+	if not sm.has_transition(from_state, to_state):
+		return {"error": "Transition from '%s' to '%s' does not exist" % [from_state, to_state]}
+	sm.remove_transition(from_state, to_state)
+	return {"result": "Transition '%s' -> '%s' removed" % [from_state, to_state]}
+
+
+## Remove a track from an animation.
+func remove_animation_track(params: Dictionary) -> Dictionary:
+	var path: String = params.get("player_path", params.get("path", ""))
+	var anim_name: String = params.get("anim_name", params.get("animation", ""))
+	var track_idx: int = params.get("track_idx", params.get("track_index", -1))
+	var library_name: String = params.get("library", "")
+	if path.is_empty() or anim_name.is_empty() or track_idx < 0:
+		return {"error": "path, anim_name, and track_index (>= 0) are required"}
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null or not node is AnimationPlayer:
+		return {"error": "AnimationPlayer not found: %s" % path}
+	var player: AnimationPlayer = node as AnimationPlayer
+	var anim: Animation = null
+	if library_name.is_empty():
+		anim = player.get_animation(anim_name)
+	else:
+		var lib: AnimationLibrary = player.get_animation_library(library_name)
+		if lib == null:
+			return {"error": "Animation library not found: '%s'" % library_name}
+		anim = lib.get_animation(anim_name)
+	if anim == null:
+		return {"error": "Animation not found: %s" % anim_name}
+	if track_idx < 0 or track_idx >= anim.get_track_count():
+		return {"error": "Invalid track index: %d (track count: %d)" % [track_idx, anim.get_track_count()]}
+	anim.remove_track(track_idx)
+	return {"result": "Track %d removed from animation '%s'" % [track_idx, anim_name]}
+
+
+## Remove a keyframe from an animation track at a specific time.
+func remove_animation_keyframe(params: Dictionary) -> Dictionary:
+	var path: String = params.get("player_path", params.get("path", ""))
+	var anim_name: String = params.get("anim_name", params.get("animation", ""))
+	var track_idx: int = params.get("track_idx", params.get("track_index", -1))
+	var time: float = params.get("time", -1.0)
+	var library_name: String = params.get("library", "")
+	if path.is_empty() or anim_name.is_empty() or track_idx < 0 or time < 0.0:
+		return {"error": "path, anim_name, track_index (>= 0), and time (>= 0) are required"}
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null or not node is AnimationPlayer:
+		return {"error": "AnimationPlayer not found: %s" % path}
+	var player: AnimationPlayer = node as AnimationPlayer
+	var anim: Animation = null
+	if library_name.is_empty():
+		anim = player.get_animation(anim_name)
+	else:
+		var lib: AnimationLibrary = player.get_animation_library(library_name)
+		if lib == null:
+			return {"error": "Animation library not found: '%s'" % library_name}
+		anim = lib.get_animation(anim_name)
+	if anim == null:
+		return {"error": "Animation not found: %s" % anim_name}
+	if track_idx < 0 or track_idx >= anim.get_track_count():
+		return {"error": "Invalid track index: %d (track count: %d)" % [track_idx, anim.get_track_count()]}
+	anim.track_remove_key_at_time(track_idx, time)
+	return {"result": "Keyframe at time %.2f removed from track %d" % [time, track_idx]}
