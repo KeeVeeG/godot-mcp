@@ -1,5 +1,5 @@
 /**
- * Scene3D tools - 6 tools for 3D scene manipulation
+ * Scene3D tools - 11 tools for 3D scene manipulation and inspection
  */
 import { callGodot } from '../server.js';
 import { z, NodePath, ParentPath, Properties, OptionalProperties } from './shared-types.js';
@@ -13,7 +13,14 @@ export function registerScene3dTools(server, bridge) {
             properties: OptionalProperties.describe('Mesh properties (size, material_path, etc.)'),
         },
     }, async (args) => callGodot(bridge, 'scene3d/add_mesh', args));
-    // 2. setup_camera_3d
+    // 2. get_mesh_instance
+    server.registerTool('get_mesh_instance', {
+        description: 'Get properties of a MeshInstance3D node (mesh type, size, material)',
+        inputSchema: {
+            path: NodePath.describe('MeshInstance3D node path'),
+        },
+    }, async (args) => callGodot(bridge, 'scene3d/get_mesh', args));
+    // 3. setup_camera_3d
     server.registerTool('setup_camera_3d', {
         description: 'Add and configure a Camera3D node',
         inputSchema: {
@@ -21,7 +28,14 @@ export function registerScene3dTools(server, bridge) {
             properties: Properties.describe('Camera properties (fov, near, far, position, look_at, make_current, etc.)'),
         },
     }, async (args) => callGodot(bridge, 'scene3d/setup_camera', args));
-    // 3. setup_lighting
+    // 4. get_camera_3d
+    server.registerTool('get_camera_3d', {
+        description: 'Get Camera3D properties (fov, near, far, current, transform)',
+        inputSchema: {
+            path: NodePath.describe('Camera3D node path'),
+        },
+    }, async (args) => callGodot(bridge, 'scene3d/get_camera', args));
+    // 5. setup_lighting
     server.registerTool('setup_lighting', {
         description: 'Add a light node (DirectionalLight3D, OmniLight3D, SpotLight3D)',
         inputSchema: {
@@ -30,7 +44,14 @@ export function registerScene3dTools(server, bridge) {
             properties: OptionalProperties.describe('Light properties (color, energy, position, shadow_enabled, etc.)'),
         },
     }, async (args) => callGodot(bridge, 'scene3d/setup_lighting', args));
-    // 4. setup_environment
+    // 6. get_lighting
+    server.registerTool('get_lighting', {
+        description: 'Get Light3D properties (type, color, energy, shadow_enabled, transform)',
+        inputSchema: {
+            path: NodePath.describe('Light3D node path'),
+        },
+    }, async (args) => callGodot(bridge, 'scene3d/get_lighting', args));
+    // 7. setup_environment
     server.registerTool('setup_environment', {
         description: 'Configure the WorldEnvironment for the 3D scene',
         inputSchema: {
@@ -38,7 +59,14 @@ export function registerScene3dTools(server, bridge) {
             properties: Properties.describe('Environment properties (background_mode, background_color, ambient_light_color, fog_enabled, glow_enabled, etc.)'),
         },
     }, async (args) => callGodot(bridge, 'scene3d/setup_environment', args));
-    // 5. add_gridmap
+    // 8. get_environment
+    server.registerTool('get_environment', {
+        description: 'Get WorldEnvironment settings (background, ambient, fog, glow, SSAO, tonemap)',
+        inputSchema: {
+            path: NodePath.optional().default('').describe('WorldEnvironment node path (leave empty for first found)'),
+        },
+    }, async (args) => callGodot(bridge, 'scene3d/get_environment', args));
+    // 9. add_gridmap
     server.registerTool('add_gridmap', {
         description: 'Add a GridMap node for 3D tile-based level design',
         inputSchema: {
@@ -46,7 +74,7 @@ export function registerScene3dTools(server, bridge) {
             properties: OptionalProperties.describe('GridMap properties (mesh_library_path, cell_size, etc.)'),
         },
     }, async (args) => callGodot(bridge, 'scene3d/add_gridmap', args));
-    // 6. set_material_3d
+    // 10. set_material_3d
     server.registerTool('set_material_3d', {
         description: 'Create and apply a StandardMaterial3D or ShaderMaterial to a mesh',
         inputSchema: {
@@ -54,5 +82,12 @@ export function registerScene3dTools(server, bridge) {
             properties: Properties.describe('Material properties (albedo_color, metallic, roughness, shader_path, etc.)'),
         },
     }, async (args) => callGodot(bridge, 'scene3d/set_material', args));
+    // 11. get_material_3d
+    server.registerTool('get_material_3d', {
+        description: 'Get material properties from a 3D mesh node',
+        inputSchema: {
+            path: NodePath.describe('MeshInstance3D or VisualInstance3D node path'),
+        },
+    }, async (args) => callGodot(bridge, 'scene3d/get_material', args));
 }
 //# sourceMappingURL=scene3d.js.map

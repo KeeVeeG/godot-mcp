@@ -1,4 +1,4 @@
-## 3D Scene commands module - 6 tools.
+## 3D Scene commands module - 11 tools.
 ## Handles 3D meshes, cameras, lighting, environment, and materials.
 class_name MCPScene3DCommands
 extends RefCounted
@@ -16,11 +16,16 @@ func set_plugin(plugin: EditorPlugin) -> void:
 func get_commands() -> Dictionary:
 	return {
 		"scene3d/add_mesh": add_mesh_instance,
+		"scene3d/get_mesh": get_mesh_instance,
 		"scene3d/setup_camera": setup_camera_3d,
+		"scene3d/get_camera": get_camera_3d,
 		"scene3d/setup_lighting": setup_lighting,
+		"scene3d/get_lighting": get_lighting,
 		"scene3d/setup_environment": setup_environment,
+		"scene3d/get_environment": get_environment,
 		"scene3d/add_gridmap": add_gridmap,
 		"scene3d/set_material": set_material_3d,
+		"scene3d/get_material": get_material_3d,
 	}
 
 
@@ -106,6 +111,55 @@ func add_mesh_instance(params: Dictionary) -> Dictionary:
 	return {"result": {"name": str(mi.name), "path": MCPCommandHelpers.get_node_path(mi, _plugin), "mesh_type": mesh_type}}
 
 
+## Get MeshInstance3D properties.
+func get_mesh_instance(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "Path is required (node path to MeshInstance3D)"}
+
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+	if not node is MeshInstance3D:
+		return {"error": "Node is not a MeshInstance3D: %s" % path}
+
+	var mi: MeshInstance3D = node as MeshInstance3D
+	var mesh: Mesh = mi.mesh
+	var result: Dictionary = {
+		"path": MCPCommandHelpers.get_node_path(mi, _plugin),
+		"name": mi.name,
+		"position": {"x": mi.position.x, "y": mi.position.y, "z": mi.position.z},
+		"scale": {"x": mi.scale.x, "y": mi.scale.y, "z": mi.scale.z},
+	}
+	if mesh:
+		result["mesh_class"] = mesh.get_class()
+		if mesh is BoxMesh:
+			result["size"] = {"x": (mesh as BoxMesh).size.x, "y": (mesh as BoxMesh).size.y, "z": (mesh as BoxMesh).size.z}
+		elif mesh is SphereMesh:
+			result["radius"] = (mesh as SphereMesh).radius
+			result["height"] = (mesh as SphereMesh).height
+		elif mesh is CylinderMesh:
+			result["top_radius"] = (mesh as CylinderMesh).top_radius
+			result["bottom_radius"] = (mesh as CylinderMesh).bottom_radius
+			result["height"] = (mesh as CylinderMesh).height
+		elif mesh is CapsuleMesh:
+			result["radius"] = (mesh as CapsuleMesh).radius
+			result["height"] = (mesh as CapsuleMesh).height
+		elif mesh is PlaneMesh:
+			var pm: PlaneMesh = mesh as PlaneMesh
+			result["size"] = {"x": pm.size.x, "y": pm.size.y}
+		elif mesh is TorusMesh:
+			result["inner_radius"] = (mesh as TorusMesh).inner_radius
+			result["outer_radius"] = (mesh as TorusMesh).outer_radius
+		elif mesh is PrismMesh:
+			var prm: PrismMesh = mesh as PrismMesh
+			result["size"] = {"x": prm.size.x, "y": prm.size.y, "z": prm.size.z}
+			result["left_to_right"] = prm.left_to_right
+	if mi.material_override:
+		result["material_class"] = mi.material_override.get_class()
+	return {"result": result}
+
+
 ## Setup Camera3D properties.
 func setup_camera_3d(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
@@ -151,6 +205,32 @@ func setup_camera_3d(params: Dictionary) -> Dictionary:
 		cam.rotation = MCPVariantCodec._parse_vector3(properties["rotation"])
 
 	return {"result": "Camera3D configured: %s" % path}
+
+
+## Get Camera3D properties.
+func get_camera_3d(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "Path is required (node path to Camera3D)"}
+
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+	if not node is Camera3D:
+		return {"error": "Node is not a Camera3D: %s" % path}
+
+	var cam: Camera3D = node as Camera3D
+	return {"result": {
+		"path": MCPCommandHelpers.get_node_path(cam, _plugin),
+		"name": cam.name,
+		"fov": cam.fov,
+		"near": cam.near,
+		"far": cam.far,
+		"projection": cam.projection,
+		"current": cam.current,
+		"position": {"x": cam.position.x, "y": cam.position.y, "z": cam.position.z},
+		"rotation": {"x": cam.rotation.x, "y": cam.rotation.y, "z": cam.rotation.z},
+	}}
 
 
 ## Setup lighting (DirectionalLight3D, OmniLight3D, SpotLight3D).
@@ -201,6 +281,38 @@ func setup_lighting(params: Dictionary) -> Dictionary:
 	return {"result": {"name": str(light.name), "path": MCPCommandHelpers.get_node_path(light, _plugin), "type": light_type}}
 
 
+## Get Light3D properties.
+func get_lighting(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "Path is required (node path to Light3D)"}
+
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+	if not node is Light3D:
+		return {"error": "Node is not a Light3D: %s" % path}
+
+	var light: Light3D = node as Light3D
+	var result: Dictionary = {
+		"path": MCPCommandHelpers.get_node_path(light, _plugin),
+		"name": light.name,
+		"type": light.get_class(),
+		"color": {"r": light.light_color.r, "g": light.light_color.g, "b": light.light_color.b, "a": light.light_color.a},
+		"energy": light.light_energy,
+		"shadow_enabled": light.shadow_enabled,
+		"position": {"x": light.position.x, "y": light.position.y, "z": light.position.z},
+		"rotation": {"x": light.rotation.x, "y": light.rotation.y, "z": light.rotation.z},
+	}
+	if light is OmniLight3D:
+		result["omni_range"] = (light as OmniLight3D).omni_range
+	if light is SpotLight3D:
+		var spot: SpotLight3D = light as SpotLight3D
+		result["spot_angle"] = spot.spot_angle
+		result["spot_range"] = spot.spot_range
+	return {"result": result}
+
+
 ## Setup WorldEnvironment node with environment settings.
 func setup_environment(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
@@ -247,6 +359,54 @@ func setup_environment(params: Dictionary) -> Dictionary:
 		env_node.environment = Environment.new()
 	_apply_environment_props(env_node.environment, properties)
 	return {"result": "Environment configured: %s" % MCPCommandHelpers.get_node_path(env_node, _plugin)}
+
+
+## Get WorldEnvironment settings.
+func get_environment(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
+
+	var env_node: WorldEnvironment = null
+	if path != "":
+		var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+		if node is WorldEnvironment:
+			env_node = node as WorldEnvironment
+		elif node is Camera3D:
+			var cam: Camera3D = node as Camera3D
+			if cam.environment == null:
+				return {"error": "Camera has no environment assigned"}
+			return {"result": _env_to_dict(cam.environment, MCPCommandHelpers.get_node_path(node, _plugin))}
+		else:
+			return {"error": "Node not found or not a WorldEnvironment/Camera3D: %s" % path}
+	else:
+		for child: Node in root.get_children():
+			if child is WorldEnvironment:
+				env_node = child as WorldEnvironment
+				break
+
+	if env_node == null:
+		return {"error": "No WorldEnvironment node found in scene"}
+	if env_node.environment == null:
+		return {"error": "WorldEnvironment has no Environment resource assigned"}
+	return {"result": _env_to_dict(env_node.environment, MCPCommandHelpers.get_node_path(env_node, _plugin))}
+
+
+func _env_to_dict(env: Environment, node_path: String) -> Dictionary:
+	return {
+		"path": node_path,
+		"background_mode": env.background_mode,
+		"ambient_light_color": {"r": env.ambient_light_color.r, "g": env.ambient_light_color.g, "b": env.ambient_light_color.b, "a": env.ambient_light_color.a},
+		"ambient_light_energy": env.ambient_light_energy,
+		"tonemap_mode": env.tonemap_mode,
+		"ssao_enabled": env.ssao_enabled,
+		"glow_enabled": env.glow_enabled,
+		"fog_enabled": env.fog_enabled,
+		"fog_color": {"r": env.fog_light_color.r, "g": env.fog_light_color.g, "b": env.fog_light_color.b, "a": env.fog_light_color.a},
+		"fog_density": env.fog_density,
+		"volumetric_fog_enabled": env.volumetric_fog_enabled,
+	}
 
 
 func _apply_environment_props(env: Environment, props: Dictionary) -> void:
@@ -352,3 +512,39 @@ func set_material_3d(params: Dictionary) -> Dictionary:
 		return {"error": "Node does not support materials: %s" % node.get_class()}
 
 	return {"result": "Material set on %s" % path}
+
+
+## Get material properties from a 3D node.
+func get_material_3d(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "Path is required (node path to MeshInstance3D/VisualInstance3D)"}
+
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+
+	var mat: Material = null
+	if node is MeshInstance3D:
+		mat = (node as MeshInstance3D).material_override
+	elif node is VisualInstance3D:
+		mat = (node as VisualInstance3D).material_override
+	else:
+		return {"error": "Node does not support materials: %s" % node.get_class()}
+
+	if mat == null:
+		return {"error": "Node has no material override assigned"}
+
+	var result: Dictionary = {
+		"path": MCPCommandHelpers.get_node_path(node, _plugin),
+		"material_class": mat.get_class(),
+	}
+	if mat is StandardMaterial3D:
+		var sm: StandardMaterial3D = mat as StandardMaterial3D
+		result["albedo_color"] = {"r": sm.albedo_color.r, "g": sm.albedo_color.g, "b": sm.albedo_color.b, "a": sm.albedo_color.a}
+		result["metallic"] = sm.metallic
+		result["roughness"] = sm.roughness
+		result["emission_enabled"] = sm.emission_enabled
+		result["emission"] = {"r": sm.emission.r, "g": sm.emission.g, "b": sm.emission.b, "a": sm.emission.a}
+		result["emission_energy_multiplier"] = sm.emission_energy_multiplier
+	return {"result": result}
