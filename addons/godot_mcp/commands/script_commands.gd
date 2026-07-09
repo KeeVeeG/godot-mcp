@@ -51,7 +51,7 @@ func _list_scripts(params: Dictionary) -> Dictionary:
 		var filtered: Array = []
 		for r in results:
 			var rel: String = r["path"].trim_prefix("res://")
-			if rel.count("/") < max_depth:
+			if rel.count("/") <= max_depth:
 				filtered.append(r)
 		results = filtered
 	
@@ -359,6 +359,12 @@ func _search_text_recursive(path: String, query: String, pattern: String, result
 	var dir: DirAccess = DirAccess.open(path)
 	if dir == null:
 		return
+	
+	# Escape regex special characters for literal text search
+	var esc_query: String = RegEx.escape(query)
+	var re: RegEx = RegEx.new()
+	re.compile(esc_query)
+	
 	dir.list_dir_begin()
 	var file_name: String = dir.get_next()
 	while file_name != "":
@@ -376,7 +382,7 @@ func _search_text_recursive(path: String, query: String, pattern: String, result
 					file.close()
 					var lines: PackedStringArray = content.split("\n")
 					for i: int in range(lines.size()):
-						if lines[i].find(query) != -1:
+						if re.search(lines[i]) != null:
 							results.append({
 								"path": full_path,
 								"line": i + 1,
