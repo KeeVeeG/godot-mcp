@@ -139,7 +139,7 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
       inputSchema: {
         path: NodePath.describe('AnimationTree node path'),
         parameter: z.string().describe("Parameter path (e.g. 'parameters/blend_position')"),
-        value: PropertyValue.describe('Parameter value (null rejected by GDScript)'),
+        value: PropertyValue.describe('AnimationTree parameters require typed values (float, int, bool, string, Vector2, etc.). Null rejected by GDScript — use reset_tree_parameter to reset to default.'),
       },
     },
     async (args) => callGodot(bridge, 'animation/set_tree_parameter', args as Record<string, unknown>),
