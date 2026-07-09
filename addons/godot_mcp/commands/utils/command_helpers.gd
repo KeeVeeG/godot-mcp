@@ -240,11 +240,11 @@ static func copy_directory_recursive(source_path: String, target_path: String) -
 
 ## Escape special regex characters in a string for literal matching.
 ## Used when building RegEx patterns from user-provided text (file paths, search queries).
-## Escapes: . ^ $ * + ? ( ) [ ] { } \ |
+## Escapes PCRE2 metacharacters: \ ^ $ . [ ] | ( ) * + ? { } -
 static func escape_regex(text: String) -> String:
 	var result: String = ""
 	for c: String in text:
-		if c in ".^$*+?()[]{}|\\":
+		if c in "\\^$.[]|()*+?{}-":
 			result += "\\" + c
 		else:
 			result += c
