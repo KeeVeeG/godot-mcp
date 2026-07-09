@@ -324,7 +324,7 @@ func _parse_script_error_from_log(script_path: String) -> Dictionary:
 	
 	# Build regex: "ERROR: <path>:<line> - <message>"
 	var re: RegEx = RegEx.new()
-	re.compile("ERROR:\\s*" + _escape_regex(script_path) + ":(\\d+)\\s*-\\s*(.+)")
+	re.compile("ERROR:\\s*" + MCPCommandHelpers.escape_regex(script_path) + ":(\\d+)\\s*-\\s*(.+)")
 	
 	# Reverse search: find most recent reference to our script
 	for i: int in range(lines.size() - 1, -1, -1):
@@ -361,7 +361,7 @@ func _search_text_recursive(path: String, query: String, pattern: String, result
 		return
 	
 	# Escape regex special characters for literal text search
-	var esc_query: String = _escape_regex(query)
+	var esc_query: String = MCPCommandHelpers.escape_regex(query)
 	var re: RegEx = RegEx.new()
 	re.compile(esc_query)
 	
@@ -400,18 +400,4 @@ func _matches_pattern(file_name: String, pattern: String) -> bool:
 		var ext: String = pattern.substr(1)
 		return file_name.ends_with(ext)
 	return file_name == pattern
-
-
-## Escape special regex characters in a string for literal matching.
-## Godot 4.2+ has RegEx.escape(), but we provide a fallback for older versions.
-func _escape_regex(text: String) -> String:
-	var result: String = ""
-	for c: String in text:
-		if c in ".^$*+?()[]{}|\\":
-			result += "\\" + c
-		else:
-			result += c
-	return result
-
-
 

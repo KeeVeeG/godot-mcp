@@ -236,3 +236,16 @@ static func copy_directory_recursive(source_path: String, target_path: String) -
 		file_name = source_dir.get_next()
 	source_dir.list_dir_end()
 	return OK
+
+
+## Escape special regex characters in a string for literal matching.
+## Used when building RegEx patterns from user-provided text (file paths, search queries).
+## Escapes: . ^ $ * + ? ( ) [ ] { } \ |
+static func escape_regex(text: String) -> String:
+	var result: String = ""
+	for c: String in text:
+		if c in ".^$*+?()[]{}|\\":
+			result += "\\" + c
+		else:
+			result += c
+	return result
