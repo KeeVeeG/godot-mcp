@@ -20,6 +20,7 @@ func get_commands() -> Dictionary:
 		"shader/edit": edit_shader,
 		"shader/assign_material": assign_shader_material,
 		"shader/set_param": set_shader_param,
+		"shader/reset_param": reset_shader_param,
 		"shader/get_params": get_shader_params,
 		"shader/list": list_shaders,
 		"shader/validate": validate_shader,
@@ -146,9 +147,14 @@ func assign_shader_material(params: Dictionary) -> Dictionary:
 func set_shader_param(params: Dictionary) -> Dictionary:
 	var node_path: String = params.get("node_path", "")
 	var param: String = params.get("param", "")
-	var value: Variant = params.get("value")
 	if node_path.is_empty() or param.is_empty():
 		return {"error": "node_path and param are required"}
+	if not params.has("value"):
+		return {"error": "value is required"}
+	if params.get("value") == null:
+		return {"error": "value cannot be null — use reset_shader_param to reset to default"}
+
+	var value: Variant = params.get("value")
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
@@ -181,6 +187,42 @@ func set_shader_param(params: Dictionary) -> Dictionary:
 	else:
 		shader_mat.set_shader_parameter(param, parsed)
 	return {"result": "Shader param '%s' set on %s" % [param, node_path]}
+
+
+## Reset a shader parameter to its default value (remove the override).
+func reset_shader_param(params: Dictionary) -> Dictionary:
+	var node_path: String = params.get("node_path", "")
+	var param: String = params.get("param", "")
+	if node_path.is_empty() or param.is_empty():
+		return {"error": "node_path and param are required"}
+
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
+	var node: Node = root.get_node_or_null(node_path)
+	if node == null:
+		return {"error": "Node not found: %s" % node_path}
+
+	var mat: Material = null
+	if node is CanvasItem:
+		mat = (node as CanvasItem).material
+	elif node is Node3D:
+		mat = (node as Node3D).material_override
+	if mat == null or not mat is ShaderMaterial:
+		return {"error": "Node does not have a ShaderMaterial"}
+
+	var shader_mat: ShaderMaterial = mat as ShaderMaterial
+	var old_val: Variant = shader_mat.get_shader_parameter(param)
+
+	if _undo_helper:
+		var ur: EditorUndoRedoManager = _undo_helper.get_undo_redo_manager()
+		ur.create_action("MCP: Reset shader param '%s' on %s" % [param, node_path])
+		ur.add_do_method(shader_mat, "set_shader_parameter", param, null)
+		ur.add_undo_method(shader_mat, "set_shader_parameter", param, old_val)
+		ur.commit_action()
+	else:
+		shader_mat.set_shader_parameter(param, null)
+	return {"result": "Shader param '%s' reset to default on %s" % [param, node_path]}
 
 
 ## Get shader parameters from a node's material.
@@ -225,9 +267,18 @@ func get_shader_params(params: Dictionary) -> Dictionary:
 
 ## List all shader files in the project.
 func list_shaders(params: Dictionary) -> Dictionary:
-	var path: String = params.get("filter", params.get("path", "res://"))
+	var filter_str: String = params.get("filter", "")
+	var path: String = params.get("path", "")
+	if filter_str.is_empty() and not path.is_empty():
+		filter_str = path
+	if filter_str.is_empty():
+		filter_str = "res://"
 	var shaders: Array = []
-	MCPCommandHelpers.walk_directory(path, PackedStringArray(["gdshader", "shader"]), func(fp, _name): shaders.append(fp))
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["gdshader", "shader"]),
+		func(fp, _name):
+			if filter_str == "res://" or fp.contains(filter_str):
+				shaders.append(fp)
+	)
 	return {"result": {"shaders": shaders, "count": shaders.size()}}
 
 
@@ -243,13 +294,70 @@ func validate_shader(params: Dictionary) -> Dictionary:
 		return {"error": "Cannot read shader: %s" % path}
 	var code: String = file.get_as_text()
 	file.close()
-	
-	# Try to load the shader as a resource to check for compilation errors
-	var shader: Resource = ResourceLoader.load(path)
+
+	var errors: Array[String] = []
+	var warnings: Array[String] = []
+	var lines: int = code.count("\n") + 1
+
+	# Preprocessor check: loading a resource catches import/preprocessor errors
+	var shader: Shader = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Shader
 	if shader == null:
-		return {"error": "Failed to load shader resource — may have compilation errors"}
-	
-	return {"result": {"path": path, "valid": true, "lines": code.count("\n") + 1, "type": shader.get_class()}}
+		errors.append("Failed to load shader resource (preprocessor or file format error)")
+
+	# shader_type declaration
+	var type_match: RegEx = RegEx.new()
+	type_match.compile(r"(?m)^shader_type\s+(spatial|canvas_item|particles|sky|fog|texture_blit)\s*;")
+	if type_match.search(code) == null:
+		errors.append("Missing or invalid 'shader_type' declaration (expected: spatial, canvas_item, particles, sky, fog, or texture_blit)")
+	else:
+		var st: String = type_match.get_string(1)
+		if st in ["spatial", "particles", "sky", "fog"]:
+			warnings.append("Shader type is '%s', not canvas_item" % st)
+
+	# Balanced braces
+	var depth: int = 0
+	var i: int = 0
+	for ch: String in code:
+		if ch == "{":
+			depth += 1
+		elif ch == "}":
+			depth -= 1
+		if depth < 0:
+			errors.append("Unexpected '}' at position %d" % i)
+			break
+		i += 1
+	if depth > 0:
+		errors.append("Unclosed '{' — %d opening brace(s) without matching close" % depth)
+
+	# vec4 with wrong component count: 2-3 args (not 4)
+	var vec4_raw: RegEx = RegEx.new()
+	vec4_raw.compile(r"vec4\s*\(\s*\S[^;]*\)")
+	for m: RegExMatch in vec4_raw.search_all(code):
+		var args: String = m.get_string()
+		var comma_count: int = 0
+		var paren_depth: int = 0
+		for c: String in args:
+			if c == "(": paren_depth += 1
+			elif c == ")": paren_depth -= 1
+			elif c == "," and paren_depth == 1: comma_count += 1
+		if comma_count != 3 and args.contains("("):  # vec4 should have 3 commas (4 args)
+			errors.append("Possible vec4 with wrong component count: %s" % args.replace("\n", " ").strip_edges())
+
+	# Use of 'texture' function without sampler2D — common mistake with TEXTURE built-in
+	var texture_misuse: RegEx = RegEx.new()
+	texture_misuse.compile(r"\btexture\s*\(")
+	if texture_misuse.search(code) and code.contains("canvas_item"):
+		warnings.append("'texture()' is used — for canvas_item shaders, use 'texture(TEXTURE, UV)' or 'TEXTURE' directly")
+
+	if errors.is_empty():
+		var result: Dictionary = {"path": path, "valid": true, "lines": lines}
+		if shader != null:
+			result["type"] = shader.get_class()
+		if not warnings.is_empty():
+			result["warnings"] = warnings
+		return {"result": result}
+	else:
+		return {"result": {"path": path, "valid": false, "lines": lines, "errors": errors}}
 
 
 

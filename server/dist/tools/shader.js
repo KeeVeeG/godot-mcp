@@ -1,5 +1,5 @@
 /**
- * Shader tools - 9 tools for shader management
+ * Shader tools - 10 tools for shader management
  */
 import { callGodot } from '../server.js';
 import { z, NodePath, FilePath, PropertyValue, SearchQuery } from './shared-types.js';
@@ -57,6 +57,14 @@ export function registerShaderTools(server, bridge) {
             node_path: NodePath.describe('Node path with the ShaderMaterial'),
         },
     }, async (args) => callGodot(bridge, 'shader/get_params', args));
+    // 6b. reset_shader_param
+    server.registerTool('reset_shader_param', {
+        description: 'Reset a shader parameter to its default value (remove the override)',
+        inputSchema: {
+            node_path: NodePath.describe('Node path with the ShaderMaterial'),
+            param: z.string().describe('Shader uniform name to reset'),
+        },
+    }, async (args) => callGodot(bridge, 'shader/reset_param', args));
     // 7. list_shaders
     server.registerTool('list_shaders', {
         description: 'List all shader files in the project',
