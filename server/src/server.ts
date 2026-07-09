@@ -48,6 +48,12 @@ export function registerTool(server: McpServer, bridge: GodotBridge, name: strin
 export async function callGodot(bridge: GodotBridge, method: string, params: Record<string, unknown> = {}): Promise<ToolResult> {
   try {
     const result = await bridge.sendRequest(method, params);
+    // Check if GDScript command returned a structured error (success: false)
+    if (result && typeof result === 'object' && (result as Record<string, unknown>).success === false) {
+      const errorData = result as Record<string, unknown>;
+      const errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData);
+      return createErrorResult(errorMessage);
+    }
     const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
     return { content: [{ type: 'text', text }] };
   } catch (error) {

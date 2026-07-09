@@ -36,6 +36,12 @@ export function registerTool(server, bridge, name, description, schema, handler)
 export async function callGodot(bridge, method, params = {}) {
     try {
         const result = await bridge.sendRequest(method, params);
+        // Check if GDScript command returned a structured error (success: false)
+        if (result && typeof result === 'object' && result.success === false) {
+            const errorData = result;
+            const errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData);
+            return createErrorResult(errorMessage);
+        }
         const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
         return { content: [{ type: 'text', text }] };
     }

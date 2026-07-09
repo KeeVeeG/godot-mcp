@@ -314,12 +314,11 @@ func _on_ws_message(message: Dictionary) -> void:
 		if _status_panel:
 			_status_panel.log_activity("OK: %s" % method_name, "success")
 
-	# Send response back as proper JSON-RPC response (with id)
+	# Send response back as proper JSON-RPC response (with id).
+	# Always send as a success response — the result itself contains success: false for errors.
+	# This avoids raw-string errors that violate JSON-RPC spec and break client error parsing.
 	if _ws_client and _ws_client.is_server_connected():
-		if result.has("error"):
-			_ws_client.send_response(msg_id, null, result["error"])
-		else:
-			_ws_client.send_response(msg_id, result.get("result", result))
+		_ws_client.send_response(msg_id, result.get("result", result))
 
 
 ## Check for and auto-dismiss blocking dialogs.
