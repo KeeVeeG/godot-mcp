@@ -36,7 +36,7 @@ export const GDScriptCode = z.string().describe('GDScript code to execute');
 /** Search query string */
 export const SearchQuery = z.string().describe('Search query');
 /** Node type name (e.g. "Sprite2D", "CharacterBody3D") */
-export const NodeType = z.string().describe("Node type name (e.g. 'Sprite2D', 'CharacterBody3D')");
+export const NodeType = z.string().min(1, "Type name is required").describe("Node type name (e.g. 'Sprite2D', 'CharacterBody3D')");
 /** Parent node path — use '' (empty string) for scene root, or node name (e.g. "Player") for direct root children */
 export const ParentPath = z.string().describe("Parent node path. Use '' (empty string) to add at scene root, or a node name/path (e.g. 'Player' or 'Player/Sprites') to add as a child of that node.");
 // ────────────────────────────────────────────────────────────

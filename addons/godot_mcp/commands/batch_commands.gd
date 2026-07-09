@@ -442,36 +442,53 @@ func _modify_scene_file(scene_path: String, type_name: String, property: String,
 	var output: PackedStringArray = PackedStringArray()
 	var in_matching_node: bool = false
 	var prop_found_in_node: bool = false
+	var need_insert: bool = false
 	var current_type: String = ""
 
 	for line: String in lines:
 		var trimmed: String = line.strip_edges()
 		if trimmed.begins_with("[node"):
-			# Exiting previous node — insert property if it wasn't found
+			# Exiting previous node — flush pending insert at end if still needed
 			if in_matching_node and not prop_found_in_node:
 				output.append(property + " = " + _serialize_for_tscn(value))
 				modified = true
 
 			in_matching_node = false
 			prop_found_in_node = false
+			need_insert = false
 			current_type = _extract_attr(trimmed, "type")
 			if current_type == type_name or (current_type.is_empty() and type_name == "Node"):
 				in_matching_node = true
+				need_insert = true  # insert property right after this header
+
+			output.append(line)
+			continue
+
 		elif trimmed.begins_with("[") and not trimmed.begins_with("[node"):
-			# Exiting node section — insert property if it wasn't found
+			# Any other section — flush pending insert at end if still needed
 			if in_matching_node and not prop_found_in_node:
 				output.append(property + " = " + _serialize_for_tscn(value))
 				modified = true
 			in_matching_node = false
-			prop_found_in_node = false
+			need_insert = false
 
-		if in_matching_node and trimmed.begins_with(property + " = "):
-			# Replace the property value
-			var serialized: String = _serialize_for_tscn(value)
-			output.append(property + " = " + serialized)
-			prop_found_in_node = true
-			modified = true
-			continue
+		# Before appending this line, check if we need to insert property right after [node...] header
+		if need_insert and in_matching_node:
+			if trimmed.begins_with(property + " = "):
+				# Replace the property value
+				var serialized: String = _serialize_for_tscn(value)
+				output.append(property + " = " + serialized)
+				prop_found_in_node = true
+				need_insert = false
+				modified = true
+				continue
+			else:
+				# Insert new property BEFORE this line (right after node header)
+				output.append(property + " = " + _serialize_for_tscn(value))
+				prop_found_in_node = true
+				need_insert = false
+				modified = true
+				# Fall through to append current line below
 
 		output.append(line)
 
