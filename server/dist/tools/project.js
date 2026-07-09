@@ -44,7 +44,7 @@ export function registerProjectTools(server, bridge) {
     }, async (args) => callGodot(bridge, 'project/set_setting', args));
     // 6. remove_project_setting
     server.registerTool('remove_project_setting', {
-        description: "Remove a project setting from project.godot. Use this instead of passing null to set_project_setting.",
+        description: 'Remove a project setting from project.godot. Use this instead of passing null to set_project_setting.',
         inputSchema: {
             key: z.string().describe("ProjectSettings key to remove (e.g. 'application/config/name')"),
         },
