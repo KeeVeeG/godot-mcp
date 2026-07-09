@@ -196,15 +196,34 @@ func set_physics_layers(params: Dictionary) -> Dictionary:
 			co.collision_layer = 1 << (layer - 1)
 		if mask > 0 and mask <= 32:
 			co.collision_mask = 1 << (mask - 1)
+		# Report layer numbers (1-32), not raw bitmask values, for consistency with input
+		var current_layers: Array[int] = _bitmask_to_layer_numbers(co.collision_layer)
+		var current_masks: Array[int] = _bitmask_to_layer_numbers(co.collision_mask)
+		var layer_str: String = ",".join(current_layers) if not current_layers.is_empty() else "none"
+		var mask_str: String = ",".join(current_masks) if not current_masks.is_empty() else "none"
+		return {"result": "Physics layers set on %s (layers=[%s], masks=[%s])" % [path, layer_str, mask_str]}
 	elif node is CollisionObject3D:
 		var co3: CollisionObject3D = node as CollisionObject3D
 		if layer > 0 and layer <= 32:
 			co3.collision_layer = 1 << (layer - 1)
 		if mask > 0 and mask <= 32:
 			co3.collision_mask = 1 << (mask - 1)
+		var current_layers: Array[int] = _bitmask_to_layer_numbers(co3.collision_layer)
+		var current_masks: Array[int] = _bitmask_to_layer_numbers(co3.collision_mask)
+		var layer_str: String = ",".join(current_layers) if not current_layers.is_empty() else "none"
+		var mask_str: String = ",".join(current_masks) if not current_masks.is_empty() else "none"
+		return {"result": "Physics layers set on %s (layers=[%s], masks=[%s])" % [path, layer_str, mask_str]}
 	else:
 		return {"error": "Node is not a CollisionObject: %s" % node.get_class()}
-	return {"result": "Physics layers set on %s (layer=%d, mask=%d)" % [path, layer, mask]}
+
+
+## Convert a bitmask value to an array of layer numbers (1-based).
+func _bitmask_to_layer_numbers(bitmask: int) -> Array[int]:
+	var layers: Array[int] = []
+	for i: int in range(32):
+		if bitmask & (1 << i):
+			layers.append(i + 1)
+	return layers
 
 
 ## Get physics collision layers.
@@ -222,12 +241,16 @@ func get_physics_layers(params: Dictionary) -> Dictionary:
 	var result: Dictionary = {"path": path}
 	if node is CollisionObject2D:
 		var co: CollisionObject2D = node as CollisionObject2D
-		result["collision_layer"] = co.collision_layer
-		result["collision_mask"] = co.collision_mask
+		result["collision_layer"] = _bitmask_to_layer_numbers(co.collision_layer)
+		result["collision_mask"] = _bitmask_to_layer_numbers(co.collision_mask)
+		result["collision_layer_bitmask"] = co.collision_layer
+		result["collision_mask_bitmask"] = co.collision_mask
 	elif node is CollisionObject3D:
 		var co3: CollisionObject3D = node as CollisionObject3D
-		result["collision_layer"] = co3.collision_layer
-		result["collision_mask"] = co3.collision_mask
+		result["collision_layer"] = _bitmask_to_layer_numbers(co3.collision_layer)
+		result["collision_mask"] = _bitmask_to_layer_numbers(co3.collision_mask)
+		result["collision_layer_bitmask"] = co3.collision_layer
+		result["collision_mask_bitmask"] = co3.collision_mask
 	else:
 		return {"error": "Node is not a CollisionObject: %s" % node.get_class()}
 	return {"result": result}

@@ -61,6 +61,7 @@ func _create_project(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Invalid path"}
 
 	# Detect invalid Windows filename characters before attempting directory creation
+	# NOTE: / and \ are valid Windows path separators, : is valid as drive letter delimiter (C:)
 	var invalid_chars: RegEx = RegEx.new()
 	invalid_chars.compile("[<>\"|?*]")
 	if invalid_chars.search(path):
@@ -342,6 +343,9 @@ func _create_project_license(params: Dictionary) -> Dictionary:
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
 
+	if not DirAccess.dir_exists_absolute(project_path):
+		return {"success": false, "error": "Project path does not exist: %s" % project_path}
+
 	if not FileAccess.file_exists(project_path.path_join("project.godot")):
 		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
 
@@ -379,6 +383,9 @@ func _setup_project_dependencies(params: Dictionary) -> Dictionary:
 
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
+
+	if not DirAccess.dir_exists_absolute(project_path):
+		return {"success": false, "error": "Project path does not exist: %s" % project_path}
 
 	if not FileAccess.file_exists(project_path.path_join("project.godot")):
 		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
@@ -556,6 +563,9 @@ func _remove_project_dependencies(params: Dictionary) -> Dictionary:
 
 	if not MCPCommandHelpers.validate_path(project_path):
 		return {"success": false, "error": "Invalid path"}
+
+	if not DirAccess.dir_exists_absolute(project_path):
+		return {"success": false, "error": "Project path does not exist: %s" % project_path}
 
 	if not FileAccess.file_exists(project_path.path_join("project.godot")):
 		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}

@@ -25,6 +25,7 @@ func get_commands() -> Dictionary:
 		"project_config/add_autoload_config": func(params: Dictionary) -> Dictionary: return execute("add_autoload_config", params),
 		"project_config/remove_autoload_config": func(params: Dictionary) -> Dictionary: return execute("remove_autoload_config", params),
 		"project_config/reorder_autoloads": func(params: Dictionary) -> Dictionary: return execute("reorder_autoloads", params),
+		"project_config/remove_setting": func(params: Dictionary) -> Dictionary: return execute("remove_setting", params),
 	}
 
 
@@ -43,6 +44,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"add_autoload_config": return _add_autoload(params)
 		"remove_autoload_config": return _remove_autoload(params)
 		"reorder_autoloads": return _reorder_autoloads(params)
+		"remove_setting": return _remove_setting(params)
 	return {"success": false, "error": "Unknown method: " + method}
 
 
@@ -67,23 +69,10 @@ func _set_setting(params: Dictionary) -> Dictionary:
 	# Defect 2: Validate key exists in ProjectSettings registry
 	if not ProjectSettings.has_setting(key):
 		return {"success": false, "error": "Setting '%s' does not exist. Check the key spelling or list valid keys with get_all_project_settings." % key}
-	# Defect 4/13: Handle null (or string "null") as reset-to-default using property_get_revert.
-	# This preserves the key in ProjectSettings.props, so has_setting() still returns true.
+	# Defect 4/13: Reject null — use remove_project_setting to delete a setting instead.
 	var is_null: bool = MCPCommandHelpers.is_null(value)
 	if is_null:
-		if not ProjectSettings.property_can_revert(key):
-			# Not a revertable setting — fall back to deletion (custom settings)
-			ProjectSettings.set_setting(key, null)
-			var err: Error = ProjectSettings.save()
-			if err != OK:
-				return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-			return {"success": true, "key": key, "message": "Setting '%s' removed" % key}
-		var default_value: Variant = ProjectSettings.property_get_revert(key)
-		ProjectSettings.set_setting(key, default_value)
-		var err: Error = ProjectSettings.save()
-		if err != OK:
-			return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-		return {"success": true, "key": key, "message": "Setting '%s' reset to default" % key}
+		return {"success": false, "error": "value cannot be null. Use remove_project_setting to delete a setting."}
 	# Resolve expected type for this setting
 	var expected_type: int = TYPE_NIL
 	for p: Dictionary in ProjectSettings.get_property_list():
@@ -142,6 +131,21 @@ func _reset_setting(params: Dictionary) -> Dictionary:
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
 	return {"success": true, "key": key, "message": "Setting '%s' reset to default" % key}
+
+
+## Remove a project setting from project.godot.
+## This is the dedicated tool for deleting settings — separate from set_project_setting.
+func _remove_setting(params: Dictionary) -> Dictionary:
+	var key: String = params.get("key", "")
+	if key.is_empty():
+		return {"success": false, "error": "Key cannot be empty"}
+	if not ProjectSettings.has_setting(key):
+		return {"success": false, "error": "Setting not found: %s" % key}
+	ProjectSettings.set_setting(key, null)
+	var err: Error = ProjectSettings.save()
+	if err != OK:
+		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
+	return {"success": true, "key": key, "message": "Setting '%s' removed" % key}
 
 
 ## Get all input actions with their mapped events.

@@ -162,4 +162,16 @@ export function registerProjectConfigTools(server: McpServer, bridge: GodotBridg
     },
     async (args) => callGodot(bridge, 'project_config/reorder_autoloads', args as Record<string, unknown>),
   );
+
+  // 13. remove_project_setting
+  server.registerTool(
+    'remove_project_setting',
+    {
+      description: 'Remove a project setting from project.godot. Use this instead of setting a value to null.',
+      inputSchema: {
+        key: z.string().describe('Project setting key to remove (e.g. custom/my_setting)'),
+      },
+    },
+    async (args) => callGodot(bridge, 'project_config/remove_setting', args as Record<string, unknown>),
+  );
 }
