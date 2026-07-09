@@ -121,8 +121,8 @@ func _get_groups(params: Dictionary) -> Dictionary:
 		_collect_groups(root, groups_dict)
 	else:
 		# File-based: nodes are orphaned (not in scene tree), get_path() returns empty.
-		# Collect node names instead of scene-relative paths.
-		_collect_groups_orphan(root, groups_dict)
+		# Reconstruct relative paths by walking the parent chain up to the root.
+		_collect_groups_orphan(root, groups_dict, root)
 	var groups: Array = []
 	for group_name: String in groups_dict:
 		groups.append({"name": group_name, "nodes": groups_dict[group_name]})
@@ -264,13 +264,26 @@ func _collect_groups(node: Node, groups: Dictionary) -> void:
 
 
 ## Collect groups from orphan nodes (instantiated from file, not in scene tree).
-## Uses node.name instead of get_path() since get_path() returns empty for orphan nodes.
-func _collect_groups_orphan(node: Node, groups: Dictionary) -> void:
+## Reconstructs relative paths by walking the parent chain up to `base_root`.
+func _collect_groups_orphan(node: Node, groups: Dictionary, base_root: Node) -> void:
 	for group: String in node.get_groups():
 		if group.begins_with("_"):
 			continue
 		if not groups.has(group):
 			groups[group] = []
-		groups[group].append(str(node.name))
+		groups[group].append(_orphan_relative_path(node, base_root))
 	for child: Node in node.get_children():
-		_collect_groups_orphan(child, groups)
+		_collect_groups_orphan(child, groups, base_root)
+
+
+## Build a relative path for an orphan node by walking up to `base_root`.
+## Returns "." for the root, "A/B/C" for nested nodes.
+static func _orphan_relative_path(node: Node, base_root: Node) -> String:
+	if node == base_root:
+		return "."
+	var parts: Array = []
+	var n: Node = node
+	while n != null and n != base_root:
+		parts.push_front(str(n.name))
+		n = n.get_parent()
+	return "/".join(parts)
