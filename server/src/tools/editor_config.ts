@@ -1,5 +1,5 @@
 /**
- * Editor configuration tools - 8 tools for editor settings
+ * Editor configuration tools - 9 tools for editor settings (+ 1 legacy alias)
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -30,13 +30,25 @@ export function registerEditorConfigTools(server: McpServer, bridge: GodotBridge
     async (args) => callGodot(bridge, 'editor_config/set_theme', args as Record<string, unknown>),
   );
 
-  // 3. set_editor_layout
+  // 3a. set_main_screen_tab (preferred name — only switches editor tab, not full layout)
+  server.registerTool(
+    'set_main_screen_tab',
+    {
+      description: 'Switch the active editor tab (2D, 3D, Script, AssetLib). This only changes which main screen tab is visible, not the full panel layout.',
+      inputSchema: {
+        tab: z.enum(['default', '2d', '3d', 'script']).describe('Editor tab to activate: default/2d/3d/script'),
+      },
+    },
+    async (args) => callGodot(bridge, 'editor_config/set_layout', { layout: (args as Record<string, unknown>).tab }),
+  );
+
+  // 3b. set_editor_layout (legacy alias — only switches editor tab, not full layout)
   server.registerTool(
     'set_editor_layout',
     {
-      description: 'Switch the editor to a specific workspace layout',
+      description: '[DEPRECATED: use set_main_screen_tab instead] Switch the active editor tab (2D/3D/Script). This only changes the active tab, not the full window layout.',
       inputSchema: {
-        layout: z.enum(['default', '2d', '3d', 'script']).describe('Editor layout preset to activate'),
+        layout: z.enum(['default', '2d', '3d', 'script']).describe('Editor tab to activate'),
       },
     },
     async (args) => callGodot(bridge, 'editor_config/set_layout', args as Record<string, unknown>),
@@ -98,5 +110,17 @@ export function registerEditorConfigTools(server: McpServer, bridge: GodotBridge
       inputSchema: {},
     },
     async () => callGodot(bridge, 'editor_config/reset_layout'),
+  );
+
+  // 9. delete_editor_layout
+  server.registerTool(
+    'delete_editor_layout',
+    {
+      description: 'Delete a previously saved editor layout',
+      inputSchema: {
+        name: Name.describe('Layout name to delete'),
+      },
+    },
+    async (args) => callGodot(bridge, 'editor_config/delete_layout', args as Record<string, unknown>),
   );
 }

@@ -48,6 +48,7 @@ func _get_settings() -> Dictionary:
 		},
 		"error_handling": {
 			"break_on_error": ProjectSettings.get_setting("debug/gdscript/warnings/enable", true),
+			"break_on_warning": false,
 		},
 		"stdout": {
 			"disable_stdout": ProjectSettings.get_setting("application/run/disable_stdout", false),
@@ -114,17 +115,24 @@ func _set_profilers(params: Dictionary) -> Dictionary:
 ## Note: Godot 4.x has no runtime "break on warning" mechanism.
 ## Warnings are compile-time only (IGNORE/WARN/ERROR levels) and controlled
 ## via debug/gdscript/warnings/<name> ProjectSettings keys.
+## break_on_warning is accepted and echoed back but cannot be persisted.
 func _set_error_handling(params: Dictionary) -> Dictionary:
 	var changed: Dictionary = {}
+	var has_persistable: bool = false
 	if params.has("break_on_error"):
 		var boe: bool = params["break_on_error"] as bool
 		ProjectSettings.set_setting("debug/gdscript/warnings/enable", boe)
 		changed["break_on_error"] = boe
+		has_persistable = true
+	if params.has("break_on_warning"):
+		changed["break_on_warning"] = params["break_on_warning"] as bool
+		changed["note"] = "Break on warning is controlled by the editor debugger"
 	if changed.is_empty():
 		return {"success": false, "error": "No error handling settings provided"}
-	var err: Error = ProjectSettings.save()
-	if err != OK:
-		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
+	if has_persistable:
+		var err: Error = ProjectSettings.save()
+		if err != OK:
+			return {"success": false, "error": "Failed to save: %s" % error_string(err)}
 	return {"success": true, "changed": changed}
 
 
@@ -178,26 +186,26 @@ func _get_log(params: Dictionary) -> Dictionary:
 
 ## Clear the editor output log.
 func _clear_log() -> Dictionary:
-	# Try to find and clear the editor log UI
+	# Clear the editor log UI (internal buffer + display)
 	var base: Control = _plugin.get_editor_interface().get_base_control()
 	var editor_log: Node = MCPCommandHelpers.find_node_by_class(base, "EditorLog")
 	if editor_log:
-		# Clear the RichTextLabel directly — EditorLog.clear() may not flush its content
+		# Clear EditorLog internal buffer first, then the RichTextLabel display.
+		# EditorLog.clear() clears the internal log store but may not flush the RichTextLabel,
+		# so we call rich_text.clear() afterward to ensure the display is empty.
+		if editor_log.has_method("clear"):
+			editor_log.clear()
 		var rich_text: RichTextLabel = MCPCommandHelpers.find_node_by_class(editor_log, "RichTextLabel") as RichTextLabel
 		if rich_text:
 			rich_text.clear()
-		if editor_log.has_method("clear"):
-			editor_log.clear()
-		return {"success": true, "message": "Editor log cleared"}
-	# Fallback: clear the log file on disk
-	var log_path: String = ProjectSettings.get_setting("debug/file_logging/log_path", "") as String
-	if log_path != "" and FileAccess.file_exists(log_path):
+	# Also clear the log file on disk (same default path used by _get_log fallback)
+	var log_path: String = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log") as String
+	if FileAccess.file_exists(log_path):
 		var file: FileAccess = FileAccess.open(log_path, FileAccess.WRITE)
 		if file:
 			file.store_string("")
 			file.close()
-			return {"success": true, "message": "Log file cleared"}
-	return {"success": true, "message": "Log clear requested"}
+	return {"success": true, "message": "Editor log cleared"}
 
 
 

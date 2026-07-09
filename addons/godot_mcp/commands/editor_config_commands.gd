@@ -7,8 +7,26 @@ var _plugin: EditorPlugin
 var _current_tab: String = "2D"
 
 
+## EditorSettings key for tracking saved layout names.
+## Uses EditorSettings (not DirAccess scanning) to avoid race conditions
+## when theme changes trigger cascading NOTIFICATION_EDITOR_SETTINGS_CHANGED updates.
+const SAVED_LAYOUTS_KEY: String = "mcp/editor/saved_layouts"
+
+
 func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
+	# Migrate: if EditorSettings key is empty but files exist, populate from disk.
+	var es: EditorSettings = EditorInterface.get_editor_settings()
+	if es != null:
+		var existing: PackedStringArray = _get_layout_names_from_settings(es)
+		if existing.is_empty():
+			# First load: scan disk for legacy layout files and register them.
+			var from_disk: Array = _scan_layout_files()
+			var names: PackedStringArray
+			for name in from_disk:
+				names.append(name)
+			if not names.is_empty():
+				es.set_setting(SAVED_LAYOUTS_KEY, names)
 
 
 ## Router compatibility: returns callable map for MCPCommandRouter.
@@ -152,6 +170,8 @@ func _save_layout(params: Dictionary) -> Dictionary:
 	var err: Error = config.save(layout_path)
 	if err != OK:
 		return {"success": false, "error": "Failed to save layout: %s" % error_string(err)}
+	# Register layout in EditorSettings (avoids DirAccess race conditions)
+	_register_layout_name(es, name)
 	return {"success": true, "name": name, "path": layout_path, "message": "Editor config '%s' saved (theme, font, scale, tab)" % name}
 
 
@@ -213,11 +233,51 @@ func _delete_layout(params: Dictionary) -> Dictionary:
 	var err: Error = dir.remove("editor_layout_%s.cfg" % name)
 	if err != OK:
 		return {"success": false, "error": "Failed to delete layout: %s" % error_string(err)}
+	# Unregister layout from EditorSettings
+	_unregister_layout_name(EditorInterface.get_editor_settings(), name)
 	return {"success": true, "name": name, "message": "Layout '%s' deleted" % name}
 
 
-## Helper: get list of saved layouts.
+## Helper: get list of saved layouts from EditorSettings (avoid DirAccess race conditions).
 func _get_saved_layouts() -> Array:
+	var es: EditorSettings = EditorInterface.get_editor_settings()
+	if es == null:
+		return []
+	var names: PackedStringArray = _get_layout_names_from_settings(es)
+	# Validate: only return names whose config files actually exist
+	var layouts: Array = []
+	for name in names:
+		if FileAccess.file_exists("user://editor_layout_%s.cfg" % name):
+			layouts.append(name)
+	return layouts
+
+
+## Read layout names from EditorSettings.
+func _get_layout_names_from_settings(es: EditorSettings) -> PackedStringArray:
+	if es.has_setting(SAVED_LAYOUTS_KEY):
+		return es.get_setting(SAVED_LAYOUTS_KEY)
+	return PackedStringArray()
+
+
+## Add a layout name to EditorSettings.
+func _register_layout_name(es: EditorSettings, name: String) -> void:
+	var names: PackedStringArray = _get_layout_names_from_settings(es)
+	if not names.has(name):
+		names.append(name)
+		es.set_setting(SAVED_LAYOUTS_KEY, names)
+
+
+## Remove a layout name from EditorSettings.
+func _unregister_layout_name(es: EditorSettings, name: String) -> void:
+	var names: PackedStringArray = _get_layout_names_from_settings(es)
+	var idx: int = names.find(name)
+	if idx >= 0:
+		names.remove_at(idx)
+		es.set_setting(SAVED_LAYOUTS_KEY, names)
+
+
+## One-time migration: scan user:// for legacy layout files (used when EditorSettings key is empty).
+func _scan_layout_files() -> Array:
 	var layouts: Array = []
 	var dir: DirAccess = DirAccess.open("user://")
 	if dir == null:

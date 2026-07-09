@@ -66,8 +66,9 @@ func _set_bus_layout(params: Dictionary) -> Dictionary:
 	if buses.size() > 0:
 		var master: Dictionary = buses[0] as Dictionary
 		AudioServer.set_bus_name(0, master.get("name", "Master"))
-		if master.has("volume_db"):
-			AudioServer.set_bus_volume_db(0, master["volume_db"] as float)
+		if master.has("volume_db") or master.has("volume"):
+			var vol: float = master.get("volume_db", master.get("volume", 0.0)) as float
+			AudioServer.set_bus_volume_db(0, vol)
 		if master.has("solo"):
 			AudioServer.set_bus_solo(0, master["solo"] as bool)
 		if master.has("mute"):
@@ -78,8 +79,9 @@ func _set_bus_layout(params: Dictionary) -> Dictionary:
 		AudioServer.add_bus()
 		var idx: int = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(idx, bus_data.get("name", "Bus%d" % idx))
-		if bus_data.has("volume_db"):
-			AudioServer.set_bus_volume_db(idx, bus_data["volume_db"] as float)
+		if bus_data.has("volume_db") or bus_data.has("volume"):
+			var vol: float = bus_data.get("volume_db", bus_data.get("volume", 0.0)) as float
+			AudioServer.set_bus_volume_db(idx, vol)
 		if bus_data.has("solo"):
 			AudioServer.set_bus_solo(idx, bus_data["solo"] as bool)
 		if bus_data.has("mute"):

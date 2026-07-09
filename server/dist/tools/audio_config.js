@@ -22,7 +22,17 @@ export function registerAudioConfigTools(server, bridge) {
             }))
                 .describe("Ordered list of audio buses (first is always 'Master')"),
         },
-    }, async (args) => callGodot(bridge, 'audio_config/set_bus_layout', args));
+    }, async (args) => {
+        const typed = args;
+        if (typed.buses) {
+            for (const bus of typed.buses) {
+                if (bus.volume !== undefined && bus.volume_db === undefined) {
+                    bus.volume_db = bus.volume;
+                }
+            }
+        }
+        return callGodot(bridge, 'audio_config/set_bus_layout', typed);
+    });
     // 3. add_audio_bus_config
     server.registerTool('add_audio_bus_config', {
         description: 'Add a new audio bus at a specific position',
@@ -45,7 +55,13 @@ export function registerAudioConfigTools(server, bridge) {
             bus: Name.describe("Bus name (e.g. 'Master', 'Music', 'SFX')"),
             volume_db: z.number().describe('Volume in decibels (0 = normal, negative = quieter)'),
         },
-    }, async (args) => callGodot(bridge, 'audio_config/set_bus_volume', args));
+    }, async (args) => {
+        const typed = args;
+        if (typed.volume !== undefined && typed.volume_db === undefined) {
+            typed.volume_db = typed.volume;
+        }
+        return callGodot(bridge, 'audio_config/set_bus_volume', typed);
+    });
     // 6. get_audio_bus_effects
     server.registerTool('get_audio_bus_effects', {
         description: 'Get all effects on a specific audio bus with their properties',

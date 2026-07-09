@@ -193,15 +193,15 @@ func set_physics_layers(params: Dictionary) -> Dictionary:
 	if node is CollisionObject2D:
 		var co: CollisionObject2D = node as CollisionObject2D
 		if layer > 0 and layer <= 32:
-			co.collision_layer |= 1 << (layer - 1)
+			co.collision_layer = 1 << (layer - 1)
 		if mask > 0 and mask <= 32:
-			co.collision_mask |= 1 << (mask - 1)
+			co.collision_mask = 1 << (mask - 1)
 	elif node is CollisionObject3D:
 		var co3: CollisionObject3D = node as CollisionObject3D
 		if layer > 0 and layer <= 32:
-			co3.collision_layer |= 1 << (layer - 1)
+			co3.collision_layer = 1 << (layer - 1)
 		if mask > 0 and mask <= 32:
-			co3.collision_mask |= 1 << (mask - 1)
+			co3.collision_mask = 1 << (mask - 1)
 	else:
 		return {"error": "Node is not a CollisionObject: %s" % node.get_class()}
 	return {"result": "Physics layers set on %s (layer=%d, mask=%d)" % [path, layer, mask]}
@@ -330,12 +330,12 @@ func get_physics_material(params: Dictionary) -> Dictionary:
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 	var mat: PhysicsMaterial = null
-	if node is RigidBody2D or node is CharacterBody2D:
-		mat = node.physics_material_override
+	if node is RigidBody2D:
+		mat = (node as RigidBody2D).physics_material_override
 	elif node is StaticBody2D:
 		mat = (node as StaticBody2D).physics_material_override
-	elif node is RigidBody3D or node is CharacterBody3D:
-		mat = node.physics_material_override
+	elif node is RigidBody3D:
+		mat = (node as RigidBody3D).physics_material_override
 	elif node is StaticBody3D:
 		mat = (node as StaticBody3D).physics_material_override
 	else:
@@ -343,12 +343,12 @@ func get_physics_material(params: Dictionary) -> Dictionary:
 		var scr: Script = node.get_script()
 		if scr:
 			var bt: String = scr.get_instance_base_type()
-			if bt == "RigidBody2D" or bt == "CharacterBody2D" or bt == "StaticBody2D" or bt == "RigidBody3D" or bt == "CharacterBody3D" or bt == "StaticBody3D":
+			if bt == "RigidBody2D" or bt == "StaticBody2D" or bt == "RigidBody3D" or bt == "StaticBody3D":
 				mat = node.physics_material_override
 			else:
-				return {"error": "Node does not support physics_material_override: %s." % node.get_class()}
+				return {"error": "Node type '%s' does not support physics_material_override. Supported types: RigidBody2D, RigidBody3D, StaticBody2D, StaticBody3D." % node.get_class()}
 		else:
-			return {"error": "Node does not support physics_material_override: %s." % node.get_class()}
+			return {"error": "Node type '%s' does not support physics_material_override. Supported types: RigidBody2D, RigidBody3D, StaticBody2D, StaticBody3D." % node.get_class()}
 	if mat == null:
 		return {"result": {"path": path, "has_material": false}}
 	return {"result": {
@@ -393,26 +393,32 @@ func set_physics_material(params: Dictionary) -> Dictionary:
 		mat.bounce = properties["bounce"] as float
 	if properties.has("absorbent"):
 		mat.absorbent = properties["absorbent"] as bool
-	if node is RigidBody2D or node is StaticBody2D or node is CharacterBody2D:
+	var material_set: bool = false
+	if node is RigidBody2D or node is StaticBody2D:
 		if _undo_helper:
 			_undo_helper.set_property_with_undo(node, "physics_material_override", mat)
 		else:
 			node.physics_material_override = mat
-	elif node is RigidBody3D or node is StaticBody3D or node is CharacterBody3D:
+		material_set = true
+	elif node is RigidBody3D or node is StaticBody3D:
 		if _undo_helper:
 			_undo_helper.set_property_with_undo(node, "physics_material_override", mat)
 		else:
 			node.physics_material_override = mat
+		material_set = true
 	else:
 		# Fallback: check script base class
 		var scr: Script = node.get_script()
 		if scr:
 			var bt: String = scr.get_instance_base_type()
-			if bt == "RigidBody2D" or bt == "StaticBody2D" or bt == "CharacterBody2D" or bt == "RigidBody3D" or bt == "StaticBody3D" or bt == "CharacterBody3D":
+			if bt == "RigidBody2D" or bt == "StaticBody2D" or bt == "RigidBody3D" or bt == "StaticBody3D":
 				if _undo_helper:
 					_undo_helper.set_property_with_undo(node, "physics_material_override", mat)
 				else:
 					node.physics_material_override = mat
+				material_set = true
+	if not material_set:
+		return {"error": "Node type '%s' does not support physics_material_override. Supported types: RigidBody2D, RigidBody3D, StaticBody2D, StaticBody3D." % node.get_class()}
 	return {"result": {"path": path, "friction": mat.friction, "rough": mat.rough, "bounce": mat.bounce, "absorbent": mat.absorbent}}
 
 

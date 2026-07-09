@@ -35,6 +35,7 @@ export function registerDebugConfigTools(server, bridge) {
         description: 'Configure how the editor handles errors during gameplay. Note: Godot 4.x has no "break on warning" mechanism — warnings are compile-time only (IGNORE/WARN/ERROR levels in ProjectSettings). To treat warnings as errors that prevent compilation, use set_project_setting on debug/gdscript/warnings/<name> keys.',
         inputSchema: {
             break_on_error: z.boolean().optional().describe('Break into debugger on runtime error'),
+            break_on_warning: z.boolean().optional().describe('Break into debugger on warnings (not persistable — controlled by editor debugger)'),
         },
     }, async (args) => callGodot(bridge, 'debug_config/set_error_handling', args));
     // 5. get_editor_log
