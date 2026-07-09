@@ -55,7 +55,7 @@ export function registerAudioConfigTools(server, bridge) {
     }, async (args) => callGodot(bridge, 'audio_config/get_bus_effects', args));
     // 7. set_audio_driver
     server.registerTool('set_audio_driver', {
-        description: 'Set the audio driver (takes effect on next Godot restart). Valid values: WASAPI, XAudio2, PulseAudio, ALSA, CoreAudio, Android, Web, Dummy',
+        description: 'Set the audio driver (takes effect on next Godot restart). Valid values: WASAPI, XAudio2, PulseAudio, ALSA, CoreAudio, Android, AudioWorklet, ScriptProcessor, Dummy',
         inputSchema: {
             driver: z.enum(['WASAPI', 'XAudio2', 'PulseAudio', 'ALSA', 'CoreAudio', 'Android', 'AudioWorklet', 'ScriptProcessor', 'Dummy']).describe('Audio driver name (platform-dependent)'),
         },
