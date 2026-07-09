@@ -2,7 +2,7 @@
 
 > File under test: `server/src/tools/audio.ts`
 > Shared types: `server/src/tools/shared-types.ts`
-> Total tools: 7
+> Total tools: 9
 
 ---
 
@@ -18,7 +18,7 @@ Before running any audio tool tests, ensure:
 
 ```
 1. Create/open a test scene with a root Node2D or Node3D
-2. Run tests in order: bus tests first (3→4→5→6), then player tests (1→7→2)
+2. Run tests in order: bus tests first (3→4→5→6), then player tests (1→7→2), then removal tests (remove_bus, remove_bus_effect)
 ```
 
 ---
@@ -371,6 +371,122 @@ Before running any audio tool tests, ensure:
 
 ---
 
+## Tool: `remove_audio_bus`
+
+**Description:** Remove an audio bus from the bus layout by name.
+
+**Godot command:** `audio/remove_bus`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `name` | `string` (Name) | **yes** | — | Bus name to remove |
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — remove an existing bus
+
+**Description:** Remove a previously created audio bus by name.
+
+**Prerequisites:** Run `add_audio_bus` with `name: "SFX"` first.
+
+```json
+{
+  "name": "SFX"
+}
+```
+
+**Expected result:** Tool call succeeds. The `SFX` bus is removed from the audio bus layout.
+
+**Notes:** Verify by calling `get_audio_bus_layout` afterward — the bus should no longer appear.
+
+**What to pay attention to:** Verify via `get_audio_bus_layout` that the `SFX` bus is gone. Other buses should remain intact.
+
+---
+
+#### Scenario 2: Remove a bus with effects
+
+**Description:** Remove a bus that has effects attached to it.
+
+**Prerequisites:** Create a bus with `add_audio_bus`, then add effects with `add_audio_bus_effect`.
+
+```json
+{
+  "name": "Music"
+}
+```
+
+**Expected result:** Tool call succeeds. The bus and all its effects are removed.
+
+**What to pay attention to:** Ensure that removing a bus also removes its effects — no orphaned effects should remain.
+
+---
+
+#### Scenario 3: Remove the Master bus (protected)
+
+**Description:** Attempt to remove the built-in Master bus.
+
+```json
+{
+  "name": "Master"
+}
+```
+
+**Expected result:** Error indicating the Master bus cannot be removed.
+
+**What to pay attention to:** Verify that the Master bus is protected and cannot be removed.
+
+---
+
+#### Scenario 4: Remove non-existent bus
+
+**Description:** Attempt to remove a bus that doesn't exist.
+
+```json
+{
+  "name": "GhostBus"
+}
+```
+
+**Expected result:** Error from Godot indicating the bus was not found.
+
+**What to pay attention to:** The error should be meaningful and not crash.
+
+---
+
+#### Scenario 5: Missing required `name` parameter
+
+**Description:** Call without the required `name` field.
+
+```json
+{}
+```
+
+**Expected result:** Validation error indicating `name` is required.
+
+**What to pay attention to:** Validation should trigger before sending to Godot.
+
+---
+
+#### Scenario 6: Double remove same bus
+
+**Description:** Remove the same bus twice.
+
+**Prerequisites:** Create a bus with `add_audio_bus`, then call `remove_audio_bus` once.
+
+```json
+{
+  "name": "SFX"
+}
+```
+
+**Expected result:** Second call returns an error indicating the bus no longer exists.
+
+**What to pay attention to:** The second call should fail gracefully, not crash.
+
+---
+
 ## Tool: `add_audio_bus_effect`
 
 **Description:** Add an audio effect to an audio bus.
@@ -539,6 +655,139 @@ Before running any audio tool tests, ensure:
 **Notes:** This is a parametric test — run the same structure for each of the 20 enum values to confirm all are recognized by the Godot side.
 
 **What to pay attention to:** Ensure that all 20 effect types are correctly recognized and added. Pay special attention to less obvious types (`eq6`, `eq10`, `eq21`, `spectrum`).
+
+---
+
+## Tool: `remove_audio_bus_effect`
+
+**Description:** Remove an effect from an audio bus by its index.
+
+**Godot command:** `audio/remove_bus_effect`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `bus_name` | `string` (Name) | **yes** | — | Audio bus name |
+| `effect_index` | `number` (int) | **yes** | — | 0-based index of the effect to remove |
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — remove an effect by index
+
+**Description:** Remove a previously added effect from a bus.
+
+**Prerequisites:** Run `add_audio_bus` with `name: "SFX"`, then `add_audio_bus_effect` with `effect_type: "reverb"`.
+
+```json
+{
+  "bus_name": "SFX",
+  "effect_index": 0
+}
+```
+
+**Expected result:** Tool call succeeds. The effect at index 0 is removed from the `SFX` bus.
+
+**Notes:** Verify via `get_audio_bus_layout` that the effect count decreased by 1.
+
+**What to pay attention to:** Verify that the effect is gone and remaining effects shifted indices correctly.
+
+---
+
+#### Scenario 2: Remove effect from a bus with multiple effects
+
+**Description:** Remove a specific effect when multiple exist.
+
+**Prerequisites:** Add two effects to a bus (e.g. reverb at index 0, delay at index 1).
+
+```json
+{
+  "bus_name": "SFX",
+  "effect_index": 0
+}
+```
+
+**Expected result:** The first effect (reverb) is removed. The second effect (delay) should now be at index 0.
+
+**What to pay attention to:** Verify that after removal, the remaining effect is at index 0 and works correctly.
+
+---
+
+#### Scenario 3: Missing required `bus_name`
+
+**Description:** Call without `bus_name`.
+
+```json
+{
+  "effect_index": 0
+}
+```
+
+**Expected result:** Validation error indicating `bus_name` is required.
+
+---
+
+#### Scenario 4: Missing required `effect_index`
+
+**Description:** Call without `effect_index`.
+
+```json
+{
+  "bus_name": "SFX"
+}
+```
+
+**Expected result:** Validation error indicating `effect_index` is required.
+
+---
+
+#### Scenario 5: Effect index out of range
+
+**Description:** Pass an index that exceeds the number of effects on the bus.
+
+```json
+{
+  "bus_name": "SFX",
+  "effect_index": 99
+}
+```
+
+**Expected result:** Error indicating the index is out of range (the bus has fewer effects).
+
+**What to pay attention to:** The error should include the actual effect count for context.
+
+---
+
+#### Scenario 6: Non-existent bus name
+
+**Description:** Reference a bus that doesn't exist.
+
+```json
+{
+  "bus_name": "NonExistentBus",
+  "effect_index": 0
+}
+```
+
+**Expected result:** Error from Godot indicating the bus was not found.
+
+---
+
+#### Scenario 7: Remove all effects one by one
+
+**Description:** Add multiple effects, then remove them all sequentially.
+
+**Prerequisites:** Add 3 effects to a bus.
+
+```json
+{"bus_name": "SFX", "effect_index": 0}
+{"bus_name": "SFX", "effect_index": 0}
+{"bus_name": "SFX", "effect_index": 0}
+```
+
+**Expected result:** Each call removes one effect. After all 3 calls, the bus has 0 effects.
+
+**What to pay attention to:** Verify that after removing all effects, `get_audio_bus_layout` shows 0 effects on the bus. No errors should occur.
 
 ---
 
@@ -931,9 +1180,23 @@ Expected: `AudioStreamPlayer`, stream `res://audio/bgm.ogg`, bus `Music`, autopl
 { "node_path": "BGM" }
 ```
 
-**Notes:** This workflow tests the full lifecycle: bus creation → effect insertion → bus configuration → player creation → verification → cleanup. Run this as an integration test to validate that all tools work together correctly.
+**Step 8 — Remove an effect from the bus:**
+```json
+// remove_audio_bus_effect
+{ "bus_name": "Music", "effect_index": 0 }
+```
+Expected: The reverb effect is removed from `Music` bus. The chorus effect shifts to index 0.
 
-**What to pay attention to:** All steps should execute sequentially without errors. Steps 5 and 6 are key verifications confirming that the previous operations were applied correctly.
+**Step 9 — Remove the bus entirely:**
+```json
+// remove_audio_bus
+{ "name": "Music" }
+```
+Expected: The `Music` bus is removed from the layout. Only `Master` remains.
+
+**Notes:** This workflow tests the full lifecycle: bus creation → effect insertion → bus configuration → player creation → verification → player cleanup → effect removal → bus removal. Run this as an integration test to validate that all tools work together correctly.
+
+**What to pay attention to:** All steps should execute sequentially without errors. Steps 5, 6, and 8 are key verifications confirming that the previous operations were applied correctly.
 
 ---
 
@@ -951,3 +1214,10 @@ Expected: `AudioStreamPlayer`, stream `res://audio/bgm.ogg`, bus `Music`, autopl
 | Empty properties object | `set_audio_bus` | `{ "bus_name": "SFX", "properties": {} }` | Either success (no-op) or error — document behavior |
 | Effect on "Master" bus | `add_audio_bus_effect` | `{ "bus_name": "Master", "effect_type": "limiter" }` | Success — Master bus accepts effects |
 | Float index for bus | `add_audio_bus` | `{ "name": "TestBus", "index": 1.5 }` | Validation error — index must be int |
+| Remove Master bus | `remove_audio_bus` | `{ "name": "Master" }` | Error — Master bus cannot be removed |
+| Remove non-existent bus | `remove_audio_bus` | `{ "name": "GhostBus" }` | Error — bus not found |
+| Remove bus with effects | `remove_audio_bus` | `{ "name": "SFX" }` (after adding effects) | Success — bus and all effects removed |
+| Remove effect from empty bus | `remove_audio_bus_effect` | `{ "bus_name": "SFX", "effect_index": 0 }` (0 effects) | Error — index out of range |
+| Remove effect with very high index | `remove_audio_bus_effect` | `{ "bus_name": "SFX", "effect_index": 999 }` | Error — index out of range with count info |
+| Remove effect from Master bus | `remove_audio_bus_effect` | `{ "bus_name": "Master", "effect_index": 0 }` | Error if no effects, success if effects exist |
+| Double remove same effect | `remove_audio_bus_effect` | Call twice with same index | Second call should error (index shifted or out of range) |

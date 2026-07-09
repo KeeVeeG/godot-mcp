@@ -1,7 +1,7 @@
 # Test Plan: Gameplay Automation Tools
 
 **File:** `server/src/tools/gameplay_automation.ts`
-**Total Tools:** 7
+**Total Tools:** 8
 **Generated:** 2026-07-08
 **Prerequisites:** Godot editor with MCP plugin active, game must be running for runtime tools
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-This module provides 7 tools for automated gameplay testing. All tools delegate to `callGodot(bridge, methodName, args)`, which sends JSON-RPC requests over WebSocket to the Godot editor plugin. Tests verify schema validation on the MCP server side and correct parameter forwarding to Godot.
+This module provides 8 tools for automated gameplay testing. All tools delegate to `callGodot(bridge, methodName, args)`, which sends JSON-RPC requests over WebSocket to the Godot editor plugin. Tests verify schema validation on the MCP server side and correct parameter forwarding to Godot.
 
 ### Shared Type Definitions (from `shared-types.ts`)
 
@@ -616,7 +616,143 @@ Each element in `scenario`:
 | **Before** | `create_scene` (scene.ts) | Create the target scene if it doesn't exist |
 | **After** | `navigate_character` (this file) | Move the created character |
 | **After** | `assert_game_state` (this file) | Verify character properties after creation |
+| **After** | `delete_test_character` (this file) | Clean up the created character |
 | **After** | `simulate_gameplay_scenario` (this file) | Run gameplay actions against the character |
+
+---
+
+## Tool: `delete_test_character`
+
+**Description:** Delete test character(s) from the scene and clean up the internal tracking array. Can target a specific character by path or delete all tracked test characters.
+**Godot Method:** `delete_test_character`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `character_path` | `string` (NodePath) | ❌ | `""` | Node path to a specific test character. If omitted, all test characters are deleted. |
+
+### Test Scenarios
+
+#### Scenario 1: Delete a specific test character by path (happy path)
+
+**Description:** Create a test character, then delete it by its returned path.
+
+```json
+{
+  "character_path": "/root/Main/TestCharacter_0"
+}
+```
+
+**Expected Result:**
+- `callGodot` invoked with `{ character_path: "/root/Main/TestCharacter_0" }`
+- Character removed from scene tree via `queue_free()`
+- Path removed from internal `_test_characters` array
+- Returns `deleted` array with the path, `remaining` count
+
+**Notes:** Requires a test character to already exist (created by `create_test_character`).
+
+---
+
+#### Scenario 2: Delete all test characters (no path specified)
+
+**Description:** Omit `character_path` to delete all tracked test characters at once.
+
+```json
+{}
+```
+
+**Expected Result:**
+- `callGodot` invoked with `{}` (empty args)
+- All test characters in `_test_characters` are removed from scene tree
+- `_test_characters` array is cleared
+- Returns `deleted` array with all paths, `remaining: 0`
+
+**Notes:** If no test characters exist, returns success with empty `deleted` array and message "No test characters to delete".
+
+---
+
+#### Scenario 3: Delete specific character that does not exist (validation failure)
+
+**Description:** Provide a path to a node that does not exist in the scene.
+
+```json
+{
+  "character_path": "/root/Main/NonExistentCharacter"
+}
+```
+
+**Expected Result:**
+- `callGodot` invoked with the path
+- Godot handler returns error: `"Character not found: /root/Main/NonExistentCharacter"`
+- Error result with `isError: true`
+
+---
+
+#### Scenario 4: Delete a node that is not a test character (validation failure)
+
+**Description:** Provide a path to a real node that was NOT created by `create_test_character`.
+
+```json
+{
+  "character_path": "/root/Main/Player"
+}
+```
+
+**Expected Result:**
+- Node exists but is not in `_test_characters`
+- Godot handler returns error: `"Node is not a test character: /root/Main/Player"`
+- Error result with `isError: true`
+
+---
+
+#### Scenario 5: Delete all when some characters were already removed (edge case)
+
+**Description:** Test characters exist in `_test_characters` but some nodes were already freed externally.
+
+```json
+{}
+```
+
+**Expected Result:**
+- Godot handler iterates `_test_characters`
+- Nodes that still exist are freed; missing nodes are reported in `not_found` array
+- Returns `deleted` (paths actually freed) and `not_found` (paths whose nodes were gone)
+- `_test_characters` is cleared regardless
+
+**Notes:** Tests graceful handling of stale references.
+
+---
+
+#### Scenario 6: Empty string character_path (same as delete all)
+
+```json
+{
+  "character_path": ""
+}
+```
+
+**Expected Result:**
+- Empty string is treated the same as omitting the parameter
+- All test characters are deleted
+- Returns success with full cleanup
+
+---
+
+### Required Call Sequence
+
+⚠️ **Test characters must exist before deletion.** Execute:
+
+1. Call `create_test_character` → character created and tracked in `_test_characters`
+2. Use the returned path as `character_path` in `delete_test_character`
+
+### Related Tools
+
+| Relationship | Tool | Purpose |
+|--------------|------|---------|
+| **Before (REQUIRED)** | `create_test_character` (this file) | Create the test character to delete |
+| **Before** | `assert_game_state` (this file) | Verify character exists before deletion |
+| **After** | `assert_game_state` (this file) | Verify character is gone after deletion |
 
 ---
 
@@ -1223,6 +1359,10 @@ Step 4: assert_game_state
       { path: "Player", property": "visible", expected: true }
     ] }
   → Validates final state
+
+Step 5: delete_test_character
+  → { character_path: "TestCharacter_0" }
+  → Cleans up the test character
 ```
 
 ### Sequence 2: Record and Replay Verification
@@ -1274,6 +1414,7 @@ Step 4: assert_game_state
 | `record_gameplay` | — | `duration` (10), `include_input` (true), `include_state` (false) | — | `duration`: 1–300 |
 | `replay_gameplay` | `recording_path` | `speed` (1.0) | — | `speed`: 0.1–10 |
 | `create_test_character` | `scene_path` | `position` | — | — |
+| `delete_test_character` | — | `character_path` | — | — |
 | `navigate_character` | `character_path`, `target` | `method` ("direct") | `method`: direct, pathfind | — |
 | `assert_game_state` | `conditions` (array) | — | — | — |
 | `wait_for_game_event` | `event` | `timeout` (5000) | — | `timeout`: 1–30000, integer |

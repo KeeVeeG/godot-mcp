@@ -1,7 +1,7 @@
 # Node Tools Test Plan
 
 **Source**: `server/src/tools/node.ts`  
-**Total tools**: 17  
+**Total tools**: 18  
 **Test plan generated**: 2026-07-08
 
 ---
@@ -25,6 +25,7 @@
 15. [Tool: get_editor_selection](#tool-get_editor_selection)
 16. [Tool: select_nodes](#tool-select_nodes)
 17. [Tool: clear_editor_selection](#tool-clear_editor_selection)
+18. [Tool: remove_resource](#tool-remove_resource)
 
 ---
 
@@ -1746,6 +1747,150 @@ None (empty schema).
 
 ---
 
+## Tool: remove_resource
+
+**Tool name**: `remove_resource`  
+**Description**: Remove a resource from a node's property (set to null)  
+**Backend method**: `node/remove_resource`
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `node_path` | `NodePath` (`z.string()`) | Yes | — | Node to remove resource from (e.g. `'Player'` or `'Player/Mesh'`) |
+| `property` | `PropertyName` (`z.string().optional()`) | No | `''` | Property name to null out. If omitted, auto-detects the primary resource property (same logic as `add_resource`) |
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — remove resource with explicit property
+
+**Description**: Remove a resource from a specific property by name.  
+**Params**:
+```json
+{
+  "node_path": "Player/MeshInstance3D",
+  "property": "material_override"
+}
+```
+**Expected result**: The `material_override` property is set to `null`. `get_node_properties` should show `material_override: null`.  
+**Notes**: Prerequisites: (1) scene must be open, (2) `Player/MeshInstance3D` must exist, (3) `material_override` must have a resource assigned (use `add_resource` first).  
+**Pay attention**: Verify via `get_node_properties` that `material_override` is `null` after the call.
+
+---
+
+#### Scenario 2: Happy path — remove resource with auto-detection (Sprite2D texture)
+
+**Description**: Remove a texture from a Sprite2D without specifying the property name.  
+**Params**:
+```json
+{
+  "node_path": "Player/PlayerSprite"
+}
+```
+**Expected result**: The `texture` property is auto-detected and set to `null`.  
+**Notes**: Prerequisites: `Player/PlayerSprite` must be a Sprite2D with a texture assigned.  
+**Pay attention**: Verify via `get_node_properties` that `texture` is `null`. The auto-detection should pick `texture` for Sprite2D nodes.
+
+---
+
+#### Scenario 3: Happy path — remove resource with auto-detection (CollisionShape2D shape)
+
+**Description**: Remove a shape from a CollisionShape2D without specifying the property name.  
+**Params**:
+```json
+{
+  "node_path": "Player/CollisionShape2D"
+}
+```
+**Expected result**: The `shape` property is auto-detected and set to `null`.  
+**Notes**: Prerequisites: `Player/CollisionShape2D` must exist with a shape assigned (use `add_resource` first).  
+**Pay attention**: Verify via `get_node_properties` that `shape` is `null`.
+
+---
+
+#### Scenario 4: Happy path — remove resource with auto-detection (MeshInstance3D material)
+
+**Description**: Remove a material from a MeshInstance3D without specifying the property name.  
+**Params**:
+```json
+{
+  "node_path": "TestMesh"
+}
+```
+**Expected result**: The `material_override` property is auto-detected and set to `null`.  
+**Notes**: Prerequisites: `TestMesh` must be a MeshInstance3D with a material assigned.  
+**Pay attention**: Verify via `get_node_properties` that `material_override` is `null`.
+
+---
+
+#### Scenario 5: Error case — nonexistent node
+
+**Description**: Try to remove a resource from a node that doesn't exist.  
+**Params**:
+```json
+{
+  "node_path": "Ghost/Node"
+}
+```
+**Expected result**: Error indicating node not found.  
+**Pay attention**: The error should be meaningful, not a crash.
+
+---
+
+#### Scenario 6: Error case — invalid property name
+
+**Description**: Try to remove a resource from a property that doesn't exist on the node.  
+**Params**:
+```json
+{
+  "node_path": "Player",
+  "property": "totally_fake_property_xyz"
+}
+```
+**Expected result**: Error indicating the property doesn't exist on the node's class.  
+**Pay attention**: The error should be descriptive and include the node name and type.
+
+---
+
+#### Scenario 7: Error case — auto-detect on generic node with no resource property
+
+**Description**: Try to auto-detect a resource property on a plain Node (no resource slot).  
+**Params**:
+```json
+{
+  "node_path": "PlainNode"
+}
+```
+**Expected result**: Error indicating no resource property found on the node, with suggestion to specify `property` explicitly.  
+**Notes**: Prerequisites: `PlainNode` must be a basic `Node` type (not Sprite2D, CollisionShape2D, etc.).  
+**Pay attention**: The error should suggest specifying `property` explicitly.
+
+---
+
+#### Scenario 8: Happy path — remove then re-add resource
+
+**Description**: Remove a resource and then add a new one to the same node.  
+**Params**:
+```json
+{
+  "node_path": "TestMesh",
+  "property": "material_override"
+}
+```
+**Expected result**: Resource is removed. Subsequent `add_resource` should succeed and assign a new resource.  
+**Notes**: This tests that removal doesn't leave the node in a broken state.  
+**Pay attention**: After removal, `add_resource` must work without errors.
+
+---
+
+### Related Tools
+
+- **Before**: `add_resource` (to assign a resource before removing it), `add_node` (to create a node), `open_scene`.
+- **After**: `get_node_properties` (to verify resource was removed), `add_resource` (to assign a new resource).
+- **Note**: When `property` is omitted, the tool auto-detects the same resource slot that `add_resource` would target. This ensures symmetry between the two tools.
+
+---
+
 ## Integration Test Sequences
 
 ### Sequence 1: Full node lifecycle
@@ -1879,6 +2024,24 @@ None (empty schema).
 
 ---
 
+### Sequence 8: Resource removal workflow
+
+**Description**: Add a resource to a node, verify it, remove it, verify removal.
+
+**Steps**:
+1. `add_node` → `{ "parent_path": "", "type": "MeshInstance3D", "name": "RemoveTestMesh" }` — create node
+2. `add_resource` → `{ "node_path": "RemoveTestMesh", "resource_type": "StandardMaterial3D", "properties": { "albedo_color": [1, 0, 0, 1] } }` — assign material
+3. `get_node_properties` → `{ "path": "RemoveTestMesh" }` — verify material is assigned
+4. `remove_resource` → `{ "node_path": "RemoveTestMesh" }` — auto-detect and remove
+5. `get_node_properties` → `{ "path": "RemoveTestMesh" }` — verify `material_override` is null
+6. `add_resource` → `{ "node_path": "RemoveTestMesh", "resource_type": "StandardMaterial3D" }` — re-add resource
+7. `get_node_properties` → `{ "path": "RemoveTestMesh" }` — verify new material is assigned
+8. Cleanup: `delete_node`
+
+**Expected**: Resource is added, verified, removed, verified as null, and re-added successfully.
+
+---
+
 ## Notes for Test Executor
 
 ### Prerequisites for all tests
@@ -1923,7 +2086,9 @@ open_scene ──→ add_node ──→ get_scene_tree
                  │  │
                  │  ├──→ delete_node
                  │  │
-                 │  ├──→ add_resource ──→ get_node_properties
+                  │  ├──→ add_resource ──→ get_node_properties
+                  │  │
+                  │  ├──→ remove_resource ──→ get_node_properties
                  │  │
                  │  ├──→ set_anchor_preset ──→ get_node_properties
                  │  │

@@ -3,7 +3,7 @@
 > **Source file:** `server/src/tools/animation.ts`  
 > **Shared types:** `server/src/tools/shared-types.ts`  
 > **Bridge call pattern:** `callGodot(bridge, method, args)` → `ToolResult { content: [{ type: 'text', text }], isError? }`  
-> **Total tools:** 10
+> **Total tools:** 12
 
 ---
 
@@ -19,6 +19,8 @@
 8. [get_animation_tree_structure](#8-get_animation_tree_structure)
 9. [set_tree_parameter](#9-set_tree_parameter)
 10. [add_state_machine_state](#10-add_state_machine_state)
+11. [remove_animation_tree](#11-remove_animation_tree)
+12. [get_tree_parameter](#12-get_tree_parameter)
 
 ---
 
@@ -1228,6 +1230,242 @@ Step 4: add_node      → { parent: "", name: "Sprite2D", type: "Sprite2D" }
 
 ---
 
+## 11. remove_animation_tree
+
+**Tool name:** `remove_animation_tree`  
+**Description:** Remove an AnimationTree node from the scene  
+**Godot method:** `animation/remove_tree`  
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | `string` (NodePath) | ✅ | AnimationTree node path |
+
+**Return:** Success confirmation.
+
+### Test Scenarios
+
+#### 11.1 Happy path — remove existing AnimationTree
+
+**Preconditions:** AnimationTree at `"AnimationTree"` exists in the scene.
+
+```json
+{
+  "path": "AnimationTree"
+}
+```
+
+**Expected result:** Success. AnimationTree node removed from the scene.  
+**Verification:** Call `get_scene_tree` — `"AnimationTree"` should no longer appear.  
+**What to pay attention to:** Verify that the node is actually removed from the scene tree. The undo system should record this action so it can be undone.
+
+#### 11.2 Happy path — remove AnimationTree that is a child of another node
+
+**Preconditions:** AnimationTree at `"Character/AnimationTree"` exists as a child of `"Character"`.
+
+```json
+{
+  "path": "Character/AnimationTree"
+}
+```
+
+**Expected result:** Success. AnimationTree removed from `"Character"`.  
+**What to pay attention to:** Verify that the parent node `"Character"` still exists and only the AnimationTree child was removed.
+
+#### 11.3 Happy path — remove AnimationTree linked to AnimationPlayer
+
+**Preconditions:** AnimationTree at `"AnimationTree"` exists and is linked to `"AnimationPlayer"` via `anim_player` property.
+
+```json
+{
+  "path": "AnimationTree"
+}
+```
+
+**Expected result:** Success. AnimationTree removed. The AnimationPlayer is not affected.  
+**What to pay attention to:** Removing an AnimationTree should not affect the AnimationPlayer it was linked to.
+
+#### 11.4 Error — non-existent node path
+
+```json
+{
+  "path": "NonExistentTree"
+}
+```
+
+**Expected result:** Error response. AnimationTree not found.  
+**What to pay attention to:** Verify that `isError: true` is returned and the error message contains information about the unfound node.
+
+#### 11.5 Error — node is not an AnimationTree
+
+**Preconditions:** A `Sprite2D` node named `"Sprite2D"` exists in the scene.
+
+```json
+{
+  "path": "Sprite2D"
+}
+```
+
+**Expected result:** Error response. The node is not an AnimationTree.  
+**What to pay attention to:** The error message should explicitly state that the node is not an AnimationTree.
+
+#### 11.6 Error — empty path
+
+```json
+{
+  "path": ""
+}
+```
+
+**Expected result:** Error response. Path is required.  
+**What to pay attention to:** Verify that an empty path returns a clear error message.
+
+---
+
+## 12. get_tree_parameter
+
+**Tool name:** `get_tree_parameter`  
+**Description:** Get the current value of a parameter on an AnimationTree  
+**Godot method:** `animation/get_tree_parameter`  
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | `string` (NodePath) | ✅ | AnimationTree node path |
+| `parameter` | `string` | ✅ | Parameter path (e.g. `"parameters/blend_position"`) |
+
+**Return:** Object with `parameter` name and current `value`.
+
+### Test Scenarios
+
+#### 12.1 Happy path — get blend position (float)
+
+**Preconditions:** AnimationTree at `"AnimationTree"` with a blend tree containing a `Blend2` node. Blend position was previously set to `0.5` via `set_tree_parameter`.
+
+```json
+{
+  "path": "AnimationTree",
+  "parameter": "parameters/blend_position"
+}
+```
+
+**Expected result:** Success. Response contains `{"parameter": "parameters/blend_position", "value": 0.5}`.  
+**What to pay attention to:** The returned value must match the value that was previously set. The value type should be preserved (float remains float).
+
+#### 12.2 Happy path — get blend position (Vector2 for 2D blend)
+
+**Preconditions:** AnimationTree with a BlendSpace2D. Blend position was set to `[0.5, 0.3]`.
+
+```json
+{
+  "path": "AnimationTree",
+  "parameter": "parameters/blend_position"
+}
+```
+
+**Expected result:** Success. Response contains the Vector2 value.  
+**What to pay attention to:** For BlendSpace2D, the value should be a Vector2 or its array representation.
+
+#### 12.3 Happy path — get state machine playback
+
+**Preconditions:** AnimationTree with `AnimationNodeStateMachine` root. Playback was set to `"walk"`.
+
+```json
+{
+  "path": "AnimationTree",
+  "parameter": "parameters/playback"
+}
+```
+
+**Expected result:** Success. Response contains the current playback state object.  
+**Notes:** State machine playback parameters return an object (AnimationNodeStateMachinePlayback), not a simple value.  
+**What to pay attention to:** The value may be an object rather than a simple string. Verify that the response structure handles object types correctly.
+
+#### 12.4 Happy path — get time scale
+
+**Preconditions:** AnimationTree with time scale set to `2.0`.
+
+```json
+{
+  "path": "AnimationTree",
+  "parameter": "parameters/time_scale"
+}
+```
+
+**Expected result:** Success. Response contains `{"parameter": "parameters/time_scale", "value": 2.0}`.
+
+#### 12.5 Happy path — get parameter that was never explicitly set
+
+**Preconditions:** AnimationTree exists but `parameters/blend_position` was never explicitly set via `set_tree_parameter`.
+
+```json
+{
+  "path": "AnimationTree",
+  "parameter": "parameters/blend_position"
+}
+```
+
+**Expected result:** Success. Returns the default value (likely `0.0` for float parameters).  
+**What to pay attention to:** Godot returns type-based defaults for unset parameters. Verify that the tool returns these defaults rather than erroring.
+
+#### 12.6 Error — non-existent parameter path
+
+```json
+{
+  "path": "AnimationTree",
+  "parameter": "parameters/nonexistent_param"
+}
+```
+
+**Expected result:** Error. Parameter doesn't exist in the tree structure.  
+**What to pay attention to:** The error message should suggest using `get_animation_tree_structure` to see available parameters.
+
+#### 12.7 Error — AnimationTree does not exist
+
+```json
+{
+  "path": "NonExistentTree",
+  "parameter": "parameters/blend_position"
+}
+```
+
+**Expected result:** Error. Node not found.
+
+#### 12.8 Error — node is not an AnimationTree
+
+```json
+{
+  "path": "Sprite2D",
+  "parameter": "parameters/blend_position"
+}
+```
+
+**Expected result:** Error. Node is not an AnimationTree.
+
+#### 12.9 Error — empty path
+
+```json
+{
+  "path": "",
+  "parameter": "parameters/blend_position"
+}
+```
+
+**Expected result:** Error. Path is required.
+
+#### 12.10 Error — empty parameter
+
+```json
+{
+  "path": "AnimationTree",
+  "parameter": ""
+}
+```
+
+**Expected result:** Error. Parameter is required.
+
+---
+
 ## Integration Test Sequences
 
 These sequences test complete workflows spanning multiple tools.
@@ -1317,6 +1555,31 @@ These sequences test complete workflows spanning multiple tools.
 
 **What to pay attention to:** The `library` parameter must be passed to all calls related to the `"slash"` animation. Verify that `list_animations` without specifying a library does not return animations from named libraries (or vice versa — depends on Godot implementation).
 
+### Sequence E: AnimationTree Lifecycle with Get/Remove
+
+```
+1. create_scene            → { node_type: "Node2D", scene_path: "res://test_lifecycle.tscn" }
+2. open_scene              → { scene_path: "res://test_lifecycle.tscn" }
+3. add_node                → { parent: "", name: "AnimPlayer", type: "AnimationPlayer" }
+4. create_animation        → { player_path: "AnimPlayer", animation: "idle", length: 1.0 }
+5. create_animation        → { player_path: "AnimPlayer", animation: "walk", length: 1.0 }
+6. create_animation_tree   → { path: "AnimTree", player_path: "AnimPlayer" }
+   → Default root_type is AnimationNodeBlendTree
+7. set_tree_parameter      → { path: "AnimTree", parameter: "parameters/blend_position", value: 0.7 }
+8. get_tree_parameter      → { path: "AnimTree", parameter: "parameters/blend_position" }
+   → Expect: { parameter: "parameters/blend_position", value: 0.7 }
+9. get_animation_tree_structure → { path: "AnimTree" }
+   → Expect: blend tree structure, still intact
+10. remove_animation_tree  → { path: "AnimTree" }
+    → Expect: success — AnimationTree removed
+11. get_animation_tree_structure → { path: "AnimTree" }
+    → Expect: error — AnimationTree not found
+12. get_tree_parameter     → { path: "AnimTree", parameter: "parameters/blend_position" }
+    → Expect: error — AnimationTree not found
+```
+
+**What to pay attention to:** This sequence tests the full AnimationTree lifecycle: create, set parameter, read parameter back, inspect structure, remove, then verify all read operations fail after removal. The `get_tree_parameter` at step 8 must return the exact value set at step 7. After `remove_animation_tree` at step 10, all subsequent operations on that path must fail with clear errors.
+
 ---
 
 ## Parameter Validation Summary (Zod-level)
@@ -1350,3 +1613,5 @@ These are errors that should be caught by Zod **before** the request reaches God
 | `create_animation_tree` | Creates AnimationTree node in scene | `get_animation_tree_structure`, `set_tree_parameter`, `add_state_machine_state` |
 | `add_state_machine_state` | Adds state to state machine | `set_tree_parameter` (can now set `parameters/playback` to this state) |
 | `set_tree_parameter` | Changes runtime parameter | Observable via game state or `get_animation_tree_structure` |
+| `remove_animation_tree` | Removes AnimationTree node from scene | `get_animation_tree_structure`, `set_tree_parameter`, `add_state_machine_state` (all should fail after removal) |
+| `get_tree_parameter` | Reads parameter value (no side effect) | `set_tree_parameter` (verify value matches after set) |

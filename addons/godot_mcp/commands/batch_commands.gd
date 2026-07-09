@@ -1,4 +1,4 @@
-## Batch commands module - 8 tools.
+## Batch commands module - 10 tools.
 ## Handles cross-scene queries, batch operations, and dependency analysis.
 class_name MCPBatchCommands
 extends RefCounted
@@ -20,6 +20,8 @@ func get_commands() -> Dictionary:
 		"batch/cross_scene_set": cross_scene_set_property,
 		"batch/find_script_refs": find_script_references,
 		"batch/detect_circular": detect_circular_dependencies,
+		"batch/get_property": batch_get_property,
+		"batch/cross_scene_get": cross_scene_get_property,
 	}
 
 
@@ -157,6 +159,45 @@ func _batch_set_recursive(node: Node, type_name: String, property: String, value
 	return count
 
 
+## Read a property value from all nodes of a given type in the current scene.
+func batch_get_property(params: Dictionary) -> Dictionary:
+	var type_name: String = params.get("type_name", params.get("type", ""))
+	var property: String = params.get("property", "")
+
+	if type_name.is_empty():
+		return {"error": "Type is required"}
+	if property.is_empty():
+		return {"error": "Property is required"}
+
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
+
+	# Pre-validate: check if any nodes of this type exist and the property is valid
+	var first_match: Node = _find_first_node_of_type(root, type_name)
+	if first_match == null:
+		return {"error": "No nodes of type '%s' found in scene" % type_name}
+	if not MCPCommandHelpers.has_property(first_match, property):
+		return {"error": "Property '%s' does not exist on %s" % [property, type_name]}
+
+	var results: Array = []
+	_batch_get_recursive(root, type_name, property, results)
+	return {"result": {"type": type_name, "property": property, "count": results.size(), "nodes": results}}
+
+
+func _batch_get_recursive(node: Node, type_name: String, property: String, results: Array) -> void:
+	if node.is_class(type_name):
+		var value: Variant = node.get(property)
+		results.append({
+			"path": MCPCommandHelpers.get_node_path(node, _plugin),
+			"name": str(node.name),
+			"type": node.get_class(),
+			"value": value,
+		})
+	for child: Node in node.get_children():
+		_batch_get_recursive(child, type_name, property, results)
+
+
 ## Helper: find the first node of a given type in the scene tree.
 func _find_first_node_of_type(node: Node, type_name: String) -> Node:
 	if node.is_class(type_name):
@@ -258,6 +299,33 @@ func cross_scene_set_property(params: Dictionary) -> Dictionary:
 	if modified_scenes.size() > 0:
 		result["warning"] = "DESTRUCTIVE: These .tscn files were modified on disk directly. Changes CANNOT be undone via the editor undo system (Ctrl+Z). This is a best-effort text-based edit — complex scenes with sub-resources or inherited scenes may be corrupted. Use batch/set_property for undoable in-scene changes."
 	return {"result": result}
+
+
+## Read a property value from nodes of a given type across all .tscn files on disk.
+## This is a read-only operation — no files are modified.
+func cross_scene_get_property(params: Dictionary) -> Dictionary:
+	var type_name: String = params.get("type_name", params.get("type", ""))
+	var property: String = params.get("property", "")
+
+	if type_name.is_empty():
+		return {"error": "Type is required"}
+	if property.is_empty():
+		return {"error": "Property is required"}
+
+	var scene_files: Array = []
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["tscn"]), func(path, _name): scene_files.append(path))
+	var all_results: Array = []
+
+	for scene_path_variant: Variant in scene_files:
+		var scene_path: String = scene_path_variant as String
+		var scene_results: Array = _read_scene_property_values(scene_path, type_name, property)
+		if scene_results.size() > 0:
+			all_results.append({
+				"scene": scene_path,
+				"nodes": scene_results,
+			})
+
+	return {"result": {"type": type_name, "property": property, "scenes_with_matches": all_results.size(), "scenes": all_results}}
 
 
 ## Search for script path references across the project.
@@ -424,6 +492,72 @@ func _file_contains(file_path: String, term: String) -> bool:
 	var content: String = file.get_as_text()
 	file.close()
 	return content.find(term) != -1
+
+
+## Helper: read property values from nodes of a given type in a .tscn file.
+func _read_scene_property_values(scene_path: String, type_name: String, property: String) -> Array:
+	if not FileAccess.file_exists(scene_path):
+		return []
+	var file := FileAccess.open(scene_path, FileAccess.READ)
+	if file == null:
+		return []
+	var content: String = file.get_as_text()
+	file.close()
+
+	var results: Array = []
+	var lines: PackedStringArray = content.split("\n")
+	var in_matching_node: bool = false
+	var current_type: String = ""
+	var current_name: String = ""
+	var current_parent: String = ""
+	var prop_value: String = ""
+	var prop_found: bool = false
+
+	for line: String in lines:
+		var trimmed: String = line.strip_edges()
+		if trimmed.begins_with("[node"):
+			# Save previous match
+			if in_matching_node:
+				results.append({
+					"name": current_name,
+					"parent": current_parent,
+					"value": prop_value if prop_found else null,
+					"has_property": prop_found,
+				})
+			in_matching_node = false
+			prop_found = false
+			prop_value = ""
+			current_type = _extract_attr(trimmed, "type")
+			current_name = _extract_attr(trimmed, "name")
+			current_parent = _extract_attr(trimmed, "parent")
+			if current_type == type_name or (current_type.is_empty() and type_name == "Node"):
+				in_matching_node = true
+		elif trimmed.begins_with("[") and not trimmed.begins_with("[node"):
+			# Exiting node section
+			if in_matching_node:
+				results.append({
+					"name": current_name,
+					"parent": current_parent,
+					"value": prop_value if prop_found else null,
+					"has_property": prop_found,
+				})
+				in_matching_node = false
+				prop_found = false
+
+		if in_matching_node and trimmed.begins_with(property + " = "):
+			prop_value = trimmed.substr((property + " = ").length())
+			prop_found = true
+
+	# Handle last node at end of file
+	if in_matching_node:
+		results.append({
+			"name": current_name,
+			"parent": current_parent,
+			"value": prop_value if prop_found else null,
+			"has_property": prop_found,
+		})
+
+	return results
 
 
 ## Helper: modify a .tscn file to set a property on matching nodes.

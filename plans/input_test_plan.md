@@ -1,6 +1,6 @@
 # Test Plan: Input Tools (`server/src/tools/input.ts`)
 
-> **Module**: `input.ts` — 7 tools for input simulation  
+> **Module**: `input.ts` — 8 tools for input simulation  
 > **Dependencies**: `shared-types.ts` (z, Position2D, Pressed)  
 > **Bridge**: All tools call `callGodot(bridge, endpoint, args)` and return its result directly  
 > **Prerequisite**: Godot editor must be running with MCP plugin active, a scene must be open
@@ -16,6 +16,7 @@
 5. [simulate_sequence](#tool-5-simulate_sequence)
 6. [get_input_actions](#tool-6-get_input_actions)
 7. [set_input_action](#tool-7-set_input_action)
+8. [remove_input_action](#tool-8-remove_input_action)
 
 ---
 
@@ -752,6 +753,77 @@ Each event object:
 
 ---
 
+## Tool 8: `remove_input_action`
+
+**Description**: Remove an input action from the InputMap  
+**Endpoint**: `input/remove_action`  
+**Schema**:
+
+| Parameter | Type | Required | Default | Constraints | Description |
+|-----------|------|----------|---------|-------------|-------------|
+| `action` | `string` | **yes** | — | Must match an existing InputMap action name | Action name to remove |
+
+### Test Scenarios
+
+#### 8.1 — Happy path: remove an existing custom action
+
+- **Description**: First create a custom action `temp_action` using `set_input_action`, then remove it
+- **Params**:
+  ```json
+  { "action": "temp_action" }
+  ```
+- **Expected result**: Success. The action `temp_action` is removed from InputMap. Verify by calling `get_input_actions` afterwards — the action should no longer appear.
+- **Notes**: **Pre-verification**: Call `set_input_action` to create `temp_action` first, then `get_input_actions` to confirm it exists.
+
+#### 8.2 — Remove a built-in ui_ action
+
+- **Description**: Remove a built-in Godot action like `ui_accept`
+- **Params**:
+  ```json
+  { "action": "ui_accept" }
+  ```
+- **Expected result**: Success. The built-in `ui_accept` action is removed. Verify via `get_input_actions` with `scope: "all"`.
+- **Notes**: Removing built-in `ui_*` actions may affect editor navigation. Be prepared to restore via `set_input_action`.
+
+#### 8.3 — Nonexistent action
+
+- **Description**: Try to remove an action that does not exist
+- **Params**:
+  ```json
+  { "action": "nonexistent_action_xyz" }
+  ```
+- **Expected result**: Error returned: `"Unknown input action: nonexistent_action_xyz"`. The tool validates existence before attempting removal.
+
+#### 8.4 — Missing required action field
+
+- **Description**: Call without the `action` field
+- **Params**:
+  ```json
+  {}
+  ```
+- **Expected result**: Error returned: `"Action name is required"`. The tool validates the action name is not empty.
+
+#### 8.5 — Empty string action name
+
+- **Description**: Pass empty string as action name
+- **Params**:
+  ```json
+  { "action": "" }
+  ```
+- **Expected result**: Error returned: `"Action name is required"`. Empty string is caught by the validation check.
+
+#### 8.6 — Verify project settings saved after removal
+
+- **Description**: Remove a custom action and verify `ProjectSettings.save()` was called (implicit success means save succeeded)
+- **Params**:
+  ```json
+  { "action": "my_custom_action" }
+  ```
+- **Expected result**: Success. If the action existed, it is removed and the change persists across editor restarts (saved to `project.godot`).
+- **Notes**: **Pre-requisite**: Create `my_custom_action` via `set_input_action` first.
+
+---
+
 ## Cross-Tool Workflows
 
 ### Workflow A: Discover → Simulate → Verify
@@ -783,6 +855,14 @@ Each event object:
 2. **Call `set_input_action`** to remap `ui_accept` to different keys
 3. **Call `simulate_action`** with `action: "ui_accept"` — verify it now responds to new keys
 4. **Call `set_input_action`** again to restore original mapping
+
+### Workflow E: Create → Test → Remove Action
+
+1. **Call `set_input_action`** to create a new action `temp_jump` mapped to `KEY_SPACE`
+2. **Call `get_input_actions`** to verify `temp_jump` was created
+3. **Call `simulate_action`** with `action: "temp_jump"` to verify it works
+4. **Call `remove_input_action`** with `action: "temp_jump"` to clean up
+5. **Call `get_input_actions`** to verify `temp_jump` no longer exists
 
 ---
 

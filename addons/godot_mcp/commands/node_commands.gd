@@ -1,4 +1,4 @@
-## Node commands module - 17 tools.
+## Node commands module - 18 tools.
 ## Handles node CRUD, properties, signals, groups, and selection.
 class_name MCPNodeCommands
 extends RefCounted
@@ -33,6 +33,7 @@ func get_commands() -> Dictionary:
 		"node/get_selection": func(params: Dictionary) -> Dictionary: return execute("get_editor_selection", params),
 		"node/select": func(params: Dictionary) -> Dictionary: return execute("select_nodes", params),
 		"node/clear_selection": func(params: Dictionary) -> Dictionary: return execute("clear_editor_selection", params),
+		"node/remove_resource": func(params: Dictionary) -> Dictionary: return execute("remove_resource", params),
 	}
 
 
@@ -56,6 +57,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"get_editor_selection": return _get_editor_selection()
 		"select_nodes": return _select_nodes(params)
 		"clear_editor_selection": return _clear_editor_selection()
+		"remove_resource": return _remove_resource(params)
 	return {"error": "Unknown method: " + method}
 
 
@@ -354,6 +356,74 @@ func _add_resource(params: Dictionary) -> Dictionary:
 			return {"error": "Cannot auto-assign %s to %s (no matching property)" % [resource_type, node.get_class()]}
 
 	return {"result": {"resource_type": resource_type, "node": path}}
+
+
+## Remove a resource from a node's property (set to null).
+## If property is specified, nulls that property.
+## Otherwise, auto-detects the primary resource property (like add_resource).
+func _remove_resource(params: Dictionary) -> Dictionary:
+	var path: String = params.get("node_path", params.get("path", ""))
+	var property: String = params.get("property", "")
+
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
+	var node: Node = _resolve_node(path, root)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+
+	# If property specified, use it directly
+	if not property.is_empty():
+		if not MCPCommandHelpers.has_property(node, property):
+			return {"error": "Property '%s' not found on %s (type: %s)" % [property, node.name, node.get_class()]}
+		if _undo_helper:
+			_undo_helper.set_property_with_undo(node, property, null)
+		else:
+			node.set(property, null)
+		return {"result": {"message": "Resource removed from %s.%s" % [path, property]}}
+
+	# Auto-detect resource property (mirrors add_resource logic)
+	if node is CollisionShape2D:
+		if _undo_helper:
+			_undo_helper.set_property_with_undo(node, "shape", null)
+		else:
+			(node as CollisionShape2D).shape = null
+	elif node is CollisionShape3D:
+		if _undo_helper:
+			_undo_helper.set_property_with_undo(node, "shape", null)
+		else:
+			(node as CollisionShape3D).shape = null
+	elif node is Sprite2D:
+		if _undo_helper:
+			_undo_helper.set_property_with_undo(node, "texture", null)
+		else:
+			(node as Sprite2D).texture = null
+	elif node is MeshInstance3D:
+		if _undo_helper:
+			_undo_helper.set_property_with_undo(node, "material_override", null)
+		else:
+			(node as MeshInstance3D).material_override = null
+	elif node is VisualInstance3D:
+		if _undo_helper:
+			_undo_helper.set_property_with_undo(node, "material_override", null)
+		else:
+			(node as VisualInstance3D).material_override = null
+	else:
+		# Generic: try common resource property names
+		var removed: bool = false
+		for try_prop: String in ["shape", "texture", "material", "material_override", "stream", "gradient", "curve"]:
+			if MCPCommandHelpers.has_property(node, try_prop):
+				if node.get(try_prop) != null:
+					if _undo_helper:
+						_undo_helper.set_property_with_undo(node, try_prop, null)
+					else:
+						node.set(try_prop, null)
+					removed = true
+					break
+		if not removed:
+			return {"error": "No resource property found on %s (type: %s). Specify 'property' explicitly." % [path, node.get_class()]}
+
+	return {"result": {"message": "Resource removed from %s" % path}}
 
 
 ## Set anchor preset on a Control node.

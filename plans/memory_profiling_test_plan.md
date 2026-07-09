@@ -1,7 +1,7 @@
 # Test Plan: memory_profiling.ts
 
 **File:** `server/src/tools/memory_profiling.ts`
-**Module:** Memory Profiling — 5 tools for memory analysis and leak detection
+**Module:** Memory Profiling — 6 tools for memory analysis and leak detection
 **GDScript backend:** `addons/godot_mcp/commands/memory_profiling_commands.gd`
 
 ---
@@ -370,6 +370,204 @@ or
 **Notes:** Tests Zod schema boundary enforcement.
 
 **What to check:** The error should occur at the Zod validation level in TypeScript.
+
+---
+
+## Tool: `stop_object_tracking`
+
+### Registration
+
+```typescript
+server.registerTool(
+  'stop_object_tracking',
+  {
+    description: 'Stop object tracking and return the accumulated creation log. Must call track_object_creation first.',
+    inputSchema: {},
+  },
+  async () => callGodot(bridge, 'stop_object_tracking'),
+);
+```
+
+### Parameters
+
+None. This tool takes no parameters.
+
+### Return Structure
+
+On success:
+```json
+{
+  "result": {
+    "success": true,
+    "class_name": "<string>",
+    "elapsed_seconds": "<string>",
+    "tracking_start": <float>,
+    "tracking_stop": <float>,
+    "current_count": <int>,
+    "creation_log": [],
+    "log_entries": <int>,
+    "message": "<string>"
+  }
+}
+```
+
+On error (no active tracking):
+```json
+{
+  "error": "No active object tracking. Call track_object_creation first."
+}
+```
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — stop tracking after track_object_creation
+
+**Description:** First call `track_object_creation` with `{"class_name": "Node2D"}`, then call `stop_object_tracking` with no arguments.
+
+**Setup:** Call `track_object_creation` with `{"class_name": "Node2D"}` first.
+
+**Params:**
+```json
+{}
+```
+
+**Expected Result:**
+- Response contains `"result"` with `success: true`
+- `result.class_name` is `"Node2D"` (matches the tracked class)
+- `result.elapsed_seconds` is a string like `"5.23"` representing seconds since tracking started
+- `result.tracking_start` is `0.0` (tracking state has been reset)
+- `result.tracking_stop` is a positive float (Unix timestamp)
+- `result.current_count` is a non-negative integer (current count of the tracked class)
+- `result.creation_log` is an array (likely empty in editor mode since creation cannot be truly intercepted)
+- `result.log_entries` is a non-negative integer (should match `creation_log.size()`)
+- `result.message` is a non-empty string containing the class name and elapsed time
+
+**Notes:** In editor mode, the `creation_log` will typically be empty because Godot does not expose a hook for intercepting object creation from GDScript. The tool still provides useful metadata: elapsed time and current count for comparison with the baseline.
+
+**What to check:**
+- `elapsed_seconds` is a string formatted as `"X.XX"` (GDScript `"%.2f"` format)
+- `tracking_start` is `0.0` because the tracking state was reset
+- `tracking_stop` is a recent Unix timestamp (> 1700000000)
+- `current_count` can be compared with `baseline_count` from the `track_object_creation` response
+- After `stop_object_tracking` is called, the tracking state is inactive
+
+---
+
+#### Scenario 2: Stop tracking without starting (no active tracking)
+
+**Description:** Call `stop_object_tracking` without first calling `track_object_creation`.
+
+**Params:**
+```json
+{}
+```
+
+**Expected Result:**
+- Response contains `"error"` with message `"No active object tracking. Call track_object_creation first."`
+- No `"result"` key in the response
+
+**Notes:** This tests the guard clause that prevents stopping when no tracking session is active.
+
+**What to check:**
+- The error message should clearly indicate that tracking must be started first
+- No crash or unhandled exception
+- No partial state changes (tracking remains inactive)
+
+---
+
+#### Scenario 3: Stop tracking twice in a row
+
+**Description:** Call `track_object_creation`, then call `stop_object_tracking` twice.
+
+**Setup:** Call `track_object_creation` with `{"class_name": "Sprite2D"}` first.
+
+**Params (both calls):**
+```json
+{}
+```
+
+**Expected Result:**
+- First call returns `"result"` with `success: true` (Scenario 1)
+- Second call returns `"error"` with `"No active object tracking. Call track_object_creation first."`
+
+**Notes:** After the first `stop_object_tracking` call, the tracking state is reset. The second call should fail because there is no active tracking session.
+
+**What to check:** The second call should return an error, not reuse stale state.
+
+---
+
+#### Scenario 4: Extra params are ignored
+
+**Description:** Pass arbitrary extra parameters to `stop_object_tracking`.
+
+**Setup:** Call `track_object_creation` with `{"class_name": "Node"}` first.
+
+**Params:**
+```json
+{
+  "verbose": true,
+  "format": "detailed"
+}
+```
+
+**Expected Result:**
+- Tool still succeeds and returns the stop result
+- Extra params are silently ignored
+- Response structure is identical to Scenario 1
+
+**Notes:** The GDScript `stop_object_tracking` receives `_params: Dictionary` (underscore = unused). Extra params are silently ignored.
+
+**What to check:** The result should be identical to scenario 1 (with Node as the tracked class).
+
+---
+
+#### Scenario 5: Stop tracking with elapsed time validation
+
+**Description:** Start tracking, wait a measurable delay, then stop. Validate that `elapsed_seconds` reflects the actual delay.
+
+**Setup:**
+1. Call `track_object_creation` with `{"class_name": "Node2D"}`
+2. Wait 3 seconds (use a timer or sleep)
+3. Call `stop_object_tracking`
+
+**Params:**
+```json
+{}
+```
+
+**Expected Result:**
+- `result.elapsed_seconds` is a string like `"3.XX"` (approximately 3 seconds)
+- `result.tracking_stop` - `result.tracking_start` should NOT be used for elapsed calculation (tracking_start is reset to 0)
+- Instead, verify `elapsed_seconds` is between `"2.50"` and `"4.00"` (allowing for processing time)
+
+**Notes:** This tests that the elapsed time calculation is accurate. The `elapsed_seconds` field is the authoritative elapsed time.
+
+**What to check:**
+- `elapsed_seconds` is approximately 3 seconds (±0.5s tolerance)
+- This validates that `Time.get_unix_time_from_system()` is used correctly for both start and stop timestamps
+
+---
+
+#### Scenario 6: Stop tracking and compare current_count with baseline
+
+**Description:** Full workflow: track → stop → compare counts.
+
+**Setup:**
+1. Call `track_object_creation` with `{"class_name": "Sprite2D"}` → record `baseline_count`
+2. Call `stop_object_tracking` → record `current_count`
+
+**Params:**
+```json
+{}
+```
+
+**Expected Result:**
+- `result.current_count` should be >= `baseline_count` from step 1 (assuming no nodes were deleted)
+- `result.class_name` is `"Sprite2D"`
+
+**Notes:** This validates the full tracking lifecycle: start → stop → compare. In a stable scene with no node creation/deletion, `current_count` should equal `baseline_count`.
+
+**What to check:** `current_count` >= `baseline_count` (if no nodes were deleted). If nodes were added between track and stop, `current_count` > `baseline_count`.
 
 ---
 
@@ -831,6 +1029,7 @@ Godot 4.x does not expose a manual GC trigger API from GDScript. This tool force
 
 | Tool | Prerequisite | Reason |
 |------|-------------|--------|
+| `stop_object_tracking` | `track_object_creation` | Must have an active tracking session to stop |
 | `get_object_count` (with class filter, Scenario 6) | `track_object_creation` | To verify that the count matches or exceeds the recorded baseline |
 | `find_memory_leaks` | Scene with nodes open | The tool walks the scene tree; an empty/null scene root limits analysis |
 
@@ -846,10 +1045,11 @@ Godot 4.x does not expose a manual GC trigger API from GDScript. This tool force
 1. **Baseline:** Call `get_memory_usage` → record `total_bytes`, `objects.total`
 2. **Track:** Call `track_object_creation` with `{"class_name": "Sprite2D", "duration": 30}` → record `baseline_count`
 3. **Wait:** Wait for 30 seconds (or perform actions that might create/leak objects)
-4. **Count:** Call `get_object_count` with `{"class_name": "Sprite2D"}` → compare `count` with `baseline_count`
-5. **Analyze:** Call `find_memory_leaks` → review `issues` array
-6. **Cleanup:** Call `force_garbage_collection` → check `freed_mb` and `objects_freed`
-7. **Re-check:** Call `get_memory_usage` again → compare with step 1 baseline
+4. **Stop:** Call `stop_object_tracking` → review `elapsed_seconds`, `current_count`, and `creation_log`
+5. **Count:** (Alternative) Call `get_object_count` with `{"class_name": "Sprite2D"}` → compare `count` with `baseline_count`
+6. **Analyze:** Call `find_memory_leaks` → review `issues` array
+7. **Cleanup:** Call `force_garbage_collection` → check `freed_mb` and `objects_freed`
+8. **Re-check:** Call `get_memory_usage` again → compare with step 1 baseline
 
 ### Typical Pairing with Profiling Tools
 
@@ -865,7 +1065,7 @@ Godot 4.x does not expose a manual GC trigger API from GDScript. This tool force
 
 #### Scenario: Godot editor not connected
 
-**Description:** Call any of the 5 tools when no Godot editor is connected to the MCP server.
+**Description:** Call any of the 6 tools when no Godot editor is connected to the MCP server.
 
 **Params (for any tool):**
 ```json

@@ -1,4 +1,4 @@
-## Particles commands module - 8 tools.
+## Particles commands module - 12 tools.
 ## Handles GPU particle creation, materials, colors, presets, and deletion.
 class_name MCPParticlesCommands
 extends RefCounted
@@ -18,11 +18,15 @@ func get_commands() -> Dictionary:
 		"particles/create": create_particles,
 		"particles/delete": _delete_particles,
 		"particles/set_material": set_particle_material,
+		"particles/get_material": get_particle_material,
 		"particles/set_color_gradient": set_particle_color_gradient,
+		"particles/get_color_gradient": get_particle_color_gradient,
 		"particles/apply_preset": apply_particle_preset,
 		"particles/get_info": get_particle_info,
 		"particles/set_emission_shape": set_particle_emission_shape,
+		"particles/get_emission_shape": get_particle_emission_shape,
 		"particles/set_velocity_curve": set_particle_velocity_curve,
+		"particles/get_velocity_curve": get_particle_velocity_curve,
 	}
 
 
@@ -121,6 +125,41 @@ func set_particle_material(params: Dictionary) -> Dictionary:
 	return {"result": "Particle material updated on %s" % path}
 
 
+## Read particle material properties.
+func get_particle_material(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "Path is required"}
+
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+
+	var process_mat: ParticleProcessMaterial = null
+	if node is GPUParticles2D:
+		process_mat = (node as GPUParticles2D).process_material as ParticleProcessMaterial
+	elif node is GPUParticles3D:
+		process_mat = (node as GPUParticles3D).process_material as ParticleProcessMaterial
+	else:
+		return {"error": "Node is not a particle emitter"}
+
+	if process_mat == null:
+		return {"error": "No process material set on %s" % path}
+
+	var result: Dictionary = {
+		"path": path,
+		"direction": [process_mat.direction.x, process_mat.direction.y, process_mat.direction.z],
+		"spread": process_mat.spread,
+		"initial_velocity_min": process_mat.initial_velocity_min,
+		"initial_velocity_max": process_mat.initial_velocity_max,
+		"gravity": [process_mat.gravity.x, process_mat.gravity.y, process_mat.gravity.z],
+		"scale_min": process_mat.scale_min,
+		"scale_max": process_mat.scale_max,
+		"color": "#%s" % process_mat.color.to_html(),
+	}
+	return {"result": result}
+
+
 ## Set a color gradient on particles.
 func set_particle_color_gradient(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
@@ -153,6 +192,48 @@ func set_particle_color_gradient(params: Dictionary) -> Dictionary:
 
 	process_mat.color_ramp = tex
 	return {"result": "Color gradient set on %s" % path}
+
+
+## Read the color gradient from a particle system.
+func get_particle_color_gradient(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "Path is required"}
+
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+
+	var process_mat: ParticleProcessMaterial = null
+	if node is GPUParticles2D:
+		process_mat = (node as GPUParticles2D).process_material as ParticleProcessMaterial
+	elif node is GPUParticles3D:
+		process_mat = (node as GPUParticles3D).process_material as ParticleProcessMaterial
+	else:
+		return {"error": "Node is not a particle emitter"}
+
+	if process_mat == null:
+		return {"error": "No process material set on %s" % path}
+
+	var color_ramp_tex: Texture2D = process_mat.color_ramp
+	if color_ramp_tex == null:
+		return {"error": "No color gradient set on %s" % path}
+
+	var gradient: Gradient = null
+	if color_ramp_tex is GradientTexture1D:
+		gradient = (color_ramp_tex as GradientTexture1D).gradient
+	if gradient == null:
+		return {"error": "Color gradient is not a valid GradientTexture1D on %s" % path}
+
+	var points: Array = []
+	for i: int in range(gradient.get_point_count()):
+		var point: Dictionary = {
+			"offset": gradient.get_offset(i),
+			"color": "#%s" % gradient.get_color(i).to_html(),
+		}
+		points.append(point)
+
+	return {"result": {"path": path, "gradient": points}}
 
 
 ## Apply a particle preset (fire, smoke, sparks, rain, snow).
@@ -349,6 +430,51 @@ func set_particle_emission_shape(params: Dictionary) -> Dictionary:
 	return {"result": "Emission shape '%s' set on %s" % [shape_type, path]}
 
 
+## Read the emission shape configuration from a particle system.
+func get_particle_emission_shape(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "Path is required"}
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+	var process_mat: ParticleProcessMaterial = null
+	if node is GPUParticles2D:
+		process_mat = (node as GPUParticles2D).process_material as ParticleProcessMaterial
+	elif node is GPUParticles3D:
+		process_mat = (node as GPUParticles3D).process_material as ParticleProcessMaterial
+	else:
+		return {"error": "Node is not a particle emitter"}
+	if process_mat == null:
+		return {"error": "No process material set on %s" % path}
+
+	var shape_name: String = "point"
+	var shape_properties: Dictionary = {}
+	match process_mat.emission_shape:
+		ParticleProcessMaterial.EMISSION_SHAPE_POINT:
+			shape_name = "point"
+		ParticleProcessMaterial.EMISSION_SHAPE_SPHERE:
+			shape_name = "sphere"
+			shape_properties["radius"] = process_mat.emission_sphere_radius
+		ParticleProcessMaterial.EMISSION_SHAPE_BOX:
+			shape_name = "box"
+			var ext: Vector3 = process_mat.emission_box_extents
+			shape_properties["size"] = [ext.x, ext.y, ext.z]
+		ParticleProcessMaterial.EMISSION_SHAPE_RING:
+			shape_name = "ring"
+			shape_properties["radius"] = process_mat.emission_ring_radius
+			shape_properties["height"] = process_mat.emission_ring_height
+			shape_properties["inner_radius"] = process_mat.emission_ring_inner_radius
+
+	var result: Dictionary = {
+		"path": path,
+		"shape": shape_name,
+	}
+	if not shape_properties.is_empty():
+		result["properties"] = shape_properties
+	return {"result": result}
+
+
 ## Set a velocity curve on a particle system's process material.
 func set_particle_velocity_curve(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
@@ -382,6 +508,46 @@ func set_particle_velocity_curve(params: Dictionary) -> Dictionary:
 	curve_tex.curve = curve
 	process_mat.velocity_limit_curve = curve_tex
 	return {"result": "Velocity curve set on %s" % path}
+
+
+## Read the velocity curve from a particle system.
+func get_particle_velocity_curve(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "Path is required"}
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+	var process_mat: ParticleProcessMaterial = null
+	if node is GPUParticles2D:
+		process_mat = (node as GPUParticles2D).process_material as ParticleProcessMaterial
+	elif node is GPUParticles3D:
+		process_mat = (node as GPUParticles3D).process_material as ParticleProcessMaterial
+	else:
+		return {"error": "Node is not a particle emitter"}
+	if process_mat == null:
+		return {"error": "No process material set on %s" % path}
+
+	var curve_tex: Texture2D = process_mat.velocity_limit_curve
+	if curve_tex == null:
+		return {"error": "No velocity curve set on %s" % path}
+
+	var curve: Curve = null
+	if curve_tex is CurveTexture:
+		curve = (curve_tex as CurveTexture).curve
+	if curve == null:
+		return {"error": "Velocity curve is not a valid CurveTexture on %s" % path}
+
+	var points: Array = []
+	for i: int in range(curve.get_point_count()):
+		var pt: Vector2 = curve.get_point_position(i)
+		var point: Dictionary = {
+			"offset": pt.x,
+			"value": pt.y,
+		}
+		points.append(point)
+
+	return {"result": {"path": path, "curve": points}}
 
 
 ## Delete a particle system node from the scene.

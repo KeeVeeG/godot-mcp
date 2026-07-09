@@ -1,7 +1,7 @@
 # Test Plan: batch.ts — Batch Tools
 
 **File:** `server/src/tools/batch.ts`
-**Module:** `registerBatchTools` — 8 tools for batch operations and cross-scene analysis
+**Module:** `registerBatchTools` — 10 tools for batch operations and cross-scene analysis
 **Shared types:** `NodeType` (z.string), `ScriptPath` (z.string), `PropertyName` (z.string), `PropertyValue` (z.unknown), `z`
 
 All tools call `callGodot(bridge, <method>, args)` which forwards to Godot via WebSocket. Responses are JSON-serialized text. Error responses have `isError: true`.
@@ -677,6 +677,255 @@ None. Empty schema `{}`. Takes no arguments at all — the handler doesn't even 
 
 ---
 
+## Tool: batch_get_property
+
+**Description:** Read a property value from all nodes of a given type in the current scene
+**Godot endpoint:** `batch/get_property`
+
+### Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `type_name` | string (`NodeType`) | **Yes** | Node type name to target |
+| `property` | string (`PropertyName`) | **Yes** | Property name to read |
+
+### Test Scenarios
+
+#### 1. Read `visible` from all Sprite2D nodes (happy path)
+
+**Description:** Get the `visible` property value from every Sprite2D in the scene.
+
+```json
+{
+  "type_name": "Sprite2D",
+  "property": "visible"
+}
+```
+
+**Expected result:**
+- `isError` is `false` or absent
+- Response contains `type`, `property`, `count`, and `nodes` array
+- Each node entry has `path`, `name`, `type`, and `value`
+- `value` matches the actual `visible` state of each node (true or false)
+
+**Notes:** Open a scene with Sprite2D nodes before calling. Verify each returned value matches the node's actual state in Godot.
+
+#### 2. Read a numeric property (`z_index`) from Node2D nodes
+
+**Description:** Get the `z_index` from all Node2D-derived nodes.
+
+```json
+{
+  "type_name": "Node2D",
+  "property": "z_index"
+}
+```
+
+**Expected result:**
+- Returns z_index values for all Node2D nodes
+- Each entry includes the node path and the integer value
+
+**Notes:** Tests that numeric property values are returned correctly.
+
+#### 3. Read a complex property (`modulate`) from Label nodes
+
+**Description:** Get the `modulate` color from all Label nodes.
+
+```json
+{
+  "type_name": "Label",
+  "property": "modulate"
+}
+```
+
+**Expected result:**
+- Returns modulate color values for all Label nodes
+- Color values are returned as Variant (object with r, g, b, a or as Godot serializes it)
+
+**Notes:** Tests that complex value types (Color) are read and returned correctly.
+
+#### 4. Read property with empty type_name
+
+**Description:** Edge case — empty string for type_name.
+
+```json
+{
+  "type_name": "",
+  "property": "visible"
+}
+```
+
+**Expected result:**
+- Returns error: `"Type is required"`
+- `isError` is `true`
+
+#### 5. Read property with empty property name
+
+**Description:** Edge case — empty string for property.
+
+```json
+{
+  "type_name": "Sprite2D",
+  "property": ""
+}
+```
+
+**Expected result:**
+- Returns error: `"Property is required"`
+- `isError` is `true`
+
+#### 6. Read non-existent property
+
+**Description:** Try to read a property that doesn't exist on the target type.
+
+```json
+{
+  "type_name": "Sprite2D",
+  "property": "nonexistent_prop_xyz"
+}
+```
+
+**Expected result:**
+- Returns error: `"Property 'nonexistent_prop_xyz' does not exist on Sprite2D"`
+- `isError` is `true`
+
+#### 7. Read from a type with zero instances
+
+**Description:** Try to read when no nodes of that type exist.
+
+```json
+{
+  "type_name": "VehicleBody3D",
+  "property": "mass"
+}
+```
+
+**Expected result:**
+- Returns error: `"No nodes of type 'VehicleBody3D' found in scene"`
+- `isError` is `true`
+- No crash
+
+---
+
+## Tool: cross_scene_get_property
+
+**Description:** Read a property value from nodes of a given type across all .tscn files on disk (read-only)
+**Godot endpoint:** `batch/cross_scene_get`
+
+### Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `type_name` | string (`NodeType`) | **Yes** | Node type name to target |
+| `property` | string (`PropertyName`) | **Yes** | Property name to read |
+
+### Test Scenarios
+
+#### 1. Read `visible` from Sprite2D across all scenes (happy path)
+
+**Description:** Get the `visible` property from every Sprite2D node across every .tscn file in the project.
+
+```json
+{
+  "type_name": "Sprite2D",
+  "property": "visible"
+}
+```
+
+**Expected result:**
+- `isError` is `false` or absent
+- Response contains `type`, `property`, `scenes_with_matches`, and `scenes` array
+- Each scene entry has `scene` (file path) and `nodes` array
+- Each node entry has `name`, `parent`, `value`, and `has_property`
+- `value` contains the raw string from the .tscn file (e.g. `"true"`, `"false"`)
+- `has_property` is `true` if the property was explicitly set, `false` if using default
+
+**Notes:** This is a read-only operation. No files are modified. Values come from the .tscn text directly, so they are strings (e.g., `"true"` not boolean `true`).
+
+#### 2. Read `z_index` from Node2D across scenes
+
+**Description:** Get the z_index property from all Node2D-type nodes across scenes.
+
+```json
+{
+  "type_name": "Node2D",
+  "property": "z_index"
+}
+```
+
+**Expected result:**
+- Returns scenes containing Node2D nodes with their z_index values
+- Nodes that don't have z_index explicitly set will have `has_property: false` and `value: null`
+
+#### 3. Read with empty type_name
+
+**Description:** Edge case — empty string for type_name.
+
+```json
+{
+  "type_name": "",
+  "property": "visible"
+}
+```
+
+**Expected result:**
+- Returns error: `"Type is required"`
+- `isError` is `true`
+
+#### 4. Read with empty property name
+
+**Description:** Edge case — empty string for property.
+
+```json
+{
+  "type_name": "Sprite2D",
+  "property": ""
+}
+```
+
+**Expected result:**
+- Returns error: `"Property is required"`
+- `isError` is `true`
+
+#### 5. Read a type that exists in no scenes
+
+**Description:** Search for a type that doesn't appear in any .tscn file.
+
+```json
+{
+  "type_name": "VehicleBody3D",
+  "property": "mass"
+}
+```
+
+**Expected result:**
+- `isError` is `false` or absent
+- Returns `scenes_with_matches: 0` and empty `scenes` array
+- No crash
+
+#### 6. Compare cross-scene read with batch get (consistency check)
+
+**Description:** Read a property from the currently open scene both ways and compare.
+
+```json
+// First call: in-scene read
+{
+  "type_name": "Sprite2D",
+  "property": "visible"
+}
+// Second call: cross-scene read
+{
+  "type_name": "Sprite2D",
+  "property": "visible"
+}
+```
+
+**Expected result:**
+- The values from `batch/get_property` (live Variant values) should match the values from `batch/cross_scene_get` (raw .tscn strings) for the currently open scene
+- `batch/get_property` returns typed values (boolean), `batch/cross_scene_get` returns strings from file
+
+---
+
 ## Cross-Tool Dependencies and Sequences
 
 Some tools have natural dependencies on each other. The following sequences should be tested:
@@ -713,6 +962,34 @@ Some tools have natural dependencies on each other. The following sequences shou
 1. Call `find_node_references` with `{ "query": "Player" }` → understand impact
 2. Call `batch_set_property` to modify all nodes of that type
 3. Call `find_node_references` again → verify references are still valid (no broken refs)
+
+### Sequence 5: Batch Get → Batch Set → Batch Get (verify roundtrip)
+
+**Purpose:** Read current values, change them, verify the change took effect.
+
+1. Call `batch/get_property` with `{ "type_name": "Sprite2D", "property": "visible" }` → note current values
+2. Call `batch/set_property` with `{ "type_name": "Sprite2D", "property": "visible", "value": false }`
+3. Call `batch/get_property` again → verify all values are now `false`
+4. Undo in Godot (Ctrl+Z) and call `batch/get_property` again → verify values reverted
+
+### Sequence 6: Cross-Scene Get → Cross-Scene Set → Cross-Scene Get (verify roundtrip)
+
+**Purpose:** Read property from .tscn files, change them across scenes, verify the change.
+
+1. Call `batch/cross_scene_get` with `{ "type_name": "Sprite2D", "property": "z_index" }` → note current values
+2. Call `batch/cross_scene_set` with `{ "type_name": "Sprite2D", "property": "z_index", "value": 42, "confirm_no_undo": true }`
+3. Call `batch/cross_scene_get` again → verify all .tscn files now show `z_index = 42`
+
+**Notes:** Use a test project copy. This modifies files on disk.
+
+### Sequence 7: Batch Get vs Cross-Scene Get (consistency)
+
+**Purpose:** Verify that live scene tree data matches on-disk .tscn data for the same scene.
+
+1. Open a scene in Godot
+2. Call `batch/get_property` with `{ "type_name": "Sprite2D", "property": "visible" }`
+3. Call `batch/cross_scene_get` with the same params
+4. For the currently open scene's .tscn file, compare the values — they should match (live Variant vs raw string)
 
 ---
 

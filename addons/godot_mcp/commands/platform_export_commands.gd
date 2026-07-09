@@ -335,4 +335,93 @@ func run_exported_build(params: Dictionary) -> Dictionary:
 	}}
 
 
+## Delete an export preset from export_presets.cfg.
+func delete_export_preset(params: Dictionary) -> Dictionary:
+	var name: String = params.get("name", "")
+
+	if name.is_empty():
+		return {"error": "name is required"}
+
+	var config_path: String = "res://export_presets.cfg"
+	var config: ConfigFile = ConfigFile.new()
+
+	if not FileAccess.file_exists(config_path):
+		return {"error": "No export presets file found at %s" % config_path}
+
+	var load_err: Error = config.load(config_path)
+	if load_err != OK:
+		return {"error": "Failed to load export presets: %s" % error_string(load_err)}
+
+	# Find the preset with matching name
+	var target_idx: int = -1
+	var total_presets: int = 0
+	while config.has_section("preset.%d" % total_presets):
+		if config.get_value("preset.%d" % total_presets, "name", "") == name:
+			target_idx = total_presets
+		total_presets += 1
+
+	if target_idx == -1:
+		return {"error": "Export preset not found: %s" % name}
+
+	# Collect the target preset info before deletion
+	var target_section: String = "preset.%d" % target_idx
+	var deleted_platform: String = config.get_value(target_section, "platform", "unknown")
+
+	# Read all presets into memory
+	var presets: Array = []
+	for idx in range(total_presets):
+		var section: String = "preset.%d" % idx
+		var preset_data: Dictionary = {}
+		for key in config.get_section_keys(section):
+			preset_data[key] = config.get_value(section, key)
+		var options_section: String = "preset.%d.options" % idx
+		var options_data: Dictionary = {}
+		if config.has_section(options_section):
+			for key in config.get_section_keys(options_section):
+				options_data[key] = config.get_value(options_section, key)
+		preset_data["__options__"] = options_data
+		presets.append(preset_data)
+
+	# Remove the target preset
+	presets.remove_at(target_idx)
+
+	# Clear the entire file and rewrite
+	for idx in range(total_presets):
+		var section: String = "preset.%d" % idx
+		if config.has_section(section):
+			for key in config.get_section_keys(section):
+				config.erase_section_key(section, key)
+			config.erase_section(section)
+		var options_section: String = "preset.%d.options" % idx
+		if config.has_section(options_section):
+			for key in config.get_section_keys(options_section):
+				config.erase_section_key(options_section, key)
+			config.erase_section(options_section)
+
+	# Write remaining presets back with re-indexed keys
+	for idx in range(presets.size()):
+		var section: String = "preset.%d" % idx
+		var preset_data: Dictionary = presets[idx]
+		var options_data: Dictionary = preset_data.get("__options__", {})
+		preset_data.erase("__options__")
+		for key in preset_data:
+			config.set_value(section, key, preset_data[key])
+		if not options_data.is_empty():
+			var options_section: String = "preset.%d.options" % idx
+			for key in options_data:
+				config.set_value(options_section, key, options_data[key])
+
+	var save_err: Error = config.save(config_path)
+	if save_err != OK:
+		return {"error": "Failed to save export presets: %s" % error_string(save_err)}
+
+	return {"result": {
+		"success": true,
+		"name": name,
+		"platform": deleted_platform,
+		"config_path": config_path,
+		"remaining_presets": presets.size(),
+		"message": "Deleted export preset '%s' (%s). %d presets remaining." % [name, deleted_platform, presets.size()],
+	}}
+
 

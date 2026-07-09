@@ -1,4 +1,4 @@
-## Audio commands module - 7 tools.
+## Audio commands module - 9 tools.
 ## Handles audio players, buses, and bus effects.
 class_name MCPAudioCommands
 extends RefCounted
@@ -15,7 +15,9 @@ func get_commands() -> Dictionary:
 		"audio/add_player": add_audio_player,
 		"audio/remove_player": _remove_audio_player,
 		"audio/add_bus": add_audio_bus,
+		"audio/remove_bus": remove_audio_bus,
 		"audio/add_bus_effect": add_audio_bus_effect,
+		"audio/remove_bus_effect": remove_audio_bus_effect,
 		"audio/set_bus": set_audio_bus,
 		"audio/get_bus_layout": get_audio_bus_layout,
 		"audio/get_info": get_audio_info,
@@ -143,6 +145,24 @@ func add_audio_bus(params: Dictionary) -> Dictionary:
 		return {"result": {"name": bus_name, "index": new_index, "total_buses": AudioServer.bus_count}}
 
 
+## Remove an audio bus by name.
+func remove_audio_bus(params: Dictionary) -> Dictionary:
+	var bus_name: String = params.get("name", params.get("bus_name", params.get("bus", "")))
+	if bus_name.is_empty():
+		return {"error": "Bus name is required"}
+
+	if bus_name == "Master":
+		return {"error": "Cannot remove the Master bus"}
+
+	var bus_idx: int = MCPCommandHelpers.find_bus_index(bus_name)
+	if bus_idx == -1:
+		return {"error": "Bus not found: %s" % bus_name}
+
+	var total_before: int = AudioServer.bus_count
+	AudioServer.remove_bus(bus_idx)
+	return {"result": {"removed": bus_name, "index": bus_idx, "total_buses": AudioServer.bus_count}}
+
+
 ## Add an effect to an audio bus.
 func add_audio_bus_effect(params: Dictionary) -> Dictionary:
 	var bus_name: String = params.get("bus_name", params.get("bus", ""))
@@ -178,6 +198,28 @@ func add_audio_bus_effect(params: Dictionary) -> Dictionary:
 
 	var effect_count: int = AudioServer.get_bus_effect_count(bus_idx)
 	return {"result": {"bus": bus_name, "effect_type": effect_type, "effect_index": effect_count - 1, "total_effects": effect_count}}
+
+
+## Remove an effect from an audio bus by index.
+func remove_audio_bus_effect(params: Dictionary) -> Dictionary:
+	var bus_name: String = params.get("bus_name", params.get("bus", ""))
+	if bus_name.is_empty():
+		return {"error": "Bus name is required"}
+
+	var bus_idx: int = MCPCommandHelpers.find_bus_index(bus_name)
+	if bus_idx == -1:
+		return {"error": "Bus not found: %s" % bus_name}
+
+	var effect_index: int = params.get("effect_index", params.get("index", -1))
+	if effect_index < 0:
+		return {"error": "effect_index is required"}
+
+	var effect_count: int = AudioServer.get_bus_effect_count(bus_idx)
+	if effect_index >= effect_count:
+		return {"error": "Effect index %d out of range (bus has %d effects)" % [effect_index, effect_count]}
+
+	AudioServer.remove_bus_effect(bus_idx, effect_index)
+	return {"result": {"bus": bus_name, "removed_effect_index": effect_index, "total_effects": AudioServer.get_bus_effect_count(bus_idx)}}
 
 
 ## Set bus properties: volume_db, solo, mute, bypass_effects.

@@ -1,4 +1,4 @@
-## Memory profiling commands module - 5 tools.
+## Memory profiling commands module - 6 tools.
 ## Provides memory usage breakdown, object tracking, leak detection,
 ## and garbage collection control.
 class_name MCPMemoryProfilingCommands
@@ -24,6 +24,7 @@ func get_commands() -> Dictionary:
 	return {
 		"get_memory_usage": get_memory_usage,
 		"track_object_creation": track_object_creation,
+		"stop_object_tracking": stop_object_tracking,
 		"find_memory_leaks": find_memory_leaks,
 		"get_object_count": get_object_count,
 		"force_garbage_collection": force_garbage_collection,
@@ -110,6 +111,43 @@ func track_object_creation(params: Dictionary) -> Dictionary:
 		"tracking_start": _tracking_start,
 		"message": "Tracking %s objects for %.1fs. Current count: %d. Call get_object_count('%s') after duration to see changes." % [
 			cls_name, duration, baseline, cls_name
+		],
+	}}
+
+
+## Stop object tracking and return the accumulated creation log.
+func stop_object_tracking(_params: Dictionary) -> Dictionary:
+	if not _tracking_active:
+		return {"error": "No active object tracking. Call track_object_creation first."}
+
+	var stop_time: float = Time.get_unix_time_from_system()
+	var elapsed: float = stop_time - _tracking_start
+	var tracked_class: String = _tracked_class
+	var start_time: float = _tracking_start
+
+	# Get the current count for comparison
+	var current_count: int = _count_objects_of_class(tracked_class)
+
+	# Snapshot tracking state before resetting
+	var log_data: Array = _creation_log.duplicate()
+
+	# Reset tracking state
+	_tracking_active = false
+	_tracked_class = ""
+	_creation_log.clear()
+	_tracking_start = 0.0
+
+	return {"result": {
+		"success": true,
+		"class_name": tracked_class,
+		"elapsed_seconds": "%.2f" % elapsed,
+		"tracking_start": start_time,
+		"tracking_stop": stop_time,
+		"current_count": current_count,
+		"creation_log": log_data,
+		"log_entries": log_data.size(),
+		"message": "Stopped tracking %s after %.1fs. Current count: %d. Creation log has %d entries." % [
+			tracked_class, elapsed, current_count, log_data.size()
 		],
 	}}
 

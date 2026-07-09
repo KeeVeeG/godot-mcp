@@ -1,4 +1,4 @@
-## Gameplay automation commands module - 7 tools.
+## Gameplay automation commands module - 8 tools.
 ## Provides automated gameplay scenarios, recording/replay,
 ## character creation and navigation, state assertions, and event waiting.
 class_name MCPGameplayAutomationCommands
@@ -28,6 +28,7 @@ func get_commands() -> Dictionary:
 		"record_gameplay": record_gameplay,
 		"replay_gameplay": replay_gameplay,
 		"create_test_character": create_test_character,
+		"delete_test_character": delete_test_character,
 		"navigate_character": navigate_character,
 		"assert_game_state": assert_game_state,
 		"wait_for_game_event": wait_for_game_event,
@@ -274,6 +275,65 @@ func create_test_character(params: Dictionary) -> Dictionary:
 		"scene": scene_path,
 		"position": position,
 		"message": "Created test character '%s' at %s" % [instance.name, str(position)],
+	}}
+
+
+## Delete test character(s) from the scene and clean up tracking.
+func delete_test_character(params: Dictionary) -> Dictionary:
+	var character_path: String = params.get("character_path", "")
+
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
+
+	# If specific path given, delete only that character
+	if not character_path.is_empty():
+		var node: Node = root.get_node_or_null(character_path)
+		if node == null:
+			return {"error": "Character not found: %s" % character_path}
+
+		var path_str: String = str(node.get_path())
+		if path_str not in _test_characters:
+			return {"error": "Node is not a test character: %s" % character_path}
+
+		var char_name: String = str(node.name)
+		node.queue_free()
+		_test_characters.erase(path_str)
+
+		return {"result": {
+			"success": true,
+			"deleted": [path_str],
+			"remaining": _test_characters.size(),
+			"message": "Deleted test character '%s'. %d remaining." % [char_name, _test_characters.size()],
+		}}
+
+	# No path given — delete all test characters
+	if _test_characters.is_empty():
+		return {"result": {
+			"success": true,
+			"deleted": [],
+			"remaining": 0,
+			"message": "No test characters to delete",
+		}}
+
+	var deleted: Array = []
+	var not_found: Array = []
+	for path_str: String in _test_characters.duplicate():
+		var node: Node = root.get_node_or_null(path_str)
+		if node != null:
+			node.queue_free()
+			deleted.append(path_str)
+		else:
+			not_found.append(path_str)
+
+	_test_characters.clear()
+
+	return {"result": {
+		"success": true,
+		"deleted": deleted,
+		"not_found": not_found,
+		"remaining": 0,
+		"message": "Deleted %d test character(s)" % deleted.size(),
 	}}
 
 

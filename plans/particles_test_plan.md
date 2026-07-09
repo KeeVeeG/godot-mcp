@@ -1,6 +1,6 @@
 # Particles Tools — Test Plan
 
-> **Source**: `server/src/tools/particles.ts` (128 lines, 8 tools)
+> **Source**: `server/src/tools/particles.ts` (128 lines, 12 tools)
 > **Shared types**: `server/src/tools/shared-types.ts`
 
 ---
@@ -1191,6 +1191,549 @@ Before running any particle tool tests:
 
 - **Before**: A particle node must exist. Use `create_particles` first.
 - **After**: Use `get_particle_info` to verify velocity curve was applied.
+
+---
+
+## Tool: `get_particle_material`
+
+**Description**: Read ParticleProcessMaterial properties from a particle system
+
+**Route**: `particles/get_material`
+
+### Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | `string` | Yes | Particle node path |
+
+### Test Scenarios
+
+#### Scenario 1: Read material properties after setting them (happy path)
+
+**Description**: Set material properties via `set_particle_material`, then read them back.
+
+**Precondition**: Create a particle node and set material:
+```json
+{ "parent": "", "type": "2d" }
+```
+```json
+{
+  "path": "GPUParticles2D",
+  "properties": {
+    "direction": [0, -1, 0],
+    "spread": 15.0,
+    "gravity": [0, 98, 0],
+    "initial_velocity_min": 50.0,
+    "initial_velocity_max": 100.0,
+    "scale_min": 0.5,
+    "scale_max": 1.5,
+    "color": "#ff8020ff"
+  }
+}
+```
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns success with material properties
+- Response includes `direction`, `spread`, `initial_velocity_min`, `initial_velocity_max`, `gravity`, `scale_min`, `scale_max`, `color`
+- Values match what was set
+
+**What to check**: Each property value should match what was set via `set_particle_material`. The `direction` and `gravity` are arrays of 3 floats. The `color` is a hex string.
+
+---
+
+#### Scenario 2: Read material on node with no material (error case)
+
+**Description**: Read material from a freshly created particle node with no material set.
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating no process material is set
+
+**What to check**: The error should say "No process material set on ..." rather than crashing.
+
+---
+
+#### Scenario 3: Read material on non-particle node (error case)
+
+**Description**: Target a regular node that is not a particle emitter.
+
+**Precondition**: Create a regular node:
+```json
+{ "parent": "", "name": "MyNode", "type": "Node2D" }
+```
+
+**Params**:
+```json
+{
+  "path": "MyNode"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating the node is not a particle emitter
+
+---
+
+#### Scenario 4: Non-existent node (error case)
+
+**Params**:
+```json
+{
+  "path": "GhostParticles"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating the node was not found
+
+---
+
+#### Scenario 5: Read material on 3D particle system
+
+**Precondition**: Create 3D particles and set material properties.
+
+**Params**:
+```json
+{
+  "path": "GPUParticles3D"
+}
+```
+
+**Expected Result**:
+- Tool returns success with 3D material properties
+- `direction` and `gravity` are 3-element arrays
+
+---
+
+### Dependencies
+
+- **Before**: A particle node must exist with a material set. Use `create_particles` and `set_particle_material` first.
+- **After**: Compare returned values against what was set to verify round-trip accuracy.
+
+---
+
+## Tool: `get_particle_color_gradient`
+
+**Description**: Read the color gradient (color ramp) from a particle system
+
+**Route**: `particles/get_color_gradient`
+
+### Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | `string` | Yes | Particle node path |
+
+### Test Scenarios
+
+#### Scenario 1: Read a two-stop gradient (happy path)
+
+**Description**: Set a gradient via `set_particle_color_gradient`, then read it back.
+
+**Precondition**: Create particles, set material, then set color gradient:
+```json
+{ "parent": "", "type": "2d" }
+```
+```json
+{
+  "path": "GPUParticles2D",
+  "properties": { "color": "#ffffffff" }
+}
+```
+```json
+{
+  "path": "GPUParticles2D",
+  "gradient": [
+    { "offset": 0.0, "color": "#FF0000FF" },
+    { "offset": 1.0, "color": "#FF000000" }
+  ]
+}
+```
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns success with `gradient` array containing 2 points
+- Each point has `offset` and `color` fields
+- Colors and offsets match what was set
+
+**What to check**: The number of gradient points should match. Offset and color values should round-trip correctly.
+
+---
+
+#### Scenario 2: Read a multi-stop gradient
+
+**Description**: Read a 4-stop rainbow gradient.
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns 4 gradient points in order
+- All offsets and colors match what was set
+
+---
+
+#### Scenario 3: No color gradient set (error case)
+
+**Description**: Read gradient from a particle node that has a material but no color ramp.
+
+**Precondition**: Create particles and set material but do not set a color gradient.
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating no color gradient is set
+
+---
+
+#### Scenario 4: No material set (error case)
+
+**Description**: Read gradient from a particle node with no material at all.
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating no process material is set
+
+---
+
+#### Scenario 5: Non-existent node (error case)
+
+**Params**:
+```json
+{
+  "path": "GhostParticles"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating the node was not found
+
+---
+
+### Dependencies
+
+- **Before**: A particle node must exist with a material and color gradient set. Use `create_particles`, `set_particle_material`, and `set_particle_color_gradient` first.
+- **After**: Compare returned gradient against what was set to verify round-trip accuracy.
+
+---
+
+## Tool: `get_particle_emission_shape`
+
+**Description**: Read the emission shape configuration from a particle system
+
+**Route**: `particles/get_emission_shape`
+
+### Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | `string` | Yes | Particle node path |
+
+### Test Scenarios
+
+#### Scenario 1: Read point emission shape (happy path)
+
+**Description**: Set emission to point, then read it back.
+
+**Precondition**: Create particles with material, then set emission shape:
+```json
+{ "parent": "", "type": "2d" }
+```
+```json
+{
+  "path": "GPUParticles2D",
+  "properties": { "color": "#ffffffff" }
+}
+```
+```json
+{
+  "path": "GPUParticles2D",
+  "shape": "point"
+}
+```
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns success with `shape: "point"`
+- No additional properties for point shape
+
+**What to check**: Point shape should have no extra `properties` field or an empty one.
+
+---
+
+#### Scenario 2: Read sphere emission shape
+
+**Description**: Set sphere with radius, then read back.
+
+**Precondition**: Set sphere emission:
+```json
+{
+  "path": "GPUParticles2D",
+  "shape": "sphere",
+  "size": [10.0]
+}
+```
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns `shape: "sphere"` with `properties.radius` matching 10.0
+
+---
+
+#### Scenario 3: Read box emission shape
+
+**Description**: Set box with 3D extents, then read back.
+
+**Precondition**:
+```json
+{
+  "path": "GPUParticles3D",
+  "shape": "box",
+  "size": [5.0, 10.0, 5.0]
+}
+```
+
+**Params**:
+```json
+{
+  "path": "GPUParticles3D"
+}
+```
+
+**Expected Result**:
+- Tool returns `shape: "box"` with `properties.size` being `[5.0, 10.0, 5.0]`
+
+---
+
+#### Scenario 4: Read ring emission shape
+
+**Description**: Set ring emission, then read back.
+
+**Precondition**:
+```json
+{
+  "path": "GPUParticles3D",
+  "shape": "ring",
+  "properties": { "radius": 15.0, "height": 2.0, "inner_radius": 5.0 }
+}
+```
+
+**Params**:
+```json
+{
+  "path": "GPUParticles3D"
+}
+```
+
+**Expected Result**:
+- Tool returns `shape: "ring"` with `properties` containing `radius`, `height`, and `inner_radius`
+
+---
+
+#### Scenario 5: No material set (error case)
+
+**Description**: Read emission shape from a particle node with no material.
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating no process material is set
+
+---
+
+#### Scenario 6: Non-existent node (error case)
+
+**Params**:
+```json
+{
+  "path": "GhostParticles"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating the node was not found
+
+---
+
+### Dependencies
+
+- **Before**: A particle node must exist with a material and emission shape set. Use `create_particles`, `set_particle_material`, and `set_particle_emission_shape` first.
+- **After**: Compare returned shape and properties against what was set.
+
+---
+
+## Tool: `get_particle_velocity_curve`
+
+**Description**: Read the velocity limit curve from a particle system
+
+**Route**: `particles/get_velocity_curve`
+
+### Parameters
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | `string` | Yes | Particle node path |
+
+### Test Scenarios
+
+#### Scenario 1: Read linear velocity curve (happy path)
+
+**Description**: Set a linear decay curve, then read it back.
+
+**Precondition**: Create particles with material, then set velocity curve:
+```json
+{ "parent": "", "type": "2d" }
+```
+```json
+{
+  "path": "GPUParticles2D",
+  "properties": { "color": "#ffffffff" }
+}
+```
+```json
+{
+  "path": "GPUParticles2D",
+  "curve": [
+    { "offset": 0.0, "value": 1.0 },
+    { "offset": 1.0, "value": 0.0 }
+  ]
+}
+```
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns success with `curve` array containing 2 points
+- Each point has `offset` and `value` fields
+- Values match what was set
+
+**What to check**: The number of curve points should match. Offset and value should round-trip correctly.
+
+---
+
+#### Scenario 2: Read multi-point velocity curve
+
+**Description**: Read a curve with a mid-life velocity boost.
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns 3 curve points in order
+- Values match what was set (0.5 at start, 2.0 at middle, 0.0 at end)
+
+---
+
+#### Scenario 3: No velocity curve set (error case)
+
+**Description**: Read curve from a particle node that has a material but no velocity curve.
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating no velocity curve is set
+
+---
+
+#### Scenario 4: No material set (error case)
+
+**Description**: Read curve from a particle node with no material at all.
+
+**Params**:
+```json
+{
+  "path": "GPUParticles2D"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating no process material is set
+
+---
+
+#### Scenario 5: Non-existent node (error case)
+
+**Params**:
+```json
+{
+  "path": "GhostParticles"
+}
+```
+
+**Expected Result**:
+- Tool returns an error indicating the node was not found
+
+---
+
+### Dependencies
+
+- **Before**: A particle node must exist with a material and velocity curve set. Use `create_particles`, `set_particle_material`, and `set_particle_velocity_curve` first.
+- **After**: Compare returned curve points against what was set to verify round-trip accuracy.
 
 ---
 

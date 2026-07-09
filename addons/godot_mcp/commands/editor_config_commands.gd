@@ -1,4 +1,4 @@
-## Editor configuration commands module - 8 tools.
+## Editor configuration commands module - 9 tools.
 ## Handles editor theme, layout, font, scale, and workspace management.
 class_name MCPEditorConfigCommands
 extends RefCounted
@@ -22,6 +22,7 @@ func get_commands() -> Dictionary:
 		"editor_config/save_layout": func(params: Dictionary) -> Dictionary: return execute("save_layout", params),
 		"editor_config/load_layout": func(params: Dictionary) -> Dictionary: return execute("load_layout", params),
 		"editor_config/reset_layout": func(params: Dictionary) -> Dictionary: return execute("reset_layout", params),
+		"editor_config/delete_layout": func(params: Dictionary) -> Dictionary: return execute("delete_layout", params),
 	}
 
 
@@ -36,6 +37,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"save_layout": return _save_layout(params)
 		"load_layout": return _load_layout(params)
 		"reset_layout": return _reset_layout()
+		"delete_layout": return _delete_layout(params)
 	return {"success": false, "error": "Unknown method: " + method}
 
 
@@ -195,6 +197,23 @@ func _reset_layout() -> Dictionary:
 	EditorInterface.set_main_screen_editor("2D")
 	_current_tab = "default"
 	return {"success": true, "message": "Editor layout reset to defaults"}
+
+
+## Delete a saved editor layout from user://.
+func _delete_layout(params: Dictionary) -> Dictionary:
+	var name: String = params.get("name", "")
+	if name.is_empty():
+		return {"success": false, "error": "Layout name cannot be empty"}
+	var layout_path: String = "user://editor_layout_%s.cfg" % name
+	if not FileAccess.file_exists(layout_path):
+		return {"success": false, "error": "Layout not found: %s" % name}
+	var dir: DirAccess = DirAccess.open("user://")
+	if dir == null:
+		return {"success": false, "error": "Cannot access user directory"}
+	var err: Error = dir.remove("editor_layout_%s.cfg" % name)
+	if err != OK:
+		return {"success": false, "error": "Failed to delete layout: %s" % error_string(err)}
+	return {"success": true, "name": name, "message": "Layout '%s' deleted" % name}
 
 
 ## Helper: get list of saved layouts.

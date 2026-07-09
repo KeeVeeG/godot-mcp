@@ -1,6 +1,6 @@
-## Addon management commands module - 5 tools.
+## Addon management commands module - 6 tools.
 ## Provides addon discovery, installation from multiple sources,
-## uninstallation, updating, and configuration management.
+## uninstallation, updating, configuration management, and config reading.
 class_name MCPAddonManagementCommands
 extends RefCounted
 
@@ -44,6 +44,7 @@ func get_commands() -> Dictionary:
 		"uninstall_addon": uninstall_addon,
 		"update_addon": update_addon,
 		"configure_addon": configure_addon,
+		"get_addon_config": get_addon_config,
 	}
 
 
@@ -285,6 +286,65 @@ func configure_addon(params: Dictionary) -> Dictionary:
 		"project_settings_updated": project_settings_updated,
 		"config_path": config_path,
 		"message": "Configured %d settings for addon '%s'" % [settings.size(), name],
+	}}
+
+
+## Get current configuration of an installed addon.
+## Reads config.json and project settings for the addon.
+func get_addon_config(params: Dictionary) -> Dictionary:
+	var name: String = params.get("name", "")
+	if name.is_empty():
+		return {"error": "name is required"}
+	var name_err: String = _validate_addon_name(name)
+	if not name_err.is_empty():
+		return {"error": name_err}
+
+	var addon_path: String = ADDONS_DIR.path_join(name)
+	var global_path: String = ProjectSettings.globalize_path(addon_path)
+
+	if not DirAccess.dir_exists_absolute(global_path):
+		return {"error": "Addon not found: %s" % name}
+
+	# Read config.json
+	var config_path: String = global_path.path_join("config.json")
+	var addon_config: Dictionary = {}
+	if FileAccess.file_exists(config_path):
+		var file: FileAccess = FileAccess.open(config_path, FileAccess.READ)
+		if file != null:
+			var json_text: String = file.get_as_text()
+			file.close()
+			var json: JSON = JSON.new()
+			if json.parse(json_text) == OK and json.data is Dictionary:
+				addon_config = json.data as Dictionary
+
+	# Read project settings for this addon
+	var project_settings: Dictionary = {}
+	var addon_prefix: String = "addons/%s/" % name
+	var props: Array = ProjectSettings.get_property_list()
+	for prop: Dictionary in props:
+		var prop_name: String = prop["name"] as String
+		if prop_name.begins_with(addon_prefix):
+			var key: String = prop_name.substr(addon_prefix.length())
+			project_settings[key] = ProjectSettings.get_setting(prop_name)
+
+	# Read plugin.cfg if present
+	var plugin_cfg_path: String = addon_path.path_join("plugin.cfg")
+	var plugin_info: Dictionary = {}
+	if FileAccess.file_exists(plugin_cfg_path):
+		var plugin_cfg: ConfigFile = ConfigFile.new()
+		if plugin_cfg.load(plugin_cfg_path) == OK:
+			plugin_info["name"] = plugin_cfg.get_value("plugin", "name", "")
+			plugin_info["description"] = plugin_cfg.get_value("plugin", "description", "")
+			plugin_info["author"] = plugin_cfg.get_value("plugin", "author", "")
+			plugin_info["version"] = plugin_cfg.get_value("plugin", "version", "")
+			plugin_info["script"] = plugin_cfg.get_value("plugin", "script", "")
+
+	return {"result": {
+		"name": name,
+		"config": addon_config,
+		"project_settings": project_settings,
+		"plugin_info": plugin_info,
+		"config_path": config_path if FileAccess.file_exists(config_path) else "",
 	}}
 
 

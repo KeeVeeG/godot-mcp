@@ -1,4 +1,4 @@
-## Input commands module - 7 tools.
+## Input commands module - 8 tools.
 ## Handles keyboard, mouse, action simulation, and input mapping.
 class_name MCPInputCommands
 extends RefCounted
@@ -19,6 +19,7 @@ func get_commands() -> Dictionary:
 		"input/simulate_sequence": simulate_sequence,
 		"input/get_actions": get_input_actions,
 		"input/set_action": set_input_action,
+		"input/remove_action": remove_input_action,
 	}
 
 
@@ -225,6 +226,24 @@ func set_input_action(params: Dictionary) -> Dictionary:
 		return {"error": "Failed to save project settings: %s" % error_string(err)}
 
 	return {"result": "Input action '%s' set with %d events" % [action, events.size()]}
+
+
+## Remove an input action from InputMap.
+func remove_input_action(params: Dictionary) -> Dictionary:
+	var action: String = params.get("action", "")
+	if action.is_empty():
+		return {"error": "Action name is required"}
+
+	if not InputMap.has_action(action):
+		return {"error": "Unknown input action: %s" % action}
+
+	InputMap.erase_action(action)
+
+	var err: Error = ProjectSettings.save()
+	if err != OK:
+		return {"error": "Failed to save project settings: %s" % error_string(err)}
+
+	return {"result": "Input action '%s' removed" % action}
 
 
 ## Write a command to the runtime IPC file.

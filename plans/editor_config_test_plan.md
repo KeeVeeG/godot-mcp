@@ -1,4 +1,4 @@
-# Test Plan: editor_config.ts — 8 Editor Configuration Tools
+# Test Plan: editor_config.ts — 9 Editor Configuration Tools
 
 > **Source**: `server/src/tools/editor_config.ts`
 > **Shared types**: `server/src/tools/shared-types.ts`
@@ -7,7 +7,7 @@
 
 ## Overview
 
-This module exposes 8 MCP tools for reading and modifying Godot editor appearance and layout settings. All mutation tools forward through `callGodot(bridge, 'editor_config/<action>', args)` to the Godot editor plugin via WebSocket. The `Name` type used by `save_editor_layout` and `load_editor_layout` is `z.string()` — a plain string with no additional constraints.
+This module exposes 9 MCP tools for reading and modifying Godot editor appearance and layout settings. All mutation tools forward through `callGodot(bridge, 'editor_config/<action>', args)` to the Godot editor plugin via WebSocket. The `Name` type used by `save_editor_layout`, `load_editor_layout`, and `delete_editor_layout` is `z.string()` — a plain string with no additional constraints.
 
 ### Tool Inventory
 
@@ -21,6 +21,7 @@ This module exposes 8 MCP tools for reading and modifying Godot editor appearanc
 | 6 | `save_editor_layout` | `name` (string) | `editor_config/save_layout` |
 | 7 | `load_editor_layout` | `name` (string) | `editor_config/load_layout` |
 | 8 | `reset_editor_layout` | none | `editor_config/reset_layout` |
+| 9 | `delete_editor_layout` | `name` (string) | `editor_config/delete_layout` |
 
 ### Inter-Tool Dependencies
 
@@ -34,6 +35,7 @@ This module exposes 8 MCP tools for reading and modifying Godot editor appearanc
 | `save_editor_layout` | `set_editor_layout` | Arrange a specific layout state before saving |
 | `load_editor_layout` | `save_editor_layout` | Must have a saved layout before loading it |
 | `reset_editor_layout` | `save_editor_layout` or any layout mutation | Test that reset actually reverts changes |
+| `delete_editor_layout` | `save_editor_layout` | Must have a saved layout before deleting it |
 
 ### Recommended Execution Order
 
@@ -47,6 +49,7 @@ This module exposes 8 MCP tools for reading and modifying Godot editor appearanc
 8. `load_editor_layout` — load the saved layout (verify it restores)
 9. `reset_editor_layout` — reset to factory defaults, then `get_editor_settings` to verify
 10. `load_editor_layout` — attempt to load after reset (may still work if saved)
+11. `delete_editor_layout` — delete the saved layout, then `load_editor_layout` to verify it's gone
 
 ---
 
@@ -568,6 +571,83 @@ The text content should be a JSON object containing editor settings — at minim
 
 ---
 
+## Tool: `delete_editor_layout`
+
+**Description**: Delete a saved editor layout from disk
+
+**Parameters**:
+
+| Name | Type | Required | Default | Constraints | Description |
+|------|------|----------|---------|-------------|-------------|
+| `name` | `string` | **yes** | — | `Name` = `z.string()` (no additional constraints) | Layout name to delete |
+
+**Zod schema**: `z.string()` (imported as `Name` from shared-types)
+
+**Bridge call**: `editor_config/delete_layout`
+
+**Handler logic**: Forwards `{ name }` to Godot plugin which removes the saved layout config file from `user://`.
+
+### Test Scenarios
+
+#### 9.1 — Happy path: delete a previously saved layout
+
+- **Description**: Save a layout, then delete it.
+- **Params**: `{ "name": "layout_to_delete" }`
+- **Expected result**: `isError` is absent or `false`. Response confirms the layout was deleted.
+- **Notes**: Prerequisite: `save_editor_layout` with `"layout_to_delete"` must have been called first. Follow up with `load_editor_layout` to verify the layout no longer exists.
+- **Attention**: Verify the config file was actually removed from `user://`.
+
+#### 9.2 — Verify deleted layout cannot be loaded
+
+- **Description**: After deleting a layout, attempt to load it.
+- **Params**: `{ "name": "layout_to_delete" }`
+- **Expected result**: `isError` is `true`. The Godot plugin should return an error indicating the layout was not found.
+- **Notes**: Depends on scenario 9.1 having been executed first. This confirms the delete actually removed the file.
+
+#### 9.3 — Edge case: delete a non-existent layout name
+
+- **Description**: Attempt to delete a layout that was never saved.
+- **Params**: `{ "name": "nonexistent_layout_12345" }`
+- **Expected result**: `isError` is `true`. The Godot plugin should return an error indicating the layout was not found.
+- **Notes**: Tests error handling for missing layouts.
+
+#### 9.4 — Edge case: empty string name
+
+- **Description**: Pass an empty string.
+- **Params**: `{ "name": "" }`
+- **Expected result**: `isError` is `true` (plugin should reject empty name). Zod allows it.
+- **Notes**: Same as 6.4 and 7.4 — the plugin is the validation boundary.
+
+#### 9.5 — Edge case: missing required `name` parameter
+
+- **Description**: Call with empty object.
+- **Params**: `{}`
+- **Expected result**: `isError` is `true` or MCP SDK rejects.
+- **Notes**: Zod validation.
+
+#### 9.6 — Delete does not affect other saved layouts
+
+- **Description**: Save two layouts, delete one, verify the other still exists.
+- **Params**: `{ "name": "layout_a" }` (after saving both `"layout_a"` and `"layout_b"`)
+- **Expected result**: `isError` is absent or `false`. Follow up with `load_editor_layout` using `"layout_b"` — it should still work.
+- **Notes**: Tests that delete is scoped to the named layout only.
+
+#### 9.7 — Delete then re-save with same name
+
+- **Description**: Delete a layout, then save a new layout with the same name.
+- **Params**: `{ "name": "recycled_name" }` (delete), then `save_editor_layout` with `"recycled_name"`
+- **Expected result**: Both operations succeed. The new layout should be loadable.
+- **Notes**: Tests that delete fully cleans up the file so a fresh save works.
+
+#### 9.8 — Double delete (idempotency)
+
+- **Description**: Delete a layout, then attempt to delete it again.
+- **Params**: `{ "name": "layout_to_delete" }` (after already deleting it)
+- **Expected result**: `isError` is `true`. The second delete should fail with "Layout not found".
+- **Notes**: Tests that delete is not idempotent — it errors on missing files rather than silently succeeding.
+
+---
+
 ## Cross-Tool Integration Scenarios
 
 ### I.1 — Full round-trip: theme + layout + font + scale + save + load + reset
@@ -589,10 +669,14 @@ The text content should be a JSON object containing editor settings — at minim
 14. `get_editor_settings` → verify restored to saved state (amoled, script, 20, 1.25)
 15. `reset_editor_layout` → `{}`
 16. `get_editor_settings` → verify back to factory defaults
+17. `load_editor_layout` → `{ "name": "integration_test" }` → expect success (saved layouts persist across resets)
+18. `delete_editor_layout` → `{ "name": "integration_test" }`
+19. `load_editor_layout` → `{ "name": "integration_test" }` → expect error (layout deleted)
+20. `get_editor_settings` → verify saved_layouts no longer contains "integration_test"
 
-**Expected**: Every step succeeds (no `isError`). Steps 6 and 14 show the mutations took effect. Step 16 shows reset reverted everything.
+**Expected**: Every step succeeds (no `isError`) except step 19 which must fail. Steps 6 and 14 show the mutations took effect. Step 16 shows reset reverted everything. Step 18 confirms delete succeeds. Step 19 confirms the layout no longer exists.
 
-**Attention**: Steps 14 and 16 are the critical assertions. If the layout save/load does not persist theme/font/scale (only panel positions), document which settings are included in a "layout" and which are not.
+**Attention**: Steps 14, 16, and 19 are the critical assertions. If the layout save/load does not persist theme/font/scale (only panel positions), document which settings are included in a "layout" and which are not.
 
 ### I.2 — Error isolation: one invalid call does not break subsequent valid calls
 

@@ -24,6 +24,7 @@
 | `reload_plugin` | `editor.ts` | After `install_addon` — reloads plugins so Godot picks up the newly installed addon |
 | `list_addons` | `addon_management.ts` | Call before and after install/uninstall/update to verify state changes |
 | `configure_addon` | `addon_management.ts` | Only after an addon is already installed |
+| `get_addon_config` | `addon_management.ts` | After install or configure to read current addon configuration |
 
 ---
 
@@ -628,6 +629,149 @@
 
 ---
 
+## Tool: `get_addon_config`
+
+**Description**: Read the current configuration of an installed addon. Returns config.json contents, project settings, and plugin.cfg metadata.
+
+**Input Schema**:
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | `string` | **yes** | — | Addon name to read config for |
+
+**Handler**: `async (args) => callGodot(bridge, 'get_addon_config', args)` — forwards `{ name }`.
+
+### Test Scenarios
+
+#### Scenario 1: Read config of an addon with config.json
+
+**Description**: Read the configuration of an addon that has a config.json file.
+
+**Params**:
+```json
+{
+  "name": "godot-mcp"
+}
+```
+
+**Expected result**: Successful response containing:
+- `config`: key-value pairs from the addon's config.json
+- `project_settings`: project settings under `addons/<name>/` prefix
+- `plugin_info`: metadata from plugin.cfg (name, description, author, version, script)
+- `config_path`: absolute path to the config.json file
+
+**Pre-condition**: The addon must be installed and have a config.json file.
+
+**What to pay attention to**: The `config` object should match the contents of the addon's config.json. The `plugin_info` should contain version and author from plugin.cfg. The `config_path` should be a valid absolute path.
+
+---
+
+#### Scenario 2: Read config of an addon without config.json
+
+**Description**: Read the configuration of an addon that does not have a config.json file.
+
+**Params**:
+```json
+{
+  "name": "simple-addon"
+}
+```
+
+**Expected result**: Successful response where `config` is an empty object `{}` and `config_path` is an empty string `""`. The `project_settings` and `plugin_info` should still be populated if applicable.
+
+**Notes**: Not all addons have a config.json. The tool should handle this gracefully without erroring.
+
+**What to pay attention to**: No error should be returned. The `config` field should be `{}`, not null or undefined.
+
+---
+
+#### Scenario 3: Read config of an addon with project settings
+
+**Description**: Read the configuration of an addon that has project settings stored in project.godot.
+
+**Params**:
+```json
+{
+  "name": "addon-with-settings"
+}
+```
+
+**Expected result**: Successful response where `project_settings` contains key-value pairs from `project.godot` under the `addons/<name>/` prefix.
+
+**Pre-condition**: The addon must be installed and have settings stored in project.godot (e.g., via `configure_addon`).
+
+**What to pay attention to**: The `project_settings` keys should NOT include the `addons/<name>/` prefix — only the suffix keys should be present. Values should match what was configured.
+
+---
+
+#### Scenario 4: Read config of a non-existent addon
+
+**Description**: Attempt to read the config of an addon that is not installed.
+
+**Params**:
+```json
+{
+  "name": "nonexistent-addon"
+}
+```
+
+**Expected result**: Error response (`isError: true`) indicating the addon was not found.
+
+**What to pay attention to**: Expect `isError: true` with a clear "not found" message. No partial data should be returned.
+
+---
+
+#### Scenario 5: Missing required `name` parameter
+
+**Description**: Call without the `name` parameter.
+
+**Params**:
+```json
+{}
+```
+
+**Expected result**: MCP SDK schema validation error — `name` is required.
+
+**What to pay attention to**: Error should indicate missing `name` field. Handler should NOT be called.
+
+---
+
+#### Scenario 6: Empty string for `name`
+
+**Description**: Pass an empty string as the name.
+
+**Params**:
+```json
+{
+  "name": ""
+}
+```
+
+**Expected result**: Depends on Godot-side validation. Zod accepts empty strings for `z.string()`. The Godot plugin should reject this with an error.
+
+**What to pay attention to**: Expect either a schema error or a Godot-side "not found" / "invalid name" error. No config data should be returned.
+
+---
+
+#### Scenario 7: Read config after configure_addon
+
+**Description**: Call `get_addon_config` immediately after `configure_addon` to verify settings were persisted.
+
+**Params**:
+```json
+{
+  "name": "test-addon"
+}
+```
+
+**Expected result**: The `project_settings` in the response should contain the settings that were just configured via `configure_addon`.
+
+**Pre-condition**: Call `configure_addon` first with some settings.
+
+**What to pay attention to**: The settings from `configure_addon` should be visible in `get_addon_config` response. This verifies that configure writes settings that can be read back.
+
+---
+
 ## Sequenced Test Flows
 
 ### Flow 1: Full Install → Configure → Update → Uninstall Lifecycle
@@ -684,12 +828,30 @@ Step 4: list_addons → verify "good-addon" appears
 
 ---
 
+### Flow 4: Configure → Read Config → Verify Round-Trip
+
+This flow tests that `configure_addon` writes settings that `get_addon_config` can read back.
+
+```
+Step 1: install_addon { name: "test-addon", source: "asset_lib" }
+Step 2: configure_addon { name: "test-addon", settings: { "enabled": true, "port": 6505 } }
+Step 3: get_addon_config { name: "test-addon" } → verify project_settings contains enabled=true, port=6505
+Step 4: configure_addon { name: "test-addon", settings: { "port": 7000 } }
+Step 5: get_addon_config { name: "test-addon" } → verify project_settings port changed to 7000, enabled still true
+```
+
+**Expected**: `get_addon_config` reflects all settings written by `configure_addon`. Partial updates do not erase existing settings.
+
+**What to pay attention to**: After step 5, `project_settings` must contain both `enabled` and `port` keys. The `port` value must be `7000` (updated), and `enabled` must still be `true` (unchanged).
+
+---
+
 ## Edge Cases Summary
 
 | Case | Tool | Expected Behavior |
 |---|---|---|
 | Empty name `""` | all tools | Zod accepts it; Godot should reject with error |
-| Non-existent addon | uninstall, update, configure | `isError: true` with "not found" message |
+| Non-existent addon | uninstall, update, configure, get_addon_config | `isError: true` with "not found" message |
 | Missing required param | all tools | MCP SDK validation error before handler |
 | Invalid enum value | install_addon (`source`) | Zod rejects with enum error |
 | git source without URL | install_addon | Godot-side error (URL semantically required) |
@@ -701,3 +863,5 @@ Step 4: list_addons → verify "good-addon" appears
 | Double install of same addon | install_addon | Overwrite existing or error (depends on implementation) |
 | Install then immediately uninstall | install_addon → uninstall_addon | Clean lifecycle, no residual files |
 | Uninstall then configure same addon | uninstall_addon → configure_addon | configure should fail with "not found" |
+| Addon without config.json | get_addon_config | Success with empty `config: {}` and empty `config_path: ""` |
+| Addon with project settings | get_addon_config | `project_settings` contains keys without `addons/<name>/` prefix |

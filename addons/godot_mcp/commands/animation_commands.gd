@@ -1,4 +1,4 @@
-﻿## Animation commands module - 16 tools.
+﻿## Animation commands module - 18 tools.
 ## Handles AnimationPlayer, AnimationTree, and state machines.
 class_name MCPAnimationCommands
 extends RefCounted
@@ -31,6 +31,8 @@ func get_commands() -> Dictionary:
 		"animation/remove_state": remove_state_machine_state,
 		"animation/add_transition": add_state_machine_transition,
 		"animation/remove_transition": remove_state_machine_transition,
+		"animation/remove_tree": remove_animation_tree,
+		"animation/get_tree_parameter": get_tree_parameter,
 	}
 
 
@@ -726,3 +728,44 @@ func remove_animation_keyframe(params: Dictionary) -> Dictionary:
 		return {"error": "No keyframe found at exact time %.4f on track %d" % [time, track_idx]}
 	anim.track_remove_key(track_idx, key_idx)
 	return {"result": "Keyframe at time %.4f removed from track %d" % [time, track_idx]}
+
+
+## Remove an AnimationTree node from the scene.
+func remove_animation_tree(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", params.get("player_path", ""))
+	if path.is_empty():
+		return {"error": "path is required"}
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null or not node is AnimationTree:
+		return {"error": "AnimationTree not found: %s" % path}
+	var tree: AnimationTree = node as AnimationTree
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root != null and tree == root:
+		return {"error": "Cannot remove scene root"}
+	if _undo_helper:
+		_undo_helper.remove_node_with_undo(tree)
+	else:
+		tree.queue_free()
+	return {"result": "AnimationTree '%s' removed from scene" % path}
+
+
+## Get the current value of a parameter on an AnimationTree.
+func get_tree_parameter(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", params.get("player_path", ""))
+	var parameter: String = params.get("parameter", "")
+	if path.is_empty() or parameter.is_empty():
+		return {"error": "path and parameter are required"}
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null or not node is AnimationTree:
+		return {"error": "AnimationTree not found: %s" % path}
+	var tree: AnimationTree = node as AnimationTree
+	# Validate parameter exists using Godot's property list (BUG-2)
+	var param_exists: bool = false
+	for prop: Dictionary in tree.get_property_list():
+		if prop.get("name", "") == parameter:
+			param_exists = true
+			break
+	if not param_exists:
+		return {"error": "Parameter '%s' does not exist on AnimationTree at '%s'. Use get_animation_tree_structure to see available parameters." % [parameter, path]}
+	var value: Variant = tree.get(parameter)
+	return {"result": {"parameter": parameter, "value": value}}
