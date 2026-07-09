@@ -29,9 +29,9 @@ export function registerAnimationTools(server, bridge) {
             player_path: NodePath.describe('AnimationPlayer node path'),
             animation: z.string().describe('Animation name'),
             track_type: z.enum([
-                'value', 'position_3d', 'rotation_3d', 'scale_3d',
+                'value', 'position', 'position_3d', 'rotation', 'rotation_3d', 'scale', 'scale_3d',
                 'blend_shape', 'method', 'bezier', 'audio', 'animation',
-            ]).describe('Type of track to add'),
+            ]).describe('Type of track to add (position/rotation/scale are aliases for position_3d/rotation_3d/scale_3d)'),
             property: z.string().describe("NodePath to target node. REQUIRED for all track types. " +
                 "Format: 'NodePath:sub_property' for value/bezier/blend_shape, " +
                 "or 'NodePath' for position/rotation/scale/method/audio/animation."),

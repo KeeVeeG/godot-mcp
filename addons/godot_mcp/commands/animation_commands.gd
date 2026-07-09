@@ -310,13 +310,20 @@ func create_animation_tree(params: Dictionary) -> Dictionary:
 
 	# If path points to an existing AnimationTree, configure it
 	var tree: AnimationTree = null
+	var is_existing: bool = false
 	if not path.is_empty():
 		var existing: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 		if existing != null:
 			if existing is AnimationTree:
 				tree = existing as AnimationTree
+				is_existing = true
 			else:
 				return {"error": "Node at path '%s' is not an AnimationTree (type: %s)" % [path, existing.get_class()]}
+
+	if is_existing:
+		# Refuse to overwrite existing tree_root (BUG-5)
+		if tree.tree_root != null:
+			return {"error": "AnimationTree at '%s' already has a root (%s). Use add_state_machine_state, set_tree_parameter, or other specific tools to modify it." % [path, tree.tree_root.get_class()]}
 
 	if tree == null:
 		# Create new — determine parent and node name
@@ -412,24 +419,56 @@ func get_animation_tree_structure(params: Dictionary) -> Dictionary:
 			result["states"] = states
 			var transitions: Array = []
 			for j: int in range(sm.get_transition_count()):
+				var tr: AnimationNodeStateMachineTransition = sm.get_transition(j)
 				transitions.append({
 					"from": str(sm.get_transition_from(j)),
 					"to": str(sm.get_transition_to(j)),
+					"advance_mode": _advance_mode_to_string(tr.get_advance_mode()),
+					"switch_mode": _switch_mode_to_string(tr.get_switch_mode()),
+					"xfade_time": tr.get_xfade_time(),
+					"priority": tr.get_priority(),
+					"reset": tr.is_reset(),
+					"advance_condition": str(tr.get_advance_condition()),
 				})
 			result["transitions"] = transitions
 	return {"result": result}
+
+
+## Enum-to-string helpers for transition display.
+static func _advance_mode_to_string(mode: int) -> String:
+	match mode:
+		AnimationNodeStateMachineTransition.ADVANCE_MODE_DISABLED:
+			return "disabled"
+		AnimationNodeStateMachineTransition.ADVANCE_MODE_ENABLED:
+			return "enabled"
+		AnimationNodeStateMachineTransition.ADVANCE_MODE_AUTO:
+			return "auto"
+	return "unknown"
+
+
+static func _switch_mode_to_string(mode: int) -> String:
+	match mode:
+		AnimationNodeStateMachineTransition.SWITCH_MODE_IMMEDIATE:
+			return "immediate"
+		AnimationNodeStateMachineTransition.SWITCH_MODE_SYNC:
+			return "sync"
+		AnimationNodeStateMachineTransition.SWITCH_MODE_AT_END:
+			return "at_end"
+	return "unknown"
 
 
 ## Set a parameter on an AnimationTree.
 func set_tree_parameter(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", params.get("player_path", ""))
 	var parameter: String = params.get("parameter", "")
-	var value: Variant = params.get("value")
 	if path.is_empty() or parameter.is_empty():
 		return {"error": "path and parameter are required"}
 
-	# Reject null values — AnimationTree parameters require typed values (BUG-6)
-	if value == null:
+	# Reject null and missing values — AnimationTree parameters require typed values (BUG-6)
+	if not params.has("value"):
+		return {"error": "'value' parameter is required. AnimationTree parameters must be typed (float, int, bool, string, Vector2, etc.)"}
+	var value: Variant = params["value"]
+	if typeof(value) == TYPE_NIL:
 		return {"error": "Parameter value cannot be null. AnimationTree parameters require typed values (float, int, bool, string, Vector2, etc.)"}
 
 	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
@@ -615,5 +654,10 @@ func remove_animation_keyframe(params: Dictionary) -> Dictionary:
 		return {"error": "Animation not found: %s" % anim_name}
 	if track_idx < 0 or track_idx >= anim.get_track_count():
 		return {"error": "Invalid track index: %d (track count: %d)" % [track_idx, anim.get_track_count()]}
-	anim.track_remove_key_at_time(track_idx, time)
-	return {"result": "Keyframe at time %.2f removed from track %d" % [time, track_idx]}
+	# Use FIND_MODE_EXACT to avoid removing wrong keyframe (NEW-BUG-2)
+	# track_remove_key_at_time uses FIND_MODE_APPROX which removes the nearest keyframe
+	var key_idx: int = anim.track_find_key(track_idx, time, Animation.FIND_MODE_EXACT)
+	if key_idx < 0:
+		return {"error": "No keyframe found at exact time %.4f on track %d" % [time, track_idx]}
+	anim.track_remove_key(track_idx, key_idx)
+	return {"result": "Keyframe at time %.4f removed from track %d" % [time, track_idx]}
