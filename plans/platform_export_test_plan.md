@@ -1,7 +1,7 @@
 # Test Plan: Platform Export Tools
 
 **File:** `server/src/tools/platform_export.ts`
-**Tools count:** 6
+**Tools count:** 7
 **Registration function:** `registerPlatformExportTools(server, bridge)`
 **Dependencies:** `shared-types.ts` (z, Name, FilePath, OptionalProperties), `server.ts` (`callGodot`)
 
@@ -467,6 +467,134 @@
 
 ---
 
+## Tool: `export/delete_export_preset`
+
+**Description:** Delete an export preset from export_presets.cfg by name
+
+**Parameters:**
+
+| Name | Type | Required | Default | Constraints | Description |
+|------|------|----------|---------|-------------|-------------|
+| `name` | `string` | ✅ | — | — | Name of the export preset to delete |
+
+**Handler:** `callGodot(bridge, 'export/delete_export_preset', args)`
+**Godot method:** `export/delete_export_preset`
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — delete an existing preset
+**Description:** Delete a preset that exists in export_presets.cfg by its name.
+
+```json
+{
+  "name": "My Windows Build"
+}
+```
+
+**Expected result:**
+- `callGodot` called with method `export/delete_export_preset` and `{ name: "My Windows Build" }`
+- Returns success result with deleted preset info (name, platform, remaining count)
+- The preset is removed from export_presets.cfg
+- Remaining presets are re-indexed to be contiguous (0, 1, 2, …)
+
+#### Scenario 2: Delete preset after creating it
+**Description:** Create a preset first, then delete it.
+
+```json
+// Step 1: create
+{ "platform": "Linux", "name": "Temp Preset" }
+
+// Step 2: delete
+{ "name": "Temp Preset" }
+```
+
+**Expected result:**
+- Step 1: preset created successfully
+- Step 2: preset deleted, result includes `"remaining_presets"` count decremented by 1
+- A subsequent `get_platform_export_templates` or listing confirms the preset no longer exists
+
+#### Scenario 3: Missing required `name` param
+**Description:** Call without the required `name` field.
+
+```json
+{}
+```
+
+**Expected result:**
+- Error returned: `"name is required"`
+- `callGodot` NOT called
+- export_presets.cfg unchanged
+
+#### Scenario 4: Empty name string
+**Description:** Call with empty string for name.
+
+```json
+{
+  "name": ""
+}
+```
+
+**Expected result:**
+- Error returned: `"name is required"`
+- `callGodot` NOT called
+- export_presets.cfg unchanged
+
+#### Scenario 5: Non-existent preset name
+**Description:** Attempt to delete a preset that does not exist.
+
+```json
+{
+  "name": "NonExistentPreset"
+}
+```
+
+**Expected result:**
+- Error returned: `"Export preset not found: NonExistentPreset"`
+- export_presets.cfg unchanged
+- **Note:** verify that the error message includes the name that was not found
+
+#### Scenario 6: Delete when no presets file exists
+**Description:** Call when export_presets.cfg does not exist at all.
+
+```json
+{
+  "name": "AnyPreset"
+}
+```
+
+**Expected result:**
+- Error returned: `"No export presets file found at res://export_presets.cfg"`
+- No file is created as a side effect
+
+#### Scenario 7: Re-indexing after deletion
+**Description:** With presets [0: A, 1: B, 2: C], delete preset B and verify indices are correct.
+
+```json
+// Create 3 presets first, then:
+{ "name": "B" }
+```
+
+**Expected result:**
+- Preset B deleted
+- Preset A remains at index 0
+- Preset C re-indexed from 2 → 1
+- Result shows `"remaining_presets": 2`
+- The exported config file has contiguous preset.N sections (0, 1)
+
+#### Scenario 8: Delete the last remaining preset
+**Description:** With only one preset, delete it.
+
+```json
+{ "name": "OnlyPreset" }
+```
+
+**Expected result:**
+- Preset deleted
+- `"remaining_presets": 0`
+- export_presets.cfg has no preset sections
+
+---
+
 ## Tool: `validate_export_for_platform`
 
 **Description:** Validate the project for export on a specific platform with detailed checks
@@ -582,6 +710,7 @@ Step 6: run_exported_build(path=<path from step 5 output>)
 | `validate_platform_export` | (none) | Read-only, can run standalone |
 | `create_platform_export_preset` | (none) | Standalone, creates configuration |
 | `get_platform_export_templates` | (none) | Read-only, no dependencies |
+| `export/delete_export_preset` | (none) | Standalone, deletes configuration |
 
 ### Tools from other files that may be needed
 

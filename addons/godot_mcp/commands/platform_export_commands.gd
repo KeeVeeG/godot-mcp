@@ -1,6 +1,6 @@
-﻿## Platform export commands module - 5 tools.
+﻿## Platform export commands module - 6 tools.
 ## Provides platform-specific export, validation, template management,
-## preset creation, and exported build execution.
+## preset creation, preset deletion, and exported build execution.
 class_name MCPPlatformExportCommands
 extends RefCounted
 
@@ -39,6 +39,7 @@ func get_commands() -> Dictionary:
 		"create_platform_export_preset": create_export_preset,
 		"run_exported_build": run_exported_build,
 		"export/validate_platform": validate_export_for_platform,
+		"export/delete_export_preset": delete_export_preset,
 	}
 
 

@@ -1793,13 +1793,31 @@ To test all tools in a realistic workflow:
 }}
 ```
 
-### Step 6: Verify configuration
+### Step 6: Read material properties
 ```json
-{ "tool": "get_particle_info", "params": { "path": "GPUParticles2D" } }
+{ "tool": "get_particle_material", "params": { "path": "GPUParticles2D" } }
 ```
-→ Verify all properties from steps 2-5 are reflected
+→ Verify direction, spread, gravity, velocity, scale, color match what was set in Step 2
 
-### Step 7: Apply preset (overwrites manual config)
+### Step 7: Read color gradient
+```json
+{ "tool": "get_particle_color_gradient", "params": { "path": "GPUParticles2D" } }
+```
+→ Verify gradient points match what was set in Step 3
+
+### Step 8: Read emission shape
+```json
+{ "tool": "get_particle_emission_shape", "params": { "path": "GPUParticles2D" } }
+```
+→ Verify shape is "sphere" with radius 5.0 from Step 4
+
+### Step 9: Read velocity curve
+```json
+{ "tool": "get_particle_velocity_curve", "params": { "path": "GPUParticles2D" } }
+```
+→ Verify curve points match what was set in Step 5
+
+### Step 10: Apply preset (overwrites manual config)
 ```json
 { "tool": "apply_particle_preset", "params": {
   "path": "GPUParticles2D",
@@ -1807,13 +1825,13 @@ To test all tools in a realistic workflow:
 }}
 ```
 
-### Step 8: Verify preset applied
+### Step 11: Verify preset applied
 ```json
 { "tool": "get_particle_info", "params": { "path": "GPUParticles2D" } }
 ```
 → Properties should now reflect fire preset, not manual config
 
-### Step 9: Clean up
+### Step 12: Clean up
 ```json
 { "tool": "delete_particles", "params": { "node_path": "GPUParticles2D" } }
 ```
@@ -1826,11 +1844,15 @@ To test all tools in a realistic workflow:
 |-------|------|------------|
 | 1 | `create_particles` | None (or parent node must exist) |
 | 2 | `set_particle_material` | `create_particles` |
-| 3 | `set_particle_color_gradient` | `create_particles` |
-| 4 | `set_particle_emission_shape` | `create_particles` |
-| 5 | `set_particle_velocity_curve` | `create_particles` |
-| 6 | `get_particle_info` | `create_particles` (read-only) |
-| 7 | `apply_particle_preset` | `create_particles` |
-| 8 | `delete_particles` | `create_particles` (last in lifecycle) |
+| 3 | `get_particle_material` | `set_particle_material` (read-only) |
+| 4 | `set_particle_color_gradient` | `create_particles` |
+| 5 | `get_particle_color_gradient` | `set_particle_color_gradient` (read-only) |
+| 6 | `set_particle_emission_shape` | `create_particles` |
+| 7 | `get_particle_emission_shape` | `set_particle_emission_shape` (read-only) |
+| 8 | `set_particle_velocity_curve` | `create_particles` |
+| 9 | `get_particle_velocity_curve` | `set_particle_velocity_curve` (read-only) |
+| 10 | `get_particle_info` | `create_particles` (read-only) |
+| 11 | `apply_particle_preset` | `create_particles` |
+| 12 | `delete_particles` | `create_particles` (last in lifecycle) |
 
-> **Note**: Tools 2-7 are independent of each other and can be called in any order after creation. Only `delete_particles` must be last.
+> **Note**: Set/get tool pairs can be called in any order after creation. Only `delete_particles` must be last.

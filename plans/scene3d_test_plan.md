@@ -13,7 +13,8 @@
 3. [setup_lighting](#tool-setup_lighting)
 4. [setup_environment](#tool-setup_environment)
 5. [add_gridmap](#tool-add_gridmap)
-6. [set_material_3d](#tool-set_material_3d)
+6. [get_gridmap](#tool-get_gridmap)
+7. [set_material_3d](#tool-set_material_3d)
 
 ---
 
@@ -43,12 +44,13 @@ Scene3D tools (no inter-dependencies among these):
   5. setup_lighting      — add a light node
   6. setup_environment   — configure WorldEnvironment
   7. add_gridmap         — add a GridMap node
-  8. set_material_3d     — apply material to the mesh from step 3
+  8. get_gridmap         — read GridMap node properties
+  9. set_material_3d     — apply material to the mesh from step 3
 
 Verification:
-  9. get_scene_tree      — inspect the full node hierarchy
- 10. get_node_properties — verify properties on individual nodes
- 11. save_scene          — persist changes
+ 10. get_scene_tree      — inspect the full node hierarchy
+ 11. get_node_properties — verify properties on individual nodes
+ 12. save_scene          — persist changes
 ```
 
 **Prerequisites for all Scene3D tools**:
@@ -885,6 +887,110 @@ Verification:
 
 ---
 
+## Tool: `get_gridmap`
+
+**Description**: Read properties of a GridMap node (cell_size, mesh_library)
+**Godot method**: `scene3d/get_gridmap`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `path` | `string` (NodePath) | **yes** | — | GridMap node path |
+
+### Test Scenarios
+
+#### Scenario 1: Get properties of a GridMap (happy path)
+
+**Description**: Read properties of a GridMap node that was created with `add_gridmap`.
+
+**Prerequisites**:
+1. `create_scene` → `{ "path": "res://scenes/get_gridmap_test.tscn", "root_node_type": "Node3D" }`
+2. `open_scene` → `{ "path": "res://scenes/get_gridmap_test.tscn" }`
+3. `add_gridmap` → `{ "parent": "", "properties": { "name": "TestGrid", "cell_size": [2, 2, 2] } }`
+
+**Call**:
+```json
+{
+  "path": "TestGrid"
+}
+```
+
+**Expected result**: Success. Response contains `cell_size` as `{ "x": 2.0, "y": 2.0, "z": 2.0 }`, the node `name`, and `path`. If a mesh library was assigned, its `resource_path` is included.
+
+**Notes**: Verify that `cell_size` values match what was set during `add_gridmap`. The `mesh_library` field is absent if no library was assigned.
+
+---
+
+#### Scenario 2: Get GridMap with mesh library assigned
+
+**Description**: Read properties of a GridMap that has a mesh library resource.
+
+**Prerequisites**:
+1. Scene setup as above
+2. A valid MeshLibrary resource must exist at a known path
+3. `add_gridmap` → `{ "parent": "", "properties": { "name": "LibraryGrid", "mesh_library": "res://meshes/level_tiles.tres", "cell_size": [1, 1, 1] } }`
+
+**Call**:
+```json
+{
+  "path": "LibraryGrid"
+}
+```
+
+**Expected result**: Success. Response includes `mesh_library` with the resource path string (e.g. `"res://meshes/level_tiles.tres"`).
+
+**Notes**: The `mesh_library` field is the `resource_path` of the assigned MeshLibrary, not the node property name.
+
+---
+
+#### Scenario 3: Missing required `path` parameter
+
+**Description**: Call without the `path` field.
+
+**Call**:
+```json
+{}
+```
+
+**Expected result**: Error. The Godot side returns `{"error": "Path is required (node path to GridMap)"}`.
+
+---
+
+#### Scenario 4: Path references a non-GridMap node
+
+**Description**: Try to read GridMap properties from a non-GridMap node.
+
+**Prerequisites**:
+1. Scene setup
+2. `add_node` → `{ "parent_path": "", "type": "Node3D", "name": "NotAGridMap" }`
+
+**Call**:
+```json
+{
+  "path": "NotAGridMap"
+}
+```
+
+**Expected result**: Error. The Godot side returns `{"error": "Node is not a GridMap: NotAGridMap"}`.
+
+---
+
+#### Scenario 5: Path references a non-existent node
+
+**Description**: Provide a path to a node that doesn't exist.
+
+**Call**:
+```json
+{
+  "path": "GhostGridMap"
+}
+```
+
+**Expected result**: Error. The Godot side returns `{"error": "Node not found: GhostGridMap"}`.
+
+---
+
 ## Tool: `set_material_3d`
 
 **Description**: Create and apply a StandardMaterial3D or ShaderMaterial to a mesh
@@ -1226,27 +1332,33 @@ Step 15: add_gridmap
       "cell_size": [2, 2, 2]
     }
   }
+
+Step 16: get_gridmap
+  {
+    "path": "LevelGrid"
+  }
+  → Verify: cell_size is {x: 2, y: 2, z: 2}, name is "LevelGrid"
 ```
 
 ### Verification Phase
 
 ```
-Step 16: get_scene_tree
+Step 17: get_scene_tree
   {}
   → Verify: tree contains Ground, CenterSphere, FloatingRing, MainCamera,
     Sun, FillLight (under Environment), AccentSpot, WorldEnvironment, LevelGrid
 
-Step 17: get_node_properties for each created node
+Step 18: get_node_properties for each created node
   → Verify: position, mesh type, material, light properties all match
 
-Step 18: save_scene
+Step 19: save_scene
   { "path": "res://scenes/scene3d_integration.tscn" }
 ```
 
 ### Cleanup Phase
 
 ```
-Step 19: delete_scene
+Step 20: delete_scene
   { "path": "res://scenes/scene3d_integration.tscn", "force": true }
 ```
 

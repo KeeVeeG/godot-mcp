@@ -1,5 +1,5 @@
 /**
- * Scene3D tools - 11 tools for 3D scene manipulation and inspection
+ * Scene3D tools - 12 tools for 3D scene manipulation and inspection
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -123,7 +123,19 @@ export function registerScene3dTools(server: McpServer, bridge: GodotBridge): vo
     async (args) => callGodot(bridge, 'scene3d/add_gridmap', args as Record<string, unknown>),
   );
 
-  // 10. set_material_3d
+  // 10. get_gridmap
+  server.registerTool(
+    'get_gridmap',
+    {
+      description: 'Get GridMap node properties (cell_size, mesh_library)',
+      inputSchema: {
+        path: NodePath.describe('GridMap node path'),
+      },
+    },
+    async (args) => callGodot(bridge, 'scene3d/get_gridmap', args as Record<string, unknown>),
+  );
+
+  // 11. set_material_3d
   server.registerTool(
     'set_material_3d',
     {
@@ -136,7 +148,7 @@ export function registerScene3dTools(server: McpServer, bridge: GodotBridge): vo
     async (args) => callGodot(bridge, 'scene3d/set_material', args as Record<string, unknown>),
   );
 
-  // 11. get_material_3d
+  // 12. get_material_3d
   server.registerTool(
     'get_material_3d',
     {

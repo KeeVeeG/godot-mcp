@@ -6,7 +6,7 @@
 
 ## Overview
 
-8 tools registered by `registerPhysicsTools()`. Each tool forwards its arguments verbatim to a Godot-side handler via `callGodot`. The MCP server itself performs Zod validation only; all domain logic lives in the Godot plugin.
+11 tools registered by `registerPhysicsTools()`. Each tool forwards its arguments verbatim to a Godot-side handler via `callGodot`. The MCP server itself performs Zod validation only; all domain logic lives in the Godot plugin.
 
 ### Type Reference (from shared-types.ts)
 
@@ -1073,6 +1073,367 @@ Before running physics tool tests, ensure:
 
 ---
 
+## Tool: `get_physics_body`
+
+**Description:** Get physics body properties from a node (mass, gravity_scale, linear_damp, angular_damp).
+**Bridge method:** `physics/get_body`
+
+### Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| `path` | `string` (NodePath) | **yes** | Physics body node path |
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — read properties from a RigidBody2D
+
+**Preconditions:** A `RigidBody2D` node named `"Player"` exists with mass=5.0 and gravity_scale=1.0 set via `setup_physics_body`.
+
+**Call:**
+```json
+{
+  "path": "Player"
+}
+```
+
+**Expected result:** Success response containing body properties: `mass`, `gravity_scale`, `linear_damp`, `angular_damp`. Values should match what was set.
+
+**What to pay attention to:** Verify that all 4 properties are present. Check that `mass` returns the actual value (not null) for RigidBody nodes.
+
+---
+
+#### Scenario 2: Happy path — read properties from a CharacterBody3D
+
+**Preconditions:** A `CharacterBody3D` node named `"NPC"` exists.
+
+**Call:**
+```json
+{
+  "path": "NPC"
+}
+```
+
+**Expected result:** Success response. `mass` may be null (CharacterBody does not have mass), but `gravity_scale`, `linear_damp`, `angular_damp` should return values or null depending on Godot's property availability.
+
+**What to pay attention to:** Determine which properties are available on CharacterBody vs RigidBody. Record null values for properties that don't exist on the node type.
+
+---
+
+#### Scenario 3: Happy path — read from StaticBody3D
+
+**Preconditions:** A `StaticBody3D` node named `"Wall"` exists.
+
+**Call:**
+```json
+{
+  "path": "Wall"
+}
+```
+
+**Expected result:** Success response. StaticBody nodes do not have mass, gravity_scale, linear_damp, or angular_damp — all values may be null.
+
+**What to pay attention to:** Verify that the tool handles missing properties gracefully (returns null, not an error).
+
+---
+
+#### Scenario 4: Non-existent node
+
+**Call:**
+```json
+{
+  "path": "NonExistentNode"
+}
+```
+
+**Expected result:** Error from Godot — node not found.
+
+**What to pay attention to:** Verify the error message is informative.
+
+---
+
+#### Scenario 5: Node without physics body
+
+**Preconditions:** A regular `Sprite2D` node `"Decoration"` exists (no physics body).
+
+**Call:**
+```json
+{
+  "path": "Decoration"
+}
+```
+
+**Expected result:** Error from Godot — node is not a physics body.
+
+**What to pay attention to:** Verify that Godot returns a meaningful error, not a crash.
+
+---
+
+#### Scenario 6: Missing required `path`
+
+**Call:**
+```json
+{}
+```
+
+**Expected result:** Zod validation error — `path` is required.
+
+**What to pay attention to:** The error should contain an indication of the missing `path` field.
+
+---
+
+#### Relationship with other tools
+
+- **Before:** Use `setup_physics_body` to configure the body, then read back with this tool.
+- **Verification pattern:** `setup_physics_body` → `get_physics_body` → assert values match.
+- **Complementary:** `get_physics_material` reads material properties; `get_physics_body` reads body properties.
+
+---
+
+## Tool: `remove_collision`
+
+**Description:** Remove collision shape(s) from a physics body.
+**Bridge method:** `physics/remove_collision`
+
+### Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| `path` | `string` (NodePath) | **yes** | Parent node path |
+| `name` | `string` | no | Collision shape name to remove (omit to remove all) |
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — remove a specific collision shape by name
+
+**Preconditions:** A `RigidBody2D` node named `"Player"` exists with a collision shape named `"CollisionShape"` added via `setup_collision`.
+
+**Call:**
+```json
+{
+  "path": "Player",
+  "name": "CollisionShape"
+}
+```
+
+**Expected result:** Success response. The collision shape `"CollisionShape"` is removed from `"Player"`. Response includes `removed` array with the shape name.
+
+**What to pay attention to:** Verify that the collision shape is actually removed from the scene tree. Use `get_collision_info` to confirm.
+
+---
+
+#### Scenario 2: Happy path — remove all collision shapes
+
+**Preconditions:** A node `"Enemy"` exists with multiple collision shapes.
+
+**Call:**
+```json
+{
+  "path": "Enemy"
+}
+```
+
+**Expected result:** Success response. All collision shapes are removed. Response includes `removed` array with all removed shape names.
+
+**What to pay attention to:** Verify that all collision shapes (CollisionShape2D, CollisionShape3D, CollisionPolygon2D) are removed.
+
+---
+
+#### Scenario 3: No collision shapes to remove
+
+**Preconditions:** A `RigidBody2D` node `"EmptyBody"` exists with no collision shapes.
+
+**Call:**
+```json
+{
+  "path": "EmptyBody"
+}
+```
+
+**Expected result:** Error from Godot — no collision shapes found.
+
+**What to pay attention to:** Verify the error message is informative and does not crash.
+
+---
+
+#### Scenario 4: Specific name not found
+
+**Preconditions:** A node `"Player"` exists with a collision shape named `"CollisionShape"`, but not `"NonExistentShape"`.
+
+**Call:**
+```json
+{
+  "path": "Player",
+  "name": "NonExistentShape"
+}
+```
+
+**Expected result:** Error from Godot — collision shape "NonExistentShape" not found.
+
+**What to pay attention to:** Verify the error message includes the shape name that was not found.
+
+---
+
+#### Scenario 5: Non-existent node
+
+**Call:**
+```json
+{
+  "path": "Ghost"
+}
+```
+
+**Expected result:** Error from Godot — node not found.
+
+**What to pay attention to:** Verify the error message.
+
+---
+
+#### Scenario 6: Missing required `path`
+
+**Call:**
+```json
+{
+  "name": "CollisionShape"
+}
+```
+
+**Expected result:** Zod validation error — `path` is required.
+
+**What to pay attention to:** The error should indicate the missing `path` field.
+
+---
+
+#### Relationship with other tools
+
+- **Before:** Use `setup_collision` to add collision shapes, then remove with this tool.
+- **After:** Use `get_collision_info` to verify shapes were removed.
+- **Verification pattern:** `setup_collision` → `remove_collision` → `get_collision_info` → assert shapes list is empty.
+
+---
+
+## Tool: `remove_raycast`
+
+**Description:** Remove a RayCast node from a parent.
+**Bridge method:** `physics/remove_raycast`
+
+### Parameters
+
+| Name | Type | Required | Description |
+|---|---|---|---|
+| `path` | `string` (NodePath) | **yes** | Parent node path |
+| `name` | `string` | no | RayCast node name to remove (omit to remove all) |
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — remove a specific RayCast by name
+
+**Preconditions:** A `CharacterBody3D` node named `"Player"` exists with a `RayCast3D` child named `"RayCast"` added via `add_raycast`.
+
+**Call:**
+```json
+{
+  "path": "Player",
+  "name": "RayCast"
+}
+```
+
+**Expected result:** Success response. The RayCast node `"RayCast"` is removed from `"Player"`. Response includes `removed` array with the node name.
+
+**What to pay attention to:** Verify that the RayCast node is actually removed from the scene tree.
+
+---
+
+#### Scenario 2: Happy path — remove all RayCast nodes
+
+**Preconditions:** A node `"Turret"` exists with multiple RayCast children.
+
+**Call:**
+```json
+{
+  "path": "Turret"
+}
+```
+
+**Expected result:** Success response. All RayCast2D and RayCast3D nodes are removed. Response includes `removed` array with all removed node names.
+
+**What to pay attention to:** Verify that both RayCast2D and RayCast3D types are removed.
+
+---
+
+#### Scenario 3: No RayCast nodes to remove
+
+**Preconditions:** A `RigidBody2D` node `"Ball"` exists with no RayCast children.
+
+**Call:**
+```json
+{
+  "path": "Ball"
+}
+```
+
+**Expected result:** Error from Godot — no RayCast nodes found.
+
+**What to pay attention to:** Verify the error message is informative and does not crash.
+
+---
+
+#### Scenario 4: Specific name not found
+
+**Preconditions:** A node `"Player"` exists with a RayCast named `"RayCast"`, but not `"GroundCheck"`.
+
+**Call:**
+```json
+{
+  "path": "Player",
+  "name": "GroundCheck"
+}
+```
+
+**Expected result:** Error from Godot — RayCast "GroundCheck" not found.
+
+**What to pay attention to:** Verify the error message includes the name that was not found.
+
+---
+
+#### Scenario 5: Non-existent node
+
+**Call:**
+```json
+{
+  "path": "Ghost"
+}
+```
+
+**Expected result:** Error from Godot — node not found.
+
+**What to pay attention to:** Verify the error message.
+
+---
+
+#### Scenario 6: Missing required `path`
+
+**Call:**
+```json
+{
+  "name": "RayCast"
+}
+```
+
+**Expected result:** Zod validation error — `path` is required.
+
+**What to pay attention to:** The error should indicate the missing `path` field.
+
+---
+
+#### Relationship with other tools
+
+- **Before:** Use `add_raycast` to create RayCast nodes, then remove with this tool.
+- **Verification pattern:** `add_raycast` → `remove_raycast` → verify node is gone from scene tree.
+- **Complementary:** Works alongside `remove_collision` for full physics cleanup.
+
+---
+
 ## Cross-Tool Integration Sequences
 
 ### Full Physics Setup Sequence
@@ -1086,9 +1447,20 @@ The recommended order for setting up a complete physics object:
 4. setup_collision(path="Player", shape_type="capsule", properties={radius: 0.5, height: 2.0})  — add collision
 5. set_physics_layers(path="Player", layer=1, mask=2)           — configure layers
 6. set_physics_material(path="Player", friction=0.5, bounce=0.1) — add material
-7. get_physics_layers(path="Player")                            — verify layers
-8. get_physics_material(path="Player")                          — verify material
-9. get_collision_info(path="Player")                            — verify collision setup
+7. get_physics_body(path="Player")                              — verify body properties
+8. get_physics_layers(path="Player")                            — verify layers
+9. get_physics_material(path="Player")                          — verify material
+10. get_collision_info(path="Player")                           — verify collision setup
+```
+
+### Physics Cleanup Sequence
+
+The recommended order for removing physics components:
+
+```
+1. remove_collision(path="Player", name="CollisionShape")  — remove specific shape
+2. remove_raycast(path="Player", name="RayCast")           — remove specific raycast
+3. get_collision_info(path="Player")                        — verify shapes removed
 ```
 
 ### Layer/Mask Verification Pattern
@@ -1130,3 +1502,6 @@ add_node(parent="", name="Turret", type="StaticBody3D")
 | `add_raycast` | `parent_path` | `properties` | `parent_path`: string | Parent must exist, auto-detect 2D/3D |
 | `get_physics_material` | `path` | — | `path`: string | Node must have material |
 | `set_physics_material` | `path` | `friction`, `bounce`, `rough`, `absorbent` | `friction`: ≥0, `bounce`: 0-1 | Node must have physics body |
+| `get_physics_body` | `path` | — | `path`: string | Node must be physics body |
+| `remove_collision` | `path` | `name` | `path`: string, `name`: string | Node must have collision shapes |
+| `remove_raycast` | `path` | `name` | `path`: string, `name`: string | Node must have RayCast children |

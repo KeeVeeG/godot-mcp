@@ -1,5 +1,5 @@
 /**
- * Memory profiling tools - 5 tools for memory analysis and leak detection
+ * Memory profiling tools - 6 tools for memory analysis and leak detection
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -31,7 +31,17 @@ export function registerMemoryProfilingTools(server: McpServer, bridge: GodotBri
     async (args) => callGodot(bridge, 'track_object_creation', args as Record<string, unknown>),
   );
 
-  // 3. find_memory_leaks
+  // 3. stop_object_tracking
+  server.registerTool(
+    'stop_object_tracking',
+    {
+      description: 'Stop object tracking and return the accumulated creation log. Must call track_object_creation first.',
+      inputSchema: {},
+    },
+    async () => callGodot(bridge, 'stop_object_tracking'),
+  );
+
+  // 4. find_memory_leaks
   server.registerTool(
     'find_memory_leaks',
     {
@@ -41,7 +51,7 @@ export function registerMemoryProfilingTools(server: McpServer, bridge: GodotBri
     async () => callGodot(bridge, 'find_memory_leaks'),
   );
 
-  // 4. get_object_count
+  // 5. get_object_count
   server.registerTool(
     'get_object_count',
     {
@@ -53,7 +63,7 @@ export function registerMemoryProfilingTools(server: McpServer, bridge: GodotBri
     async (args) => callGodot(bridge, 'get_object_count', args as Record<string, unknown>),
   );
 
-  // 5. force_garbage_collection
+  // 6. force_garbage_collection
   server.registerTool(
     'force_garbage_collection',
     {

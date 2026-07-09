@@ -132,29 +132,29 @@ project_creation → project → scene → node → script → runtime → expor
 
 ## Progress Checklist
 
-- [x] 01. `project_creation_test_plan.md`
-- [x] 02. `project_test_plan.md`
-- [x] 03. `project_config_test_plan.md`
-- [x] 04. `editor_config_test_plan.md`
-- [x] 05. `build_config_test_plan.md`
-- [x] 06. `debug_config_test_plan.md`
-- [x] 07. `physics_config_test_plan.md`
-- [x] 08. `audio_config_test_plan.md`
-- [x] 09. `rendering_config_test_plan.md`
-- [x] 10. `node_config_test_plan.md`
-- [x] 11. `resource_config_test_plan.md`
-- [x] 12. `platform_specific_test_plan.md`
-- [x] 13. `scene_test_plan.md`
-- [x] 14. `scene_config_test_plan.md`
-- [x] 15. `scene3d_test_plan.md`
-- [x] 16. `resource_test_plan.md`
-- [x] 17. `save_load_test_plan.md`
-- [x] 18. `node_test_plan.md`
-- [x] 19. `batch_test_plan.md`
-- [x] 20. `script_test_plan.md`
-- [x] 21. `theme_test_plan.md`
-- [x] 22. `shader_test_plan.md`
-- [x] 23. `animation_test_plan.md`
+- [ ] 01. `project_creation_test_plan.md`
+- [ ] 02. `project_test_plan.md`
+- [ ] 03. `project_config_test_plan.md`
+- [ ] 04. `editor_config_test_plan.md`
+- [ ] 05. `build_config_test_plan.md`
+- [ ] 06. `debug_config_test_plan.md`
+- [ ] 07. `physics_config_test_plan.md`
+- [ ] 08. `audio_config_test_plan.md`
+- [ ] 09. `rendering_config_test_plan.md`
+- [ ] 10. `node_config_test_plan.md`
+- [ ] 11. `resource_config_test_plan.md`
+- [ ] 12. `platform_specific_test_plan.md`
+- [ ] 13. `scene_test_plan.md`
+- [ ] 14. `scene_config_test_plan.md`
+- [ ] 15. `scene3d_test_plan.md`
+- [ ] 16. `resource_test_plan.md`
+- [ ] 17. `save_load_test_plan.md`
+- [ ] 18. `node_test_plan.md`
+- [ ] 19. `batch_test_plan.md`
+- [ ] 20. `script_test_plan.md`
+- [ ] 21. `theme_test_plan.md`
+- [ ] 22. `shader_test_plan.md`
+- [ ] 23. `animation_test_plan.md`
 - [ ] 24. `physics_test_plan.md`
 - [ ] 25. `particles_test_plan.md`
 - [ ] 26. `navigation_test_plan.md`

@@ -1,7 +1,7 @@
 # Project Creation Tools Test Plan
 
 **Source**: `server/src/tools/project_creation.ts`  
-**Total tools**: 10  
+**Total tools**: 12  
 **Test plan generated**: 2026-07-08
 
 ---
@@ -17,7 +17,9 @@
 7. [Tool: create_project_license](#tool-create_project_license)
 8. [Tool: setup_project_dependencies](#tool-setup_project_dependencies)
 9. [Tool: validate_project_structure](#tool-validate_project_structure)
-10. [Tool: get_project_templates](#tool-get_project_templates)
+10. [Tool: delete_project](#tool-delete_project)
+11. [Tool: remove_project_dependencies](#tool-remove_project_dependencies)
+12. [Tool: get_project_templates](#tool-get_project_templates)
 
 ---
 
@@ -32,9 +34,11 @@ Most project creation tools require an existing project. Recommended testing seq
 5. **`create_project_readme`** → after project creation
 6. **`create_project_license`** → after project creation
 7. **`setup_project_dependencies`** → after project creation (may require internet)
-8. **`validate_project_structure`** → after project creation and applying other tools
-9. **`create_project_from_template`** → requires an existing template project on disk
-10. **`create_project_with_assets`** → requires existing asset files
+8. **`remove_project_dependencies`** → after setup_project_dependencies (removes installed addons)
+9. **`validate_project_structure`** → after project creation and applying other tools
+10. **`create_project_from_template`** → requires an existing template project on disk
+11. **`create_project_with_assets`** → requires existing asset files
+12. **`delete_project`** → run last (destructive, removes all project files)
 
 **Important**: Tools 2–9 share a common `project_path` pointing to the same test project. After all tests are complete, the test project should be deleted.
 
@@ -1333,6 +1337,233 @@ Most project creation tools require an existing project. Recommended testing seq
 
 ---
 
+## Tool: delete_project
+
+**Tool name**: `delete_project`  
+**Description**: Delete a Godot project and all its files from disk  
+**Backend method**: `project_creation/delete_project`
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project_path` | `string` (FilePath) | **Yes** | — | Path to the Godot project root |
+| `confirm` | `boolean` | No | `false` | Must be `true` to proceed with deletion (safety guard) |
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — delete project with confirmation
+
+**Description**: Delete an existing project with `confirm=true`.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/godot_mcp_test_project",
+  "confirm": true
+}
+```
+**Expected result**: Successful response. The project directory and all its contents are removed from disk. The response includes `"deleted": true` and a `total_files_removed` count.  
+**Notes**: Prerequisite: project created via `create_project`. This test is DESTRUCTIVE — run it last or on a dedicated test project.  
+**Pay attention**: Verify that the directory no longer exists on disk after the call. Verify that `total_files_removed` is a positive integer.
+
+#### Scenario 2: Edge case — delete without confirmation
+
+**Description**: Attempt to delete without `confirm=true`.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/godot_mcp_test_project"
+}
+```
+**Expected result**: Error response with `"requires_confirmation": true` in the result. The project is NOT deleted.  
+**Pay attention**: This is a safety guard. The project directory must still exist after this call. The error message should explain that `confirm=true` is required.
+
+#### Scenario 3: Edge case — delete non-existent path
+
+**Description**: Attempt to delete a path that does not exist.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/nonexistent_project",
+  "confirm": true
+}
+```
+**Expected result**: Error: "Project path does not exist" or similar.  
+**Pay attention**: `isError: true` or `success: false`.
+
+#### Scenario 4: Edge case — delete path without project.godot
+
+**Description**: Attempt to delete a directory that exists but is not a Godot project.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp",
+  "confirm": true
+}
+```
+**Expected result**: Error: "Not a valid Godot project (missing project.godot)". The directory is NOT deleted.  
+**Pay attention**: Critical safety check — only Godot projects should be deletable via this tool.
+
+#### Scenario 5: Edge case — missing project_path
+
+**Description**: Call without `project_path`.  
+**Params**:
+```json
+{
+  "confirm": true
+}
+```
+**Expected result**: Error: "Project path is required".  
+**Pay attention**: `project_path` is required.
+
+#### Scenario 6: Edge case — confirm=false explicitly
+
+**Description**: Explicitly pass `confirm=false`.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/godot_mcp_test_project",
+  "confirm": false
+}
+```
+**Expected result**: Same as Scenario 2 — deletion is blocked, requires confirmation.  
+**Pay attention**: Both omitting `confirm` and passing `false` should prevent deletion.
+
+---
+
+## Tool: remove_project_dependencies
+
+**Tool name**: `remove_project_dependencies`  
+**Description**: Remove installed dependencies/addons from a Godot project  
+**Backend method**: `project_creation/remove_dependencies`
+
+### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `project_path` | `string` (FilePath) | **Yes** | — | Path to the Godot project root |
+| `addons` | `array<string>` | **Yes** | — | List of addon names to remove |
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — remove a single addon
+
+**Description**: Remove a previously installed addon by name.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/godot_mcp_test_project",
+  "addons": ["godot-jolt"]
+}
+```
+**Expected result**: Successful response. The addon directory `addons/godot-jolt/` is removed. The response includes `"removed": ["godot-jolt"]` and `"errors": []`.  
+**Notes**: Prerequisite: addon installed via `setup_project_dependencies`.  
+**Pay attention**: Verify that `addons/godot-jolt/` no longer exists on disk. Verify that the removed array contains the addon name.
+
+#### Scenario 2: Happy path — remove multiple addons
+
+**Description**: Remove several addons in one call.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/godot_mcp_test_project",
+  "addons": ["addon_a", "addon_b"]
+}
+```
+**Expected result**: Both addons removed. `"removed"` array contains both names.  
+**Pay attention**: If one addon is not found — it should appear in `errors`, not block the removal of the others.
+
+#### Scenario 3: Happy path — addons as array of objects with name field
+
+**Description**: Pass addons as dictionaries with a `name` field (alternative format).  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/godot_mcp_test_project",
+  "addons": [{"name": "my_addon"}]
+}
+```
+**Expected result**: The addon `my_addon` is removed. The function accepts both string and `{name: string}` formats.  
+**Pay attention**: Verify that both string and object formats work.
+
+#### Scenario 4: Edge case — addon not found
+
+**Description**: Attempt to remove an addon that does not exist in the project.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/godot_mcp_test_project",
+  "addons": ["nonexistent_addon"]
+}
+```
+**Expected result**: Successful response (`success: true`), but `errors` array contains a message about the addon not being found. `removed` array is empty.  
+**Pay attention**: The function should not fail entirely — it should report which addons could not be found.
+
+#### Scenario 5: Edge case — missing addons parameter
+
+**Description**: Call without `addons`.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/godot_mcp_test_project"
+}
+```
+**Expected result**: Error: "addons array is required and must not be empty".  
+**Pay attention**: `addons` is required.
+
+#### Scenario 6: Edge case — empty addons array
+
+**Description**: Pass an empty addons array.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/godot_mcp_test_project",
+  "addons": []
+}
+```
+**Expected result**: Error: "addons array is required and must not be empty".  
+**Pay attention**: An empty array is rejected (unlike `setup_project_dependencies` which accepts it).
+
+#### Scenario 7: Edge case — missing project_path
+
+**Description**: Call without `project_path`.  
+**Params**:
+```json
+{
+  "addons": ["my_addon"]
+}
+```
+**Expected result**: Error: "Project path is required".  
+**Pay attention**: `project_path` is required.
+
+#### Scenario 8: Edge case — project is not a Godot project
+
+**Description**: Path points to a directory without `project.godot`.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp",
+  "addons": ["my_addon"]
+}
+```
+**Expected result**: Error: "Not a valid Godot project (missing project.godot)".  
+**Pay attention**: Addon removal should only work within valid Godot projects.
+
+#### Scenario 9: Edge case — mixed success and failure
+
+**Description**: Remove one existing addon and one non-existing addon.  
+**Params**:
+```json
+{
+  "project_path": "C:/tmp/godot_mcp_test_project",
+  "addons": ["existing_addon", "nonexistent_addon"]
+}
+```
+**Expected result**: Partial success. `removed` contains `["existing_addon"]`, `errors` contains a message about `nonexistent_addon`. `success` is `true` (the operation itself succeeded, individual failures are in `errors`).  
+**Pay attention**: Verify that the existing addon is actually removed from disk despite the other failure.
+
+---
+
 ## Tool: get_project_templates
 
 **Tool name**: `get_project_templates`  
@@ -1409,16 +1640,22 @@ Phase 4: Tools on TestProject (sequentially)
   [C4] create_project_readme (detailed)
   [C5] create_project_license (MIT)
   [C6] setup_project_dependencies (1+ addon)
-  [C7] validate_project_structure              → final verification
+  [C7] remove_project_dependencies             → remove installed addon
+  [C8] setup_project_dependencies (re-install) → re-install for final validation
+  [C9] validate_project_structure              → final verification
 
 Phase 5: Edge case tests on TestProject
   [D1] initialize_git_repository (repeated)    → Git idempotency
   [D2] create_project_readme (custom content)  → README overwrite
   [D3] create_project_license (GPL-3.0)        → LICENSE overwrite
   [D4] scaffold_project_structure (full)       → extended structure
+  [D5] remove_project_dependencies (not found) → verify error handling
+  [D6] delete_project (no confirm)             → verify safety guard
 
-Phase 6: Cleanup
-  Delete all test projects: C:/tmp/godot_mcp_test_*
+Phase 6: Cleanup — delete_project
+  [E1] delete_project (confirm=true)           → delete TestProject
+  [E2] delete remaining test projects via delete_project
+  [E3] Verify all C:/tmp/godot_mcp_test_* directories are gone
 ```
 
 ---

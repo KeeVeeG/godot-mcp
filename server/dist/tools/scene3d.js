@@ -1,5 +1,5 @@
 /**
- * Scene3D tools - 11 tools for 3D scene manipulation and inspection
+ * Scene3D tools - 12 tools for 3D scene manipulation and inspection
  */
 import { callGodot } from '../server.js';
 import { z, NodePath, ParentPath, Properties, OptionalProperties } from './shared-types.js';
@@ -74,7 +74,14 @@ export function registerScene3dTools(server, bridge) {
             properties: OptionalProperties.describe('GridMap properties (mesh_library_path, cell_size, etc.)'),
         },
     }, async (args) => callGodot(bridge, 'scene3d/add_gridmap', args));
-    // 10. set_material_3d
+    // 10. get_gridmap
+    server.registerTool('get_gridmap', {
+        description: 'Get GridMap node properties (cell_size, mesh_library)',
+        inputSchema: {
+            path: NodePath.describe('GridMap node path'),
+        },
+    }, async (args) => callGodot(bridge, 'scene3d/get_gridmap', args));
+    // 11. set_material_3d
     server.registerTool('set_material_3d', {
         description: 'Create and apply a StandardMaterial3D or ShaderMaterial to a mesh',
         inputSchema: {
@@ -82,7 +89,7 @@ export function registerScene3dTools(server, bridge) {
             properties: Properties.describe('Material properties (albedo_color, metallic, roughness, shader_path, etc.)'),
         },
     }, async (args) => callGodot(bridge, 'scene3d/set_material', args));
-    // 11. get_material_3d
+    // 12. get_material_3d
     server.registerTool('get_material_3d', {
         description: 'Get material properties from a 3D mesh node',
         inputSchema: {

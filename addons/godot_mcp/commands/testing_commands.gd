@@ -1,6 +1,6 @@
-## Testing commands module - 5 tools.
+## Testing commands module - 6 tools.
 ## Provides test scenario execution, state assertions, stress tests,
-## and aggregated test reporting.
+## aggregated test reporting, and result clearing.
 class_name MCPTestingCommands
 extends RefCounted
 
@@ -23,6 +23,7 @@ func get_commands() -> Dictionary:
 		"testing/assert_screen_text": assert_screen_text,
 		"testing/stress_test": run_stress_test,
 		"testing/get_report": get_test_report,
+		"testing/clear_report": clear_test_report,
 	}
 
 
@@ -244,6 +245,23 @@ func get_test_report(_params: Dictionary) -> Dictionary:
 		"stress_test": _stress_test_data,
 		"failures": failures,
 		"session_duration_ms": (Time.get_unix_time_from_system() - _test_session_start) * 1000.0 if _test_session_start > 0 else 0.0,
+	}}
+
+
+## Clear all accumulated test results and reset session state.
+## Use between test runs to get a fresh report.
+func clear_test_report(_params: Dictionary) -> Dictionary:
+	var cleared_count: int = _test_results.size()
+	var had_stress_data: bool = not _stress_test_data.is_empty()
+
+	_test_results.clear()
+	_test_session_start = 0.0
+	_stress_test_data.clear()
+
+	return {"result": {
+		"cleared_tests": cleared_count,
+		"cleared_stress_data": had_stress_data,
+		"message": "Cleared %d test results and reset session state." % cleared_count,
 	}}
 
 

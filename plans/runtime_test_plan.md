@@ -1,7 +1,7 @@
 # Runtime Tools — Test Plan
 
 > **Target file**: `server/src/tools/runtime.ts`
-> **Total tools**: 19
+> **Total tools**: 23
 > **Prerequisite**: 🔴 Godot game must be running (all tools). The MCP server must be connected to the Godot editor plugin.
 
 ---
@@ -1088,6 +1088,294 @@
 
 ---
 
+## Tool: `unwatch_signals`
+
+**Description**: Stop watching signals on a game node that was previously being monitored.
+
+**Parameters**:
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | `string` (NodePath) | ✅ | Node path to stop watching |
+| `signals` | `string[]` | ❌ | Specific signal names to stop watching (omit to stop all) |
+
+**Godot method**: `runtime/unwatch_signals`
+
+**Dependencies**: Must be preceded by `watch_signals` on the same node.
+
+---
+
+### Test Scenarios
+
+#### Scenario 20.1 — Happy path: stop watching a node
+- **Description**: Start watching signals, then stop watching.
+- **Sequence**:
+  1. `watch_signals` → `{"path": "Player", "signals": ["process"], "duration": 10.0}`
+  2. `unwatch_signals` → `{"path": "Player"}`
+- **Expected result**: Success. Signal watching is stopped for the node.
+- **Notes**: Verify that after unwatching, subsequent signal emissions are not recorded.
+
+#### Scenario 20.2 — Happy path: stop watching specific signals
+- **Description**: Watch multiple signals, then stop watching only one.
+- **Sequence**:
+  1. `watch_signals` → `{"path": "Player", "signals": ["process", "ready"], "duration": 10.0}`
+  2. `unwatch_signals` → `{"path": "Player", "signals": ["process"]}`
+- **Expected result**: Success. Only `process` watching is stopped; `ready` may still be watched.
+- **Notes**: Document whether partial unwatch is supported or if all signals are stopped.
+
+#### Scenario 20.3 — Edge case: unwatch without prior watch
+- **Description**: Call `unwatch_signals` on a node that was never watched.
+- **Params**: `{"path": "Player"}`
+- **Expected result**: Depends on Godot — may return success (no-op), warning, or error.
+- **Notes**: Document whether calling unwatch without a prior watch is handled gracefully.
+
+#### Scenario 20.4 — Error: nonexistent node
+- **Description**: Unwatch a node that does not exist.
+- **Params**: `{"path": "/FakeNode"}`
+- **Expected result**: `{isError: true}` — node not found.
+- **Notes**: Standard node-not-found error.
+
+#### Scenario 20.5 — Error: missing required param
+- **Description**: Call without `path`.
+- **Params**: `{}`
+- **Expected result**: MCP schema validation error.
+- **Notes**: `path` is required.
+
+---
+
+## Tool: `delete_captured_frames`
+
+**Description**: Delete captured frames from disk that were previously saved by `capture_frames`.
+
+**Parameters**:
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `paths` | `string[]` | ❌ | Specific file paths to delete (omit to delete all captured frames) |
+
+**Godot method**: `runtime/delete_captured_frames`
+
+**Dependencies**: Typically preceded by `capture_frames` which creates the frame files.
+
+---
+
+### Test Scenarios
+
+#### Scenario 21.1 — Happy path: delete all captured frames
+- **Description**: Capture frames, then delete them all.
+- **Sequence**:
+  1. `capture_frames` → `{"count": 3}` → get file paths from result
+  2. `delete_captured_frames` → `{}`
+- **Expected result**: Success. All captured frame files are removed from disk.
+- **Notes**: Verify the files no longer exist on disk after deletion.
+
+#### Scenario 21.2 — Happy path: delete specific frames
+- **Description**: Capture frames, then delete only specific ones.
+- **Sequence**:
+  1. `capture_frames` → `{"count": 3}` → get file paths from result
+  2. `delete_captured_frames` → `{"paths": ["path/to/frame_001.png"]}`
+- **Expected result**: Success. Only the specified file is deleted; others remain.
+- **Notes**: Verify the specified file is gone and other files still exist.
+
+#### Scenario 21.3 — Edge case: delete when no frames exist
+- **Description**: Call when no frames have been captured.
+- **Params**: `{}`
+- **Expected result**: Depends on Godot — may return success (no-op) or warning.
+- **Notes**: Document whether deleting nothing is handled gracefully.
+
+#### Scenario 21.4 — Error: nonexistent file path
+- **Description**: Try to delete a file that does not exist.
+- **Params**: `{"paths": ["/nonexistent/path/frame.png"]}`
+- **Expected result**: Depends on Godot — may return error or success (already gone).
+- **Notes**: Document behavior for missing files.
+
+#### Scenario 21.5 — Error: empty paths array
+- **Description**: Pass an empty paths array.
+- **Params**: `{"paths": []}`
+- **Expected result**: May behave like "delete all" or return empty result.
+- **Notes**: Document whether empty array is treated as "no filter" or "nothing to delete".
+
+---
+
+## Tool: `stop_monitoring`
+
+**Description**: Stop an active property monitoring session that was started by `monitor_properties`.
+
+**Parameters**:
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `path` | `string` (NodePath) | ✅ | Node path whose monitoring session to stop |
+
+**Godot method**: `runtime/stop_monitoring`
+
+**Dependencies**: Must be preceded by `monitor_properties` on the same node.
+
+---
+
+### Test Scenarios
+
+#### Scenario 22.1 — Happy path: stop active monitoring
+- **Description**: Start monitoring, then stop it early.
+- **Sequence**:
+  1. `monitor_properties` → `{"path": "Player", "properties": ["position"], "duration": 30.0}`
+  2. (Wait 2 seconds)
+  3. `stop_monitoring` → `{"path": "Player"}`
+- **Expected result**: Success. Returns the monitoring data collected so far.
+- **Notes**: Verify the returned data contains samples from the ~2 seconds of monitoring, not the full 30 seconds.
+
+#### Scenario 22.2 — Happy path: stop monitoring and get partial data
+- **Description**: Stop monitoring early to get intermediate results.
+- **Sequence**:
+  1. `monitor_properties` → `{"path": "Player", "properties": ["position", "rotation"], "duration": 60.0}`
+  2. (Wait 3 seconds — move the player during this time)
+  3. `stop_monitoring` → `{"path": "Player"}`
+- **Expected result**: Returns timeline data for both properties covering ~3 seconds.
+- **Notes**: Verify both properties have data and timestamps are within the expected window.
+
+#### Scenario 22.3 — Edge case: stop monitoring that already finished
+- **Description**: Let monitoring finish naturally, then call stop.
+- **Sequence**:
+  1. `monitor_properties` → `{"path": "Player", "properties": ["position"], "duration": 1.0}`
+  2. (Wait 2 seconds — monitoring has finished)
+  3. `stop_monitoring` → `{"path": "Player"}`
+- **Expected result**: Depends on Godot — may return success (no-op), the final data, or error.
+- **Notes**: Document whether stopping an already-finished session is handled gracefully.
+
+#### Scenario 22.4 — Edge case: stop monitoring without prior start
+- **Description**: Call `stop_monitoring` without a prior `monitor_properties`.
+- **Params**: `{"path": "Player"}`
+- **Expected result**: Depends on Godot — may return success (no-op), warning, or error.
+- **Notes**: Document behavior.
+
+#### Scenario 22.5 — Error: nonexistent node
+- **Description**: Stop monitoring a node that does not exist.
+- **Params**: `{"path": "/FakeNode"}`
+- **Expected result**: `{isError: true}` — node not found.
+- **Notes**: Standard node-not-found error.
+
+#### Scenario 22.6 — Error: missing required param
+- **Description**: Call without `path`.
+- **Params**: `{}`
+- **Expected result**: MCP schema validation error.
+- **Notes**: `path` is required.
+
+---
+
+## Tool: `batch_set_properties`
+
+**Description**: Set multiple properties on multiple nodes in one call. Counterpart to `batch_get_properties`.
+
+**Parameters**:
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `nodes` | `object[]` | ✅ | Array of node change descriptors |
+
+Each element in `nodes`:
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | `string` (NodePath) | ✅ | Node path to modify |
+| `properties` | `object` | ✅ | Dictionary of property_name: value pairs to set |
+
+**Godot method**: `runtime/batch_set_properties`
+
+---
+
+### Test Scenarios
+
+#### Scenario 23.1 — Happy path: batch set on multiple nodes
+- **Description**: Set properties on 2+ nodes simultaneously.
+- **Prerequisites**: Identify nodes via `get_game_scene_tree`.
+- **Params**:
+  ```json
+  {
+    "nodes": [
+      {"path": "Player", "properties": {"visible": false}},
+      {"path": "Enemy1", "properties": {"visible": false}}
+    ]
+  }
+  ```
+- **Expected result**: Success. Both nodes' `visible` property is set to `false`.
+- **Notes**: Verify via `batch_get_properties` or individual `get_game_node_properties` calls. Restore values after test.
+
+#### Scenario 23.2 — Happy path: batch set multiple properties on one node
+- **Description**: Set several properties on a single node in one call.
+- **Params**:
+  ```json
+  {
+    "nodes": [
+      {"path": "Player", "properties": {"position": [100, 200, 0], "visible": true, "scale": [2, 2, 1]}}
+    ]
+  }
+  ```
+- **Expected result**: Success. All three properties are updated.
+- **Notes**: Verify each property individually after the batch set.
+
+#### Scenario 23.3 — Happy path: batch set with mixed node types
+- **Description**: Set properties on different node types (Node2D, Control, etc.).
+- **Params**:
+  ```json
+  {
+    "nodes": [
+      {"path": "Player", "properties": {"position": [50, 50, 0]}},
+      {"path": "UI/HealthBar", "properties": {"value": 75}}
+    ]
+  }
+  ```
+- **Expected result**: Success. Each node gets type-appropriate property values.
+- **Notes**: Verify both changes. Adapt paths to actual game nodes.
+
+#### Scenario 23.4 — Error: one bad node in batch
+- **Description**: Include a nonexistent node in the batch.
+- **Params**:
+  ```json
+  {
+    "nodes": [
+      {"path": "Player", "properties": {"visible": false}},
+      {"path": "/FakeNode", "properties": {"visible": false}}
+    ]
+  }
+  ```
+- **Expected result**: Depends on Godot — may fail entirely (atomic) or apply valid changes and report error for invalid one.
+- **Notes**: Document whether batch operations are atomic or partial.
+
+#### Scenario 23.5 — Error: invalid property value
+- **Description**: Set an incompatible value type in the batch.
+- **Params**:
+  ```json
+  {
+    "nodes": [
+      {"path": "Player", "properties": {"position": "not_a_vector"}}
+    ]
+  }
+  ```
+- **Expected result**: `{isError: true}` — type mismatch for property.
+- **Notes**: Godot's type system should reject this.
+
+#### Scenario 23.6 — Error: nonexistent property
+- **Description**: Set a property that doesn't exist on the node.
+- **Params**:
+  ```json
+  {
+    "nodes": [
+      {"path": "Player", "properties": {"nonexistent_xyz": 42}}
+    ]
+  }
+  ```
+- **Expected result**: `{isError: true}` — invalid property.
+- **Notes**: Standard invalid-property error.
+
+#### Scenario 23.7 — Error: empty nodes array
+- **Description**: Pass an empty nodes array.
+- **Params**: `{"nodes": []}`
+- **Expected result**: May return success (no-op) or empty result.
+- **Notes**: Document behavior for empty batch.
+
+#### Scenario 23.8 — Error: missing required param
+- **Description**: Call without `nodes`.
+- **Params**: `{}`
+- **Expected result**: MCP schema validation error.
+- **Notes**: `nodes` is required.
+
+---
+
 ## Inter-Tool Dependency Sequences
 
 These sequences test that multiple tools work together correctly.
@@ -1160,6 +1448,49 @@ These sequences test that multiple tools work together correctly.
 
 ---
 
+### Sequence G: Monitor → Stop monitoring → Read partial data
+
+1. `monitor_properties` → `{"path": "Player", "properties": ["position"], "duration": 30.0}` → start long monitoring
+2. (Wait 3 seconds — move the player)
+3. `stop_monitoring` → `{"path": "Player"}` → stop early, get partial data
+4. Verify the returned data covers ~3 seconds, not 30 seconds.
+   - **Expected**: `stop_monitoring` returns the data collected so far. Monitoring is terminated early.
+   - **Note**: This tests that `stop_monitoring` correctly interrupts a long-running `monitor_properties` session.
+
+---
+
+### Sequence H: Watch signals → Unwatch signals
+
+1. `watch_signals` → `{"path": "Player", "signals": ["process"], "duration": 10.0}` → start watching
+2. (Wait 2 seconds)
+3. `unwatch_signals` → `{"path": "Player"}` → stop watching
+4. (Wait 3 more seconds)
+5. Check that no additional signal emissions were recorded after unwatch.
+   - **Expected**: `unwatch_signals` stops signal observation. Data collected before unwatch is preserved.
+
+---
+
+### Sequence I: Capture frames → Delete captured frames
+
+1. `capture_frames` → `{"count": 3}` → capture 3 frames, get file paths
+2. Verify files exist on disk.
+3. `delete_captured_frames` → `{}` → delete all captured frames
+4. Verify files no longer exist on disk.
+   - **Expected**: Frames are captured to disk, then successfully cleaned up.
+   - **Note**: Tests the full capture→cleanup lifecycle.
+
+---
+
+### Sequence J: Batch set → Batch get verify
+
+1. `batch_set_properties` → `{"nodes": [{"path": "Player", "properties": {"visible": false}}, {"path": "Enemy1", "properties": {"visible": false}}]}` → batch change
+2. `batch_get_properties` → `{"paths": ["Player", "Enemy1"], "properties": ["visible"]}` → batch read
+   - **Expected**: Both nodes show `visible: false` in the batch read.
+3. `batch_set_properties` → restore original values.
+   - **Expected**: Batch write and batch read are consistent.
+
+---
+
 ## Error Handling — Cross-Cutting Concerns
 
 These tests apply to ALL runtime tools.
@@ -1215,5 +1546,9 @@ These tests apply to ALL runtime tools.
 | 17 | `navigate_to` | 2 | `path`, `target` | — | `runtime/navigate_to` |
 | 18 | `move_to` | 2 | `path`, `target` | — | `runtime/move_to` |
 | 19 | `watch_signals` | 3 | `path`, `signals` | `duration` | `runtime/watch_signals` |
+| 20 | `unwatch_signals` | 2 | `path` | `signals` | `runtime/unwatch_signals` |
+| 21 | `delete_captured_frames` | 1 | — | `paths` | `runtime/delete_captured_frames` |
+| 22 | `stop_monitoring` | 1 | `path` | — | `runtime/stop_monitoring` |
+| 23 | `batch_set_properties` | 1 | `nodes` | — | `runtime/batch_set_properties` |
 
-**Total scenarios**: ~85 individual scenarios + 6 dependency sequences + 5 cross-cutting error tests.
+**Total scenarios**: ~107 individual scenarios + 6 dependency sequences + 5 cross-cutting error tests.

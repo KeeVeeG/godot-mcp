@@ -1,4 +1,4 @@
-## Project creation commands module - 10 tools.
+## Project creation commands module - 12 tools.
 ## Handles project scaffolding, templates, git init, licensing, and dependency setup.
 class_name MCPProjectCreationCommands
 extends RefCounted
@@ -22,6 +22,8 @@ func get_commands() -> Dictionary:
 		"project_creation/create_license": func(params: Dictionary) -> Dictionary: return execute("create_project_license", params),
 		"project_creation/setup_dependencies": func(params: Dictionary) -> Dictionary: return execute("setup_project_dependencies", params),
 		"project_creation/validate_structure": func(params: Dictionary) -> Dictionary: return execute("validate_project_structure", params),
+		"project_creation/delete_project": func(params: Dictionary) -> Dictionary: return execute("delete_project", params),
+		"project_creation/remove_dependencies": func(params: Dictionary) -> Dictionary: return execute("remove_project_dependencies", params),
 		"project_creation/get_templates": func(params: Dictionary) -> Dictionary: return execute("get_project_templates", params),
 	}
 
@@ -38,6 +40,8 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"create_project_license": return _create_project_license(params)
 		"setup_project_dependencies": return _setup_project_dependencies(params)
 		"validate_project_structure": return _validate_project_structure(params)
+		"delete_project": return _delete_project(params)
+		"remove_project_dependencies": return _remove_project_dependencies(params)
 		"get_project_templates": return _get_project_templates()
 	return {"success": false, "error": "Unknown method: " + method}
 
@@ -473,6 +477,101 @@ func _validate_project_structure(params: Dictionary) -> Dictionary:
 	}
 
 
+## Delete a project and all its files from disk.
+func _delete_project(params: Dictionary) -> Dictionary:
+	var project_path: String = params.get("project_path", "")
+	var confirm: bool = params.get("confirm", false)
+
+	if project_path.is_empty():
+		return {"success": false, "error": "Project path is required"}
+
+	if not MCPCommandHelpers.validate_path(project_path):
+		return {"success": false, "error": "Invalid path"}
+
+	if not DirAccess.dir_exists_absolute(project_path):
+		return {"success": false, "error": "Project path does not exist: %s" % project_path}
+
+	var config_path: String = project_path.path_join("project.godot")
+	if not FileAccess.file_exists(config_path):
+		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
+
+	# Safety: require explicit confirmation
+	if not confirm:
+		return {
+			"success": false,
+			"error": "Deletion requires confirm=true to prevent accidental data loss. Path: %s" % project_path,
+			"requires_confirmation": true,
+		}
+
+	# Count files before deletion for the report
+	var file_count: Dictionary = {}
+	_count_files_recursive(project_path, file_count, 0, 32)
+	var total_files: int = 0
+	for ext: String in file_count:
+		total_files += file_count[ext]
+
+	# Delete the project directory recursively
+	var err: Error = _remove_directory_recursive(project_path)
+	if err != OK:
+		return {"success": false, "error": "Failed to delete project: %s" % error_string(err)}
+
+	return {
+		"success": true,
+		"path": project_path,
+		"deleted": true,
+		"total_files_removed": total_files,
+	}
+
+
+## Remove installed dependencies / addons from a project.
+func _remove_project_dependencies(params: Dictionary) -> Dictionary:
+	var project_path: String = params.get("project_path", "")
+	var addons: Array = params.get("addons", [])
+
+	if project_path.is_empty():
+		return {"success": false, "error": "Project path is required"}
+
+	if not MCPCommandHelpers.validate_path(project_path):
+		return {"success": false, "error": "Invalid path"}
+
+	if not FileAccess.file_exists(project_path.path_join("project.godot")):
+		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
+
+	if addons.is_empty():
+		return {"success": false, "error": "addons array is required and must not be empty"}
+
+	var addons_dir: String = project_path.path_join("addons")
+	var removed: Array = []
+	var errors: Array = []
+
+	for addon_def: Variant in addons:
+		var addon_name: String = ""
+		if addon_def is String:
+			addon_name = addon_def as String
+		elif addon_def is Dictionary:
+			addon_name = (addon_def as Dictionary).get("name", "")
+		else:
+			errors.append("Invalid addon entry: %s" % str(addon_def))
+			continue
+
+		if addon_name.is_empty():
+			errors.append("Addon name is empty")
+			continue
+
+		var addon_path: String = addons_dir.path_join(addon_name)
+		if not DirAccess.dir_exists_absolute(addon_path):
+			errors.append("Addon not found: %s (path: %s)" % [addon_name, addon_path])
+			continue
+
+		var err: Error = _remove_directory_recursive(addon_path)
+		if err == OK:
+			removed.append(addon_name)
+		else:
+			errors.append("Failed to remove addon '%s': %s" % [addon_name, error_string(err)])
+
+	return {"success": true, "removed": removed, "errors": errors}
+
+
 ## Get list of available project templates.
 func _get_project_templates() -> Dictionary:
 	var templates: Array = [
@@ -613,6 +712,30 @@ func _count_files_recursive(path: String, counts: Dictionary, depth: int, max_de
 			counts[ext] = counts.get(ext, 0) + 1
 		file_name = dir.get_next()
 	dir.list_dir_end()
+
+
+## Helper: Remove a directory and all its contents recursively.
+func _remove_directory_recursive(path: String) -> Error:
+	var dir: DirAccess = DirAccess.open(path)
+	if dir == null:
+		return ERR_CANT_OPEN
+
+	dir.list_dir_begin()
+	var entry: String = dir.get_next()
+	while entry != "":
+		if not entry.begins_with("."):
+			var full_path: String = path.path_join(entry)
+			if dir.current_is_dir():
+				var err: Error = _remove_directory_recursive(full_path)
+				if err != OK:
+					return err
+				DirAccess.remove_absolute(full_path)
+			else:
+				DirAccess.remove_absolute(full_path)
+		entry = dir.get_next()
+	dir.list_dir_end()
+
+	return DirAccess.remove_absolute(path)
 
 
 func _generate_readme(project_name: String, template: String) -> String:

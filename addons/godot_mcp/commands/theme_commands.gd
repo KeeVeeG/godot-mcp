@@ -1,4 +1,4 @@
-## Theme commands module - 7 tools.
+## Theme commands module - 11 tools.
 ## Handles theme creation, deletion, colors, constants, fonts, and styleboxes.
 class_name MCPThemeCommands
 extends RefCounted
@@ -27,6 +27,10 @@ func get_commands() -> Dictionary:
 		"theme/set_font_size": set_theme_font_size,
 		"theme/set_stylebox": set_theme_stylebox,
 		"theme/get_info": get_theme_info,
+		"theme/get_color": get_theme_color,
+		"theme/get_constant": get_theme_constant,
+		"theme/get_font_size": get_theme_font_size,
+		"theme/get_stylebox": get_theme_stylebox,
 	}
 
 
@@ -298,6 +302,137 @@ func get_theme_info(params: Dictionary) -> Dictionary:
 			type_info["styleboxes"] = Array(styleboxes)
 		result["types"].append(type_info)
 	return {"result": result}
+
+
+## Get a specific color value from a theme.
+func get_theme_color(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var theme_type: String = params.get("theme_type", "")
+	var name_str: String = params.get("name", "")
+	if path.is_empty():
+		return {"error": "path is required"}
+	if theme_type.is_empty():
+		return {"error": "theme_type is required"}
+	if name_str.is_empty():
+		return {"error": "name is required"}
+	if not _is_valid_theme_type(theme_type):
+		return {"error": "Invalid theme_type: '%s' is not a valid Control class" % theme_type}
+
+	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
+	if theme == null:
+		return {"error": "Theme not found: %s" % path}
+
+	if not theme.has_color(name_str, theme_type):
+		return {"error": "Color '%s' not found for type '%s'" % [name_str, theme_type]}
+
+	var color: Color = theme.get_color(name_str, theme_type)
+	return {"result": {"name": name_str, "theme_type": theme_type, "color": "#" + color.to_html()}}
+
+
+## Get a specific constant value from a theme.
+func get_theme_constant(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var theme_type: String = params.get("theme_type", "")
+	var name_str: String = params.get("name", "")
+	if path.is_empty():
+		return {"error": "path is required"}
+	if theme_type.is_empty():
+		return {"error": "theme_type is required"}
+	if name_str.is_empty():
+		return {"error": "name is required"}
+	if not _is_valid_theme_type(theme_type):
+		return {"error": "Invalid theme_type: '%s' is not a valid Control class" % theme_type}
+
+	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
+	if theme == null:
+		return {"error": "Theme not found: %s" % path}
+
+	if not theme.has_constant(name_str, theme_type):
+		return {"error": "Constant '%s' not found for type '%s'" % [name_str, theme_type]}
+
+	var value: int = theme.get_constant(name_str, theme_type)
+	return {"result": {"name": name_str, "theme_type": theme_type, "value": value}}
+
+
+## Get a specific font size value from a theme.
+func get_theme_font_size(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var theme_type: String = params.get("theme_type", "")
+	var name_str: String = params.get("name", "")
+	if path.is_empty():
+		return {"error": "path is required"}
+	if theme_type.is_empty():
+		return {"error": "theme_type is required"}
+	if name_str.is_empty():
+		return {"error": "name is required"}
+	if not _is_valid_theme_type(theme_type):
+		return {"error": "Invalid theme_type: '%s' is not a valid Control class" % theme_type}
+
+	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
+	if theme == null:
+		return {"error": "Theme not found: %s" % path}
+
+	if not theme.has_font_size(name_str, theme_type):
+		return {"error": "Font size '%s' not found for type '%s'" % [name_str, theme_type]}
+
+	var size: int = theme.get_font_size(name_str, theme_type)
+	return {"result": {"name": name_str, "theme_type": theme_type, "size": size}}
+
+
+## Get a specific StyleBox from a theme.
+func get_theme_stylebox(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var theme_type: String = params.get("theme_type", "")
+	var name_str: String = params.get("name", "")
+	if path.is_empty():
+		return {"error": "path is required"}
+	if theme_type.is_empty():
+		return {"error": "theme_type is required"}
+	if name_str.is_empty():
+		return {"error": "name is required"}
+	if not _is_valid_theme_type(theme_type):
+		return {"error": "Invalid theme_type: '%s' is not a valid Control class" % theme_type}
+
+	var theme: Theme = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Theme
+	if theme == null:
+		return {"error": "Theme not found: %s" % path}
+
+	if not theme.has_stylebox(name_str, theme_type):
+		return {"error": "StyleBox '%s' not found for type '%s'" % [name_str, theme_type]}
+
+	var stylebox: StyleBox = theme.get_stylebox(name_str, theme_type)
+	var props: Dictionary = {}
+
+	if stylebox is StyleBoxFlat:
+		props["type"] = "Flat"
+		props["bg_color"] = "#" + stylebox.bg_color.to_html()
+		props["border_color"] = "#" + stylebox.border_color.to_html()
+		props["border_width_left"] = stylebox.border_width_left
+		props["border_width_right"] = stylebox.border_width_right
+		props["border_width_top"] = stylebox.border_width_top
+		props["border_width_bottom"] = stylebox.border_width_bottom
+		props["corner_radius_top_left"] = stylebox.corner_radius_top_left
+		props["corner_radius_top_right"] = stylebox.corner_radius_top_right
+		props["corner_radius_bottom_left"] = stylebox.corner_radius_bottom_left
+		props["corner_radius_bottom_right"] = stylebox.corner_radius_bottom_right
+		props["content_margin_left"] = stylebox.content_margin_left
+		props["content_margin_top"] = stylebox.content_margin_top
+		props["content_margin_right"] = stylebox.content_margin_right
+		props["content_margin_bottom"] = stylebox.content_margin_bottom
+	elif stylebox is StyleBoxLine:
+		props["type"] = "Line"
+		props["color"] = "#" + stylebox.color.to_html()
+		props["thickness"] = stylebox.thickness
+	elif stylebox is StyleBoxEmpty:
+		props["type"] = "Empty"
+	elif stylebox is StyleBoxTexture:
+		props["type"] = "Texture"
+		if stylebox.texture:
+			props["texture"] = stylebox.texture.resource_path
+	else:
+		props["type"] = "Unknown"
+
+	return {"result": {"name": name_str, "theme_type": theme_type, "properties": props}}
 
 
 

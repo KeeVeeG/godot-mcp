@@ -1,4 +1,4 @@
-﻿## Runtime commands module - 19 tools.
+﻿## Runtime commands module - 23 tools.
 ## Handles game runtime inspection via file-based IPC.
 class_name MCPRuntimeCommands
 extends RefCounted
@@ -43,6 +43,10 @@ func get_commands() -> Dictionary:
 		"runtime/navigate_to": navigate_to,
 		"runtime/move_to": move_to,
 		"runtime/watch_signals": watch_signals,
+		"runtime/unwatch_signals": unwatch_signals,
+		"runtime/delete_captured_frames": delete_captured_frames,
+		"runtime/stop_monitoring": stop_monitoring,
+		"runtime/batch_set_properties": batch_set_properties,
 	}
 
 
@@ -248,3 +252,23 @@ func move_to(params: Dictionary) -> Dictionary:
 ## Watch signals on a node.
 func watch_signals(params: Dictionary) -> Dictionary:
 	return await _ipc_request("watch_signals", params)
+
+
+## Stop watching signals on a node.
+func unwatch_signals(params: Dictionary) -> Dictionary:
+	return await _ipc_request("unwatch_signals", params)
+
+
+## Delete captured frames from disk.
+func delete_captured_frames(params: Dictionary) -> Dictionary:
+	return await _ipc_request("delete_captured_frames", params)
+
+
+## Stop an active property monitoring session.
+func stop_monitoring(params: Dictionary) -> Dictionary:
+	return await _ipc_request("stop_monitoring", params)
+
+
+## Batch set properties on multiple nodes.
+func batch_set_properties(params: Dictionary) -> Dictionary:
+	return await _ipc_request("batch_set_properties", params)

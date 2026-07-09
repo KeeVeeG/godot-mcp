@@ -1,7 +1,7 @@
 # Visual Testing Tools — Test Plan
 
 > **File**: `server/src/tools/visual_testing.ts`
-> **Tools count**: 6
+> **Tools count**: 10
 > **All tools delegate to Godot via `callGodot(bridge, toolName, args)` — results depend on Godot editor state.**
 
 ---
@@ -670,6 +670,299 @@ None. This tool takes no parameters.
 
 ---
 
+## Tool 7: `delete_screenshot`
+
+**Description**: Delete a captured screenshot and its context metadata from `user://mcp_visual_tests/`.
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `name` | `string` | **yes** | — | Name of the screenshot to delete (must match a name used with `take_screenshot_with_context`) |
+
+### Test Scenarios
+
+#### Scenario 7.1 — Happy path: delete an existing screenshot
+
+**Description**: Capture a screenshot, then delete it.
+
+**Prerequisites**: Call `take_screenshot_with_context` with `name: "temp_capture"`.
+
+**Call**:
+```json
+{
+  "name": "temp_capture"
+}
+```
+
+**Expected result**:
+- `success` (boolean): `true`
+- `name` (string): `"temp_capture"`
+- `deleted_files` (array): list of deleted file paths (screenshot PNG and context JSON)
+- `message` (string): confirmation message
+
+**Notes**: After deletion, the screenshot file and its context JSON should no longer exist on disk.
+
+**What to pay attention to**: Verify that both `temp_capture.png` and `temp_capture_context.json` are removed. Calling `assert_visual_match` with this name afterward should fail.
+
+---
+
+#### Scenario 7.2 — Delete a non-existent screenshot (edge case)
+
+**Description**: Attempt to delete a screenshot that was never captured.
+
+**Call**:
+```json
+{
+  "name": "never_existed"
+}
+```
+
+**Expected result**: Error — screenshot not found. The error should clearly indicate that no screenshot with that name exists.
+
+**Notes**: Tests error handling for missing files.
+
+**What to pay attention to**: The error message should contain the screenshot name. No files should be modified.
+
+---
+
+#### Scenario 7.3 — Empty name (edge case)
+
+**Description**: Pass an empty string as `name`.
+
+**Call**:
+```json
+{
+  "name": ""
+}
+```
+
+**Expected result**: Error — `name is required`.
+
+**What to pay attention to**: The tool should validate the parameter and return a clear error, not attempt to delete a file with an empty name.
+
+---
+
+## Tool 8: `delete_visual_recording`
+
+**Description**: Delete a visual recording session and all its captured frames from `user://mcp_visual_tests/recordings/`.
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `test_name` | `string` | **yes** | — | Name of the recording to delete (must match a `test_name` used with `record_visual_regression`) |
+
+### Test Scenarios
+
+#### Scenario 8.1 — Happy path: delete an existing recording
+
+**Description**: Record frames, then delete the recording.
+
+**Prerequisites**: Call `record_visual_regression` with `test_name: "temp_recording"`, `frames: 3`.
+
+**Call**:
+```json
+{
+  "test_name": "temp_recording"
+}
+```
+
+**Expected result**:
+- `success` (boolean): `true`
+- `test_name` (string): `"temp_recording"`
+- `deleted_frames` (number): `3`
+- `message` (string): confirmation message
+
+**Notes**: After deletion, the entire recording directory should be removed, including all frame PNGs and the manifest JSON.
+
+**What to pay attention to**: Verify that `user://mcp_visual_tests/recordings/temp_recording/` no longer exists. The in-memory `_recordings` dictionary should also be cleared.
+
+---
+
+#### Scenario 8.2 — Delete a non-existent recording (edge case)
+
+**Description**: Attempt to delete a recording that was never created.
+
+**Call**:
+```json
+{
+  "test_name": "nonexistent_recording"
+}
+```
+
+**Expected result**: Error — recording not found.
+
+**What to pay attention to**: The error should clearly indicate the missing recording name.
+
+---
+
+#### Scenario 8.3 — Empty test_name (edge case)
+
+**Description**: Pass an empty string as `test_name`.
+
+**Call**:
+```json
+{
+  "test_name": ""
+}
+```
+
+**Expected result**: Error — `test_name is required`.
+
+---
+
+## Tool 9: `clear_visual_diff_report`
+
+**Description**: Clear all accumulated visual test results (assertions) and in-memory recordings. Resets the session state for `get_visual_diff_report`.
+
+### Parameters
+
+None. This tool takes no parameters.
+
+### Test Scenarios
+
+#### Scenario 9.1 — Happy path: clear after multiple assertions
+
+**Description**: Perform several `assert_visual_match` calls, then clear the report.
+
+**Prerequisites**:
+1. Take 2 screenshots and set baselines
+2. Call `assert_visual_match` for each
+3. Then call `clear_visual_diff_report`
+
+**Call**:
+```json
+{}
+```
+
+**Expected result**:
+- `success` (boolean): `true`
+- `cleared_assertions` (number): `2`
+- `cleared_recordings` (number): count of in-memory recordings (may be `0` if none were recorded)
+- `message` (string): confirmation with counts
+
+**Notes**: After clearing, `get_visual_diff_report` should return an empty report (`total_assertions: 0`).
+
+**What to pay attention to**: Verify that `get_visual_diff_report` returns zero assertions after clearing. The `_test_results` array and `_recordings` dictionary should be empty.
+
+---
+
+#### Scenario 9.2 — Clear with no prior assertions (edge case)
+
+**Description**: Call `clear_visual_diff_report` without any prior assertions or recordings.
+
+**Call**:
+```json
+{}
+```
+
+**Expected result**:
+- `success` (boolean): `true`
+- `cleared_assertions` (number): `0`
+- `cleared_recordings` (number): `0`
+
+**Notes**: Should not crash or return an error — clearing an empty state is valid.
+
+**What to pay attention to**: No error should be returned. The counts should be zero.
+
+---
+
+#### Scenario 9.3 — Verify report resets correctly
+
+**Description**: Perform assertions, clear, then perform new assertions and check the report.
+
+**Call**:
+```json
+{}
+```
+
+**Steps**:
+1. Assert 2 screenshots (both pass)
+2. Call `clear_visual_diff_report`
+3. Assert 1 new screenshot (fails)
+4. Call `get_visual_diff_report`
+
+**Expected result**: Report should show only the 1 new assertion (failed), not the 2 old ones.
+
+**What to pay attention to**: The report should not contain stale data from before the clear.
+
+---
+
+## Tool 10: `list_visual_baselines`
+
+**Description**: List all saved visual baseline screenshots in `user://mcp_visual_tests/baselines/`.
+
+### Parameters
+
+None. This tool takes no parameters.
+
+### Test Scenarios
+
+#### Scenario 10.1 — Happy path: list after setting baselines
+
+**Description**: Set 2 baselines, then list them.
+
+**Prerequisites**:
+1. Take 2 screenshots
+2. Call `set_visual_baseline` for each
+
+**Call**:
+```json
+{}
+```
+
+**Expected result**:
+- `baselines` (array): list of baseline objects, each with `name`, `path`, `file_size`
+- `count` (number): `2`
+- `baselines_dir` (string): path to the baselines directory
+
+**Notes**: Each baseline entry should have the name (without extension), the virtual path, and the file size in bytes.
+
+**What to pay attention to**: The count should match the number of `set_visual_baseline` calls. The `name` field should be the filename without `.png`.
+
+---
+
+#### Scenario 10.2 — List with no baselines (edge case)
+
+**Description**: Call `list_visual_baselines` when no baselines have been set.
+
+**Call**:
+```json
+{}
+```
+
+**Expected result**:
+- `baselines` (array): empty array `[]`
+- `count` (number): `0`
+- `baselines_dir` (string): path to the baselines directory
+
+**Notes**: Should not crash or return an error — empty state is valid.
+
+**What to pay attention to**: The result should contain an empty array, not null. No error should be returned.
+
+---
+
+#### Scenario 10.3 — Verify baselines are listed after overwrite
+
+**Description**: Set a baseline, overwrite it, then list.
+
+**Call**:
+```json
+{}
+```
+
+**Steps**:
+1. Set baseline `"hero"` from screenshot A
+2. Set baseline `"hero"` from screenshot B (overwrite)
+3. Call `list_visual_baselines`
+
+**Expected result**: Only one entry for `"hero"` — the overwritten version.
+
+**What to pay attention to**: No duplicate entries. The count should be `1`, not `2`.
+
+---
+
 ## Recommended Test Execution Order
 
 Some tools depend on the state created by others. The recommended sequence:
@@ -677,10 +970,14 @@ Some tools depend on the state created by others. The recommended sequence:
 ```
 1. take_screenshot_with_context  →  creates screenshot files
 2. set_visual_baseline           →  uses screenshot files as baselines
-3. assert_visual_match           →  compares screenshots against baselines
-4. compare_screenshots           →  direct file-to-file comparison (independent)
-5. record_visual_regression      →  captures frames over time (independent)
-6. get_visual_diff_report        →  aggregates results from step 3
+3. list_visual_baselines         →  verify baselines were saved
+4. assert_visual_match           →  compares screenshots against baselines
+5. compare_screenshots           →  direct file-to-file comparison (independent)
+6. record_visual_regression      →  captures frames over time (independent)
+7. get_visual_diff_report        →  aggregates results from step 4
+8. clear_visual_diff_report      →  resets session state
+9. delete_screenshot             →  cleanup screenshots
+10. delete_visual_recording      →  cleanup recordings
 ```
 
 ### Full Integration Flow
@@ -692,14 +989,28 @@ Some tools depend on the state created by others. The recommended sequence:
 // Step 2: Set baselines
 { "tool": "set_visual_baseline", "args": { "name": "menu", "screenshot_path": "res://screenshots/menu.png" } }
 
-// Step 3: Make changes to the scene, then re-capture
+// Step 3: List baselines to verify
+{ "tool": "list_visual_baselines", "args": {} }
+
+// Step 4: Make changes to the scene, then re-capture
 { "tool": "take_screenshot_with_context", "args": { "name": "menu_after_changes" } }
 
-// Step 4: Assert match
+// Step 5: Assert match
 { "tool": "assert_visual_match", "args": { "name": "menu_after_changes", "baseline": "res://screenshots/menu.png", "threshold": 0.02 } }
 
-// Step 5: Get aggregated report
+// Step 6: Get aggregated report
 { "tool": "get_visual_diff_report", "args": {} }
+
+// Step 7: Record frames over time
+{ "tool": "record_visual_regression", "args": { "test_name": "menu_animation", "frames": 5, "interval": 0.5 } }
+
+// Step 8: Clear the report for a new test cycle
+{ "tool": "clear_visual_diff_report", "args": {} }
+
+// Step 9: Cleanup screenshots and recordings
+{ "tool": "delete_screenshot", "args": { "name": "menu" } }
+{ "tool": "delete_screenshot", "args": { "name": "menu_after_changes" } }
+{ "tool": "delete_visual_recording", "args": { "test_name": "menu_animation" } }
 ```
 
 ---

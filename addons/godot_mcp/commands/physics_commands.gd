@@ -1,4 +1,4 @@
-## Physics commands module - 6 tools.
+## Physics commands module - 11 tools.
 ## Handles physics bodies, collision, layers, and raycasts.
 class_name MCPPhysicsCommands
 extends RefCounted
@@ -23,6 +23,9 @@ func get_commands() -> Dictionary:
 		"physics/add_raycast": add_raycast,
 		"physics/get_material": get_physics_material,
 		"physics/set_material": set_physics_material,
+		"physics/get_body": get_physics_body,
+		"physics/remove_collision": remove_collision,
+		"physics/remove_raycast": remove_raycast,
 	}
 
 
@@ -410,9 +413,102 @@ func set_physics_material(params: Dictionary) -> Dictionary:
 					_undo_helper.set_property_with_undo(node, "physics_material_override", mat)
 				else:
 					node.physics_material_override = mat
-				return {"result": {"path": path, "friction": mat.friction, "rough": mat.rough, "bounce": mat.bounce, "absorbent": mat.absorbent}}
-		return {"error": "Node does not support physics_material_override: %s." % node.get_class()}
 	return {"result": {"path": path, "friction": mat.friction, "rough": mat.rough, "bounce": mat.bounce, "absorbent": mat.absorbent}}
 
+
+## Get physics body properties from a node.
+func get_physics_body(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "Path is required"}
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
+	var node: Node = root.get_node_or_null(path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+
+	# Check if it's a physics body (direct type or via script inheritance)
+	var is_physics: bool = node is RigidBody2D or node is RigidBody3D or node is CharacterBody2D or node is CharacterBody3D or node is StaticBody2D or node is StaticBody3D
+	if not is_physics:
+		var scr: Script = node.get_script()
+		if scr:
+			var base_type: String = scr.get_instance_base_type()
+			is_physics = base_type == "RigidBody2D" or base_type == "RigidBody3D" or base_type == "CharacterBody2D" or base_type == "CharacterBody3D" or base_type == "StaticBody2D" or base_type == "StaticBody3D"
+	if not is_physics:
+		return {"error": "Node is not a physics body: %s" % node.get_class()}
+
+	var result: Dictionary = {"path": path, "type": node.get_class()}
+	var read_props: PackedStringArray = ["mass", "gravity_scale", "linear_damp", "angular_damp"]
+	for prop: String in read_props:
+		if MCPCommandHelpers.has_property(node, prop):
+			result[prop] = node.get(prop)
+		else:
+			result[prop] = null
+	return {"result": result}
+
+
+## Remove collision shape(s) from a physics body.
+func remove_collision(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var shape_name: String = params.get("name", "")
+	if path.is_empty():
+		return {"error": "Path is required"}
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
+	var node: Node = root.get_node_or_null(path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+
+	var removed: Array = []
+	for i: int in range(node.get_child_count() - 1, -1, -1):
+		var child: Node = node.get_child(i)
+		if child is CollisionShape2D or child is CollisionShape3D or child is CollisionPolygon2D:
+			if shape_name.is_empty() or str(child.name) == shape_name:
+				removed.append(str(child.name))
+				if _undo_helper:
+					_undo_helper.remove_node_with_undo(child)
+				else:
+					node.remove_child(child)
+					child.queue_free()
+	if removed.is_empty():
+		if shape_name.is_empty():
+			return {"error": "No collision shapes found on %s" % path}
+		else:
+			return {"error": "Collision shape '%s' not found on %s" % [shape_name, path]}
+	return {"result": {"path": path, "removed": removed}}
+
+
+## Remove a RayCast node from a parent.
+func remove_raycast(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	var raycast_name: String = params.get("name", "")
+	if path.is_empty():
+		return {"error": "Path is required"}
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
+	var node: Node = root.get_node_or_null(path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+
+	var removed: Array = []
+	for i: int in range(node.get_child_count() - 1, -1, -1):
+		var child: Node = node.get_child(i)
+		if child is RayCast2D or child is RayCast3D:
+			if raycast_name.is_empty() or str(child.name) == raycast_name:
+				removed.append(str(child.name))
+				if _undo_helper:
+					_undo_helper.remove_node_with_undo(child)
+				else:
+					node.remove_child(child)
+					child.queue_free()
+	if removed.is_empty():
+		if raycast_name.is_empty():
+			return {"error": "No RayCast nodes found on %s" % path}
+		else:
+			return {"error": "RayCast '%s' not found on %s" % [raycast_name, path]}
+	return {"result": {"path": path, "removed": removed}}
 
 

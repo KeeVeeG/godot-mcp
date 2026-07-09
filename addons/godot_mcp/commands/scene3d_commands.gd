@@ -1,4 +1,4 @@
-## 3D Scene commands module - 11 tools.
+## 3D Scene commands module - 12 tools.
 ## Handles 3D meshes, cameras, lighting, environment, and materials.
 class_name MCPScene3DCommands
 extends RefCounted
@@ -24,6 +24,7 @@ func get_commands() -> Dictionary:
 		"scene3d/setup_environment": setup_environment,
 		"scene3d/get_environment": get_environment,
 		"scene3d/add_gridmap": add_gridmap,
+		"scene3d/get_gridmap": get_gridmap,
 		"scene3d/set_material": set_material_3d,
 		"scene3d/get_material": get_material_3d,
 	}
@@ -464,6 +465,29 @@ func add_gridmap(params: Dictionary) -> Dictionary:
 		gridmap.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	return {"result": {"name": str(gridmap.name), "path": MCPCommandHelpers.get_node_path(gridmap, _plugin)}}
+
+
+## Get GridMap node properties.
+func get_gridmap(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "Path is required (node path to GridMap)"}
+
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+	if not node is GridMap:
+		return {"error": "Node is not a GridMap: %s" % path}
+
+	var gm: GridMap = node as GridMap
+	var result: Dictionary = {
+		"path": MCPCommandHelpers.get_node_path(gm, _plugin),
+		"name": gm.name,
+		"cell_size": {"x": gm.cell_size.x, "y": gm.cell_size.y, "z": gm.cell_size.z},
+	}
+	if gm.mesh_library:
+		result["mesh_library"] = gm.mesh_library.resource_path
+	return {"result": result}
 
 
 ## Set material on a 3D node.

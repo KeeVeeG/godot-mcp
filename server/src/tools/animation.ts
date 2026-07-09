@@ -44,15 +44,16 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
       inputSchema: {
         player_path: NodePath.describe('AnimationPlayer node path'),
         animation: z.string().describe('Animation name'),
-        track_type: z.enum([
-          'value', 'position', 'position_3d', 'rotation', 'rotation_3d', 'scale', 'scale_3d',
-          'blend_shape', 'method', 'bezier', 'audio', 'animation',
-        ]).describe('Type of track to add (position/rotation/scale are aliases for position_3d/rotation_3d/scale_3d)'),
-        property: z.string().describe(
-          "NodePath to target node. REQUIRED for all track types. " +
-          "Format: 'NodePath:sub_property' for value/bezier/blend_shape, " +
-          "or 'NodePath' for position/rotation/scale/method/audio/animation."
-        ),
+        track_type: z
+          .enum(['value', 'position', 'position_3d', 'rotation', 'rotation_3d', 'scale', 'scale_3d', 'blend_shape', 'method', 'bezier', 'audio', 'animation'])
+          .describe('Type of track to add (position/rotation/scale are aliases for position_3d/rotation_3d/scale_3d)'),
+        property: z
+          .string()
+          .describe(
+            'NodePath to target node. REQUIRED for all track types. ' +
+              "Format: 'NodePath:sub_property' for value/bezier/blend_shape, " +
+              "or 'NodePath' for position/rotation/scale/method/audio/animation.",
+          ),
         library: z.string().optional().describe('Animation library name (empty for default)'),
       },
     },
@@ -139,7 +140,9 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
       inputSchema: {
         path: NodePath.describe('AnimationTree node path'),
         parameter: z.string().describe("Parameter path (e.g. 'parameters/blend_position')"),
-        value: PropertyValue.describe('AnimationTree parameters require typed values (float, int, bool, string, Vector2, etc.). Null rejected by GDScript — use reset_tree_parameter to reset to default.'),
+        value: PropertyValue.describe(
+          'AnimationTree parameters require typed values (float, int, bool, string, Vector2, etc.). Null rejected by GDScript — use reset_tree_parameter to reset to default.',
+        ),
       },
     },
     async (args) => callGodot(bridge, 'animation/set_tree_parameter', args as Record<string, unknown>),
@@ -149,7 +152,8 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
   server.registerTool(
     'reset_tree_parameter',
     {
-      description: 'Reset an AnimationTree parameter to its type-based default (0.0, false, 0, "", Vector2.ZERO). NOTE: Godot does not expose per-parameter defaults to GDScript — this uses pragmatic type inference.',
+      description:
+        'Reset an AnimationTree parameter to its type-based default (0.0, false, 0, "", Vector2.ZERO). NOTE: Godot does not expose per-parameter defaults to GDScript — this uses pragmatic type inference.',
       inputSchema: {
         path: NodePath.describe('AnimationTree node path'),
         parameter: z.string().describe("Parameter path (e.g. 'parameters/blend_position')"),
@@ -194,18 +198,12 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
         path: NodePath.describe('AnimationTree node path'),
         from: z.string().describe('Source state name'),
         to: z.string().describe('Target state name'),
-        advance_mode: z.enum(['disabled', 'enabled', 'auto']).optional().default('enabled')
-          .describe('When transition fires: disabled=never, enabled=when condition met, auto=automatically'),
-        switch_mode: z.enum(['immediate', 'sync', 'at_end']).optional().default('immediate')
-          .describe('Switch mode: immediate=now, sync=synced time, at_end=wait for animation end'),
-        xfade_time: z.number().min(0).optional().default(0.0)
-          .describe('Cross-fade duration in seconds'),
-        advance_condition: z.string().optional().default('')
-          .describe('Advance condition name (for advance_mode=enabled)'),
-        priority: z.number().int().min(0).optional().default(1)
-          .describe('Priority (lower = higher priority)'),
-        reset: z.boolean().optional().default(true)
-          .describe('Reset target animation on transition'),
+        advance_mode: z.enum(['disabled', 'enabled', 'auto']).optional().default('enabled').describe('When transition fires: disabled=never, enabled=when condition met, auto=automatically'),
+        switch_mode: z.enum(['immediate', 'sync', 'at_end']).optional().default('immediate').describe('Switch mode: immediate=now, sync=synced time, at_end=wait for animation end'),
+        xfade_time: z.number().min(0).optional().default(0.0).describe('Cross-fade duration in seconds'),
+        advance_condition: z.string().optional().default('').describe('Advance condition name (for advance_mode=enabled)'),
+        priority: z.number().int().min(0).optional().default(1).describe('Priority (lower = higher priority)'),
+        reset: z.boolean().optional().default(true).describe('Reset target animation on transition'),
       },
     },
     async (args) => callGodot(bridge, 'animation/add_transition', args as Record<string, unknown>),

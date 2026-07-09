@@ -1,4 +1,4 @@
-## Script commands module - 9 tools.
+## Script commands module - 10 tools.
 ## Handles script CRUD, validation, and search.
 class_name MCPScriptCommands
 extends RefCounted
@@ -22,6 +22,7 @@ func get_commands() -> Dictionary:
 		"script/get_open": func(params: Dictionary) -> Dictionary: return execute("get_open_scripts", params),
 		"script/validate": func(params: Dictionary) -> Dictionary: return execute("validate_script", params),
 		"script/search_in_files": func(params: Dictionary) -> Dictionary: return execute("search_in_files", params),
+		"script/detach": func(params: Dictionary) -> Dictionary: return execute("detach_script", params),
 	}
 
 
@@ -37,6 +38,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"get_open_scripts": return _get_open_scripts()
 		"validate_script": return _validate_script(params)
 		"search_in_files": return _search_in_files(params)
+		"detach_script": return _detach_script(params)
 	return {"error": "Unknown method: " + method}
 
 
@@ -255,6 +257,35 @@ func _attach_script(params: Dictionary) -> Dictionary:
 	ur.commit_action()
 
 	return {"result": {"message": "Script %s attached to %s" % [script_path, node_path]}}
+
+
+## Detach a script from a node with UndoRedo support (sets script = null).
+func _detach_script(params: Dictionary) -> Dictionary:
+	var node_path: String = params.get("node_path", "")
+
+	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
+	if root == null:
+		return {"error": "No scene open"}
+
+	var node: Node
+	if node_path.is_empty():
+		node = root
+	else:
+		node = root.get_node_or_null(node_path)
+	if node == null:
+		return {"error": "Node not found: %s" % node_path}
+
+	var old_script: Script = node.get_script()
+	if old_script == null:
+		return {"error": "Node has no script attached: %s" % node_path}
+
+	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
+	ur.create_action("MCP: Detach script from %s" % node_path)
+	ur.add_do_property(node, "script", null)
+	ur.add_undo_property(node, "script", old_script)
+	ur.commit_action()
+
+	return {"result": {"message": "Script detached from %s" % node_path}}
 
 
 ## Get all open scripts in the script editor.

@@ -2,7 +2,7 @@
 
 > **Source file:** `server/src/tools/script.ts`
 > **Shared types:** `server/src/tools/shared-types.ts`
-> **Tools count:** 9
+> **Tools count:** 10
 > **Generated:** 2026-07-08
 
 ---
@@ -51,6 +51,7 @@ On error, the result includes `"isError": true`.
 | `read_script` | `create_script` or pre-existing scripts | Script must exist to read |
 | `validate_script` | `create_script` or pre-existing scripts | Script must exist to validate |
 | `search_in_files` | `create_script` | Need known content to search for |
+| `detach_script` | `attach_script` | Node must have a script attached before detaching |
 | `get_open_scripts` | `open_scene` (scene.ts) | Need a scene with attached scripts to have open scripts |
 
 ### Recommended Test Sequence
@@ -64,8 +65,9 @@ On error, the result includes `"isError": true`.
 6. search_in_files       (depends on step 2 - searches for known content)
 7. add_node              (from node.ts - creates target node)
 8. attach_script         (depends on steps 2 and 7)
-9. get_open_scripts      (depends on step 2 - after opening script)
-10. delete_script        (depends on step 2 - cleanup)
+9. detach_script         (depends on step 8)
+10. get_open_scripts      (depends on step 2 - after opening script)
+11. delete_script        (depends on step 2 - cleanup)
 ```
 
 ---
@@ -999,6 +1001,185 @@ func b():
 
 ---
 
+## Tool: `detach_script`
+
+**Description:** Detach a script from a node (set `script = null`)
+
+**Backend method:** `script/detach`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `node_path` | `string` | **Yes** | — | Node to detach script from (e.g. `Player` or `''` for scene root) |
+
+### Test Scenarios
+
+#### Scenario 1: Detach script from a named node
+
+**Description:** Detach a script from a node that has one attached.
+
+**Prerequisites:**
+1. `create_script` at `res://scripts/test_detach.gd` with content `extends Node\n`
+2. `add_node` (from node.ts) — add a `Node` named `TestDetachTarget` at scene root
+3. `attach_script` to attach the script to the node
+
+**Call:**
+```json
+{
+  "node_path": "TestDetachTarget"
+}
+```
+
+**Expected result:**
+- Status: success
+- Script is detached from the node
+- Verify: `get_node_properties` (from node.ts) should show the script property is `null`
+
+**Notes:**
+- Pay attention: after detachment, the node must have `script = null`
+- Cleanup: `delete_node` + `delete_script`
+
+---
+
+#### Scenario 2: Detach script from scene root (empty node_path)
+
+**Description:** Detach script from the scene root using empty string.
+
+**Prerequisites:**
+1. `create_script` at `res://scripts/test_detach_root.gd`
+2. `attach_script` to attach script to scene root (empty `node_path`)
+
+**Call:**
+```json
+{
+  "node_path": ""
+}
+```
+
+**Expected result:**
+- Status: success
+- Scene root node no longer has the script
+
+**Notes:**
+- Pay attention: empty string `""` means the scene root — consistent with `attach_script`
+
+---
+
+#### Scenario 3: Detach script from nested node path
+
+**Description:** Detach script from a deeply nested node.
+
+**Prerequisites:**
+1. `create_script` at `res://scripts/test_detach_nested.gd`
+2. `add_node` — `Node` named `Parent` at root
+3. `add_node` — `Node` named `Child` as child of `Parent`
+4. `attach_script` — attach script to `Parent/Child`
+
+**Call:**
+```json
+{
+  "node_path": "Parent/Child"
+}
+```
+
+**Expected result:**
+- Status: success
+- Script detached from `Parent/Child` node
+
+**Notes:**
+- Pay attention: node paths work like `Parent/Child` — slashes separate hierarchy levels
+
+---
+
+#### Scenario 4: Detach script from node with no script attached
+
+**Description:** Try to detach a script from a node that has no script.
+
+**Prerequisites:** `add_node` to create a node with no script attached.
+
+**Call:**
+```json
+{
+  "node_path": "TestDetachNoScript"
+}
+```
+
+**Expected result:**
+- Status: error
+- Error message indicates the node has no script attached
+- `isError: true`
+
+**Notes:**
+- Pay attention: the error should clearly state that the node has no script
+
+---
+
+#### Scenario 5: Detach script from non-existent node
+
+**Description:** Try to detach script from a node that doesn't exist in the scene.
+
+**Call:**
+```json
+{
+  "node_path": "NonExistentNode_12345"
+}
+```
+
+**Expected result:**
+- Status: error (node not found)
+- `isError: true`
+
+**Notes:**
+- Pay attention: the error should indicate the missing node
+
+---
+
+#### Scenario 6: Missing required `node_path` parameter
+
+**Description:** Call without `node_path`.
+
+**Call:**
+```json
+{}
+```
+
+**Expected result:**
+- Status: error (Zod validation — `node_path` required)
+
+**Notes:**
+- Pay attention: standard required field validation
+
+---
+
+#### Scenario 7: Detach and re-attach (undo/redo)
+
+**Description:** Detach a script, then verify the undo operation restores it.
+
+**Prerequisites:**
+1. `create_script` at `res://scripts/test_detach_undo.gd`
+2. `add_node` — `Node` named `UndoTestTarget`
+3. `attach_script` — attach script to `UndoTestTarget`
+
+**Call:**
+```json
+{
+  "node_path": "UndoTestTarget"
+}
+```
+
+**Expected result:**
+- Status: success
+- Script is detached
+- Verify: `get_node_properties` shows `script = null`
+- After calling editor undo (if available), script should be restored
+
+**Notes:**
+- Pay attention: this tests the UndoRedo support — the detach action should be undoable
+- Cleanup: `delete_node` + `delete_script`
+
+---
+
 ## Tool: `get_open_scripts`
 
 **Description:** Get list of scripts currently open in the script editor
@@ -1420,6 +1601,38 @@ Step 4: get_node_properties (from node.ts)
 Step 5: Cleanup — delete_node then delete_script
 ```
 
+### Sequence D: Script attach/detach workflow
+
+**Purpose:** Verify creating a script, attaching it, detaching it, and verifying the state.
+
+```
+Step 1: create_script
+  → { path: "res://scripts/detach_test.gd", content: "extends Node\n\nfunc _ready():\n\tprint('Detached!')\n" }
+  → Expect: success
+
+Step 2: add_node (from node.ts)
+  → { parent_path: "", type: "Node", name: "ScriptDetachTest" }
+  → Expect: success
+
+Step 3: attach_script
+  → { script_path: "res://scripts/detach_test.gd", node_path: "ScriptDetachTest" }
+  → Expect: success
+
+Step 4: get_node_properties (from node.ts)
+  → { path: "ScriptDetachTest" }
+  → Expect: script property is set
+
+Step 5: detach_script
+  → { node_path: "ScriptDetachTest" }
+  → Expect: success
+
+Step 6: get_node_properties (from node.ts)
+  → { path: "ScriptDetachTest" }
+  → Expect: script property is null
+
+Step 7: Cleanup — delete_node then delete_script
+```
+
 ### Sequence C: Search + edit workflow
 
 **Purpose:** Verify searching for content, then editing it, then searching again.
@@ -1459,6 +1672,8 @@ Step 6: Cleanup — delete_script
 | Non-positive `max_depth` | `true` | Zod `positive()` error |
 | File not found (read/edit/delete/validate/attach) | `true` | "not found" or "does not exist" |
 | Node not found (attach_script) | `true` | "node not found" or similar |
+| Node not found (detach_script) | `true` | "node not found" or similar |
+| No script attached (detach_script) | `true` | "no script attached" or similar |
 | Old text not found (edit_script) | `true` | "text not found" or "no match" |
 | Empty path | `true` | Godot-side error (empty string passes Zod) |
 | Missing `res://` prefix | `true` | Godot-side path error |

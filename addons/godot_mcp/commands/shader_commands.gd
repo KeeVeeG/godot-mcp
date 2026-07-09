@@ -1,4 +1,4 @@
-## Shader commands module - 8 tools.
+## Shader commands module - 9 tools.
 ## Handles shader creation, editing, and material assignment.
 class_name MCPShaderCommands
 extends RefCounted
@@ -19,6 +19,7 @@ func get_commands() -> Dictionary:
 		"shader/read": read_shader,
 		"shader/edit": edit_shader,
 		"shader/assign_material": assign_shader_material,
+		"shader/unassign_material": unassign_material,
 		"shader/set_param": set_shader_param,
 		"shader/reset_param": reset_shader_param,
 		"shader/get_params": get_shader_params,
@@ -140,6 +141,34 @@ func assign_shader_material(params: Dictionary) -> Dictionary:
 		elif node is Node3D:
 			(node as Node3D).material_override = mat
 	return {"result": "Shader material assigned to %s" % node_path}
+
+
+## Remove shader material from a node (set material/material_override to null).
+func unassign_material(params: Dictionary) -> Dictionary:
+	var node_path: String = params.get("node_path", "")
+	if node_path.is_empty():
+		return {"error": "node_path is required"}
+
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
+	var node: Node = root.get_node_or_null(node_path)
+	if node == null:
+		return {"error": "Node not found: %s" % node_path}
+
+	if _undo_helper:
+		if node is CanvasItem:
+			_undo_helper.set_property_with_undo(node, "material", null)
+		elif node is Node3D:
+			_undo_helper.set_property_with_undo(node, "material_override", null)
+		else:
+			return {"error": "Node does not support materials: %s" % node.get_class()}
+	else:
+		if node is CanvasItem:
+			(node as CanvasItem).material = null
+		elif node is Node3D:
+			(node as Node3D).material_override = null
+	return {"result": "Material removed from %s" % node_path}
 
 
 ## Set a shader parameter on a node's material.

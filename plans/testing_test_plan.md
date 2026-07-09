@@ -2,7 +2,7 @@
 
 **Source**: `server/src/tools/testing.ts`
 **GDScript backend**: `addons/godot_mcp/commands/testing_commands.gd`
-**Total tools**: 5
+**Total tools**: 6
 **Test plan generated**: 2026-07-08
 
 ---
@@ -14,6 +14,7 @@
 3. [Tool: assert_screen_text](#tool-assert_screen_text)
 4. [Tool: run_stress_test](#tool-run_stress_test)
 5. [Tool: get_test_report](#tool-get_test_report)
+6. [Tool: clear_test_report](#tool-clear_test_report)
 
 ---
 
@@ -29,7 +30,7 @@
 
 ## Prerequisites for All Tools
 
-All 5 tools forward calls to the Godot editor via `callGodot(bridge, ...)`. This means:
+All 6 tools forward calls to the Godot editor via `callGodot(bridge, ...)`. This means:
 
 1. **Godot editor must be running** with the MCP plugin active and connected via WebSocket.
 2. **A scene must be open** in the editor — most tools call `MCPCommandHelpers.get_scene_root()` internally and return `{"error": "No scene open"}` if none is found.
@@ -46,7 +47,7 @@ All 5 tools forward calls to the Godot editor via `callGodot(bridge, ...)`. This
 | Scenario → Report | `run_test_scenario` → `get_test_report` | Scenario results are appended to `_test_results` and appear in the report |
 | Stress → Report | `run_stress_test` → `get_test_report` | Stress test data is stored in `_stress_test_data` and included in report under `"stress_test"` key |
 
-**Important**: `_test_results` accumulates across the entire session. Calling `get_test_report` returns ALL results since the editor plugin was loaded. There is no reset mechanism.
+**Important**: `_test_results` accumulates across the entire session. Calling `get_test_report` returns ALL results since the editor plugin was loaded. Use `clear_test_report` to reset accumulated results between test runs.
 
 ---
 
@@ -1007,6 +1008,114 @@ The `total_tests` count should NOT include the stress test (stress tests don't a
 
 ---
 
+## Tool: clear_test_report
+
+**Tool name**: `clear_test_report`
+**Description**: Clear all accumulated test results and reset session state
+**Backend method**: `testing/clear_report`
+
+### Parameters
+
+None — empty schema `{}`.
+
+### How it works internally
+
+Resets all testing session state:
+1. Clears `_test_results` array (accumulated from `run_test_scenario`, `assert_node_state`, `assert_screen_text`)
+2. Resets `_test_session_start` to `0.0`
+3. Clears `_stress_test_data` dictionary
+
+Returns the count of cleared test entries and whether stress data existed.
+
+### Test Scenarios
+
+#### Scenario 1: Happy path — clear after running assertions
+
+**Description**: Run some assertions, then clear the report, then verify the report is empty.
+**Setup sequence**:
+1. Call `assert_node_state` with `path: "Player", property: "visible", expected: true`
+2. Call `assert_node_state` with `path: "Player", property: "visible", expected: false`
+3. Call `clear_test_report`
+4. Call `get_test_report`
+
+**Params**:
+```json
+{}
+```
+**Expected result**: `result` with:
+- `cleared_tests`: `2`
+- `cleared_stress_data`: `false`
+- `message`: `"Cleared 2 test results and reset session state."`
+
+The subsequent `get_test_report` call should return `total_tests: 0`, `passed: 0`, `failed: 0`.
+
+**Notes**: Verifies that clearing resets the accumulator. After clearing, `get_test_report` should return an empty report.
+**What to check**: Verify that `cleared_tests` matches the number of prior assertions. Verify that `get_test_report` after clearing returns zero counts.
+
+---
+
+#### Scenario 2: Happy path — clear after stress test
+
+**Description**: Run a stress test, then clear the report.
+**Setup sequence**:
+1. Call `run_stress_test` with `count: 50`
+2. Call `clear_test_report`
+
+**Params**:
+```json
+{}
+```
+**Expected result**: `result` with:
+- `cleared_tests`: `0` (stress tests don't append to `_test_results`)
+- `cleared_stress_data`: `true`
+- `message`: `"Cleared 0 test results and reset session state."`
+
+**Notes**: Stress test data is stored separately in `_stress_test_data`. The `cleared_stress_data` field indicates whether stress data was present and cleared. `cleared_tests` only counts `_test_results` entries.
+**What to check**: Verify that `cleared_tests` is 0 (stress tests are not in `_test_results`). Verify that `cleared_stress_data` is `true`. After clearing, `get_test_report` should return `stress_test: {}`.
+
+---
+
+#### Scenario 3: Happy path — clear on empty session (no prior tests)
+
+**Description**: Call `clear_test_report` without running any prior tests.
+**Params**:
+```json
+{}
+```
+**Expected result**: `result` with:
+- `cleared_tests`: `0`
+- `cleared_stress_data`: `false`
+- `message`: `"Cleared 0 test results and reset session state."`
+
+**Notes**: This tests the idempotent case — clearing when nothing exists should succeed without errors.
+**What to check**: Verify that no errors are returned. The function should handle empty state gracefully.
+
+---
+
+#### Scenario 4: Happy path — clear then run new tests
+
+**Description**: Run tests, clear, then run new tests and verify only new results appear.
+**Setup sequence**:
+1. Call `assert_node_state` with `path: "Player", property: "visible", expected: true` (pass)
+2. Call `clear_test_report`
+3. Call `assert_node_state` with `path: "Player", property: "visible", expected: false` (fail)
+4. Call `get_test_report`
+
+**Params**:
+```json
+{}
+```
+**Expected result**: Report after step 4:
+- `total_tests`: `1` (only the post-clear assertion)
+- `passed`: `0`
+- `failed`: `1`
+- `failures`: array with 1 entry (the post-clear assertion)
+
+**Notes**: Verifies that clearing effectively creates a boundary between test runs. Only results from after the clear should appear in the report.
+**What to check**: Verify that the report contains ONLY the post-clear assertion, not the pre-clear one. This is the primary use case for `clear_test_report` — isolating test runs.
+
+---
+
 ## Cross-Tool Integration Scenarios
 
 ### Integration 1: Full test workflow
@@ -1093,5 +1202,6 @@ if (response.isError) {
 | `assert_screen_text` | 8 | 4 | 4 |
 | `run_stress_test` | 9 | 4 | 5 |
 | `get_test_report` | 5 | 5 | 0 |
+| `clear_test_report` | 4 | 4 | 0 |
 | **Cross-tool integration** | 3 | 3 | 0 |
-| **Total** | **43** | **24** | **19** |
+| **Total** | **47** | **28** | **19** |

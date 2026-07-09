@@ -1,4 +1,4 @@
-﻿## Visual testing commands module - 6 tools.
+﻿## Visual testing commands module - 10 tools.
 ## Provides screenshot capture with context, pixel-level comparison,
 ## visual regression recording, and baseline management.
 class_name MCPVisualTestingCommands
@@ -31,6 +31,10 @@ func get_commands() -> Dictionary:
 		"record_visual_regression": record_visual_regression,
 		"get_visual_diff_report": get_visual_diff_report,
 		"set_visual_baseline": set_visual_baseline,
+		"delete_screenshot": delete_screenshot,
+		"delete_visual_recording": delete_visual_recording,
+		"clear_visual_diff_report": clear_visual_diff_report,
+		"list_visual_baselines": list_visual_baselines,
 	}
 
 
@@ -406,10 +410,138 @@ func set_visual_baseline(params: Dictionary) -> Dictionary:
 	}}
 
 
+## Delete a captured screenshot and its context metadata.
+func delete_screenshot(params: Dictionary) -> Dictionary:
+	var name: String = params.get("name", "")
+
+	if name.is_empty():
+		return {"error": "name is required"}
+
+	var screenshot_path: String = VISUAL_DIR + "%s.png" % name
+	var context_path: String = VISUAL_DIR + "%s_context.json" % name
+
+	var screenshot_global: String = ProjectSettings.globalize_path(screenshot_path)
+	var context_global: String = ProjectSettings.globalize_path(context_path)
+
+	var deleted_files: Array = []
+
+	if FileAccess.file_exists(screenshot_path):
+		var err: Error = DirAccess.remove_absolute(screenshot_global)
+		if err != OK:
+			return {"error": "Failed to delete screenshot: %s" % screenshot_path}
+		deleted_files.append(screenshot_path)
+	else:
+		return {"error": "Screenshot not found: %s" % name}
+
+	if FileAccess.file_exists(context_path):
+		DirAccess.remove_absolute(context_global)
+		deleted_files.append(context_path)
+
+	return {"result": {
+		"success": true,
+		"name": name,
+		"deleted_files": deleted_files,
+		"message": "Screenshot '%s' deleted (%d files)" % [name, deleted_files.size()],
+	}}
 
 
+## Delete a visual recording and all its frames.
+func delete_visual_recording(params: Dictionary) -> Dictionary:
+	var test_name: String = params.get("test_name", "")
+
+	if test_name.is_empty():
+		return {"error": "test_name is required"}
+
+	var recording_dir: String = VISUAL_DIR + "recordings/%s/" % test_name
+	var recording_global: String = ProjectSettings.globalize_path(recording_dir)
+
+	if not DirAccess.dir_exists_absolute(recording_dir):
+		return {"error": "Recording not found: %s" % test_name}
+
+	# Remove all files inside the recording directory
+	var dir: DirAccess = DirAccess.open(recording_global)
+	if dir == null:
+		return {"error": "Failed to open recording directory"}
+
+	var deleted_count: int = 0
+	dir.list_dir_begin()
+	var file_name: String = dir.get_next()
+	while file_name != "":
+		if not dir.current_is_dir():
+			var file_path: String = recording_global + file_name
+			var err: Error = DirAccess.remove_absolute(file_path)
+			if err == OK:
+				deleted_count += 1
+		file_name = dir.get_next()
+	dir.list_dir_end()
+
+	# Remove the directory itself
+	var remove_err: Error = DirAccess.remove_absolute(recording_global)
+	if remove_err != OK:
+		return {"error": "Failed to remove recording directory"}
+
+	# Remove from in-memory recordings
+	_recordings.erase(test_name)
+
+	return {"result": {
+		"success": true,
+		"test_name": test_name,
+		"deleted_frames": deleted_count,
+		"message": "Recording '%s' deleted (%d frames)" % [test_name, deleted_count],
+	}}
 
 
+## Clear all accumulated visual test results and recordings.
+func clear_visual_diff_report(_params: Dictionary) -> Dictionary:
+	var total_results: int = _test_results.size()
+	var total_recordings: int = _recordings.size()
+
+	_test_results.clear()
+	_recordings.clear()
+
+	return {"result": {
+		"success": true,
+		"cleared_assertions": total_results,
+		"cleared_recordings": total_recordings,
+		"message": "Visual diff report cleared (%d assertions, %d recordings)" % [total_results, total_recordings],
+	}}
+
+
+## List all saved visual baselines.
+func list_visual_baselines(_params: Dictionary) -> Dictionary:
+	_ensure_dirs()
+
+	var baselines: Array = []
+	var baseline_global: String = ProjectSettings.globalize_path(BASELINE_DIR)
+
+	var dir: DirAccess = DirAccess.open(baseline_global)
+	if dir == null:
+		return {"error": "Failed to open baselines directory"}
+
+	dir.list_dir_begin()
+	var file_name: String = dir.get_next()
+	while file_name != "":
+		if not dir.current_is_dir() and file_name.ends_with(".png"):
+			var full_path: String = BASELINE_DIR + file_name
+			var file_size: int = 0
+			if FileAccess.file_exists(full_path):
+				var f: FileAccess = FileAccess.open(full_path, FileAccess.READ)
+				if f != null:
+					file_size = f.get_length()
+					f.close()
+			baselines.append({
+				"name": file_name.get_basename(),
+				"path": full_path,
+				"file_size": file_size,
+			})
+		file_name = dir.get_next()
+	dir.list_dir_end()
+
+	return {"result": {
+		"baselines": baselines,
+		"count": baselines.size(),
+		"baselines_dir": BASELINE_DIR,
+	}}
 
 
 ## Helper: Get a snapshot of a node's key properties.

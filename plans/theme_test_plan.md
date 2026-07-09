@@ -1,6 +1,6 @@
 # Theme Tools Test Plan
 
-> **Source**: `server/src/tools/theme.ts` (7 tools)
+> **Source**: `server/src/tools/theme.ts` (11 tools)
 > **Shared types**: `server/src/tools/shared-types.ts`
 > **Bridge call**: `callGodot(bridge, 'theme/<action>', args)` — forwards to Godot via WebSocket, returns `ToolResult { content: [{ type: 'text', text }] }`
 
@@ -15,6 +15,10 @@
 5. [set_theme_font_size](#tool-set_theme_font_size)
 6. [set_theme_stylebox](#tool-set_theme_stylebox)
 7. [get_theme_info](#tool-get_theme_info)
+8. [get_theme_color](#tool-get_theme_color)
+9. [get_theme_constant](#tool-get_theme_constant)
+10. [get_theme_font_size](#tool-get_theme_font_size)
+11. [get_theme_stylebox](#tool-get_theme_stylebox)
 
 ---
 
@@ -30,8 +34,12 @@ Theme tools have dependencies on the theme resource existing. Execute in this or
  5. set_theme_font_size   — add a font size override
  6. set_theme_stylebox    — add a stylebox override
  7. get_theme_info        — verify all overrides were applied
- 8. delete_theme          — cleanup
- 9. get_theme_info        — confirm theme is gone (expect error)
+ 8. get_theme_color       — read back the color value
+ 9. get_theme_constant    — read back the constant value
+10. get_theme_font_size   — read back the font size value
+11. get_theme_stylebox    — read back the stylebox value
+12. delete_theme          — cleanup
+13. get_theme_info        — confirm theme is gone (expect error)
 ```
 
 **Prerequisites**:
@@ -972,9 +980,453 @@ Theme tools have dependencies on the theme resource existing. Execute in this or
 
 ---
 
+## Tool: `get_theme_color`
+
+**Description**: Get a specific color value from a theme
+**Godot method**: `theme/get_color`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `path` | `string` (ResourcePath) | **yes** | — | Theme resource path |
+| `theme_type` | `string` (z.string()) | **yes** | — | Control type (e.g. `Button`, `Label`, `Panel`) |
+| `name` | `string` (z.string()) | **yes** | — | Color name (e.g. `font_color`, `font_hover_color`) |
+
+### Test Scenarios
+
+#### Scenario 1: Get an existing color (happy path)
+
+**Description**: Set a color first, then read it back and verify the value matches.
+
+**Prerequisites**: Theme must exist and have a color override set.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "Button",
+  "name": "font_color"
+}
+```
+
+**Expected result**: Success. Response should contain the color value as a hex string (e.g. `"#FF0000"`). The value must match what was set with `set_theme_color`.
+
+**Notes**: This is the primary read-back validation. After setting a color with `set_theme_color`, use `get_theme_color` to confirm the value persisted correctly.
+
+---
+
+#### Scenario 2: Get a color that does not exist
+
+**Description**: Query a color name that was never set on the given theme type.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "Button",
+  "name": "nonexistent_color"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message indicating the color was not found for the given type.
+
+**Notes**: Tests that the tool correctly reports missing overrides rather than returning a default or crashing.
+
+---
+
+#### Scenario 3: Get a color from a non-existent theme
+
+**Description**: Query a color from a theme file that doesn't exist.
+
+**Call**:
+```json
+{
+  "path": "res://themes/does_not_exist.tres",
+  "theme_type": "Button",
+  "name": "font_color"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message about the theme file not being found.
+
+---
+
+#### Scenario 4: Get a color from an invalid theme_type
+
+**Description**: Query a color using a theme_type that is not a valid Control class.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "NotARealClass",
+  "name": "font_color"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message about the invalid theme_type.
+
+---
+
+#### Scenario 5: Missing required parameter (one at a time)
+
+**Description**: Omit each required parameter individually to verify error handling.
+
+**Call** (each separately):
+```json
+{"theme_type": "Button", "name": "font_color"}
+{"path": "res://themes/test_theme.tres", "name": "font_color"}
+{"path": "res://themes/test_theme.tres", "theme_type": "Button"}
+```
+
+**Expected result**: All three should return `isError: true` with a message about the missing field.
+
+---
+
+## Tool: `get_theme_constant`
+
+**Description**: Get a specific constant value from a theme
+**Godot method**: `theme/get_constant`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `path` | `string` (ResourcePath) | **yes** | — | Theme resource path |
+| `theme_type` | `string` (z.string()) | **yes** | — | Control type |
+| `name` | `string` (z.string()) | **yes** | — | Constant name (e.g. `hseparation`, `vseparation`) |
+
+### Test Scenarios
+
+#### Scenario 1: Get an existing constant (happy path)
+
+**Description**: Set a constant first, then read it back and verify the value matches.
+
+**Prerequisites**: Theme must exist and have a constant override set.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "Button",
+  "name": "hseparation"
+}
+```
+
+**Expected result**: Success. Response should contain the integer value. The value must match what was set with `set_theme_constant`.
+
+**Notes**: This is the primary read-back validation. After setting a constant with `set_theme_constant`, use `get_theme_constant` to confirm the value persisted correctly.
+
+---
+
+#### Scenario 2: Get a constant that does not exist
+
+**Description**: Query a constant name that was never set on the given theme type.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "Button",
+  "name": "nonexistent_constant"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message indicating the constant was not found for the given type.
+
+---
+
+#### Scenario 3: Get a constant from a non-existent theme
+
+**Description**: Query a constant from a theme file that doesn't exist.
+
+**Call**:
+```json
+{
+  "path": "res://themes/does_not_exist.tres",
+  "theme_type": "Button",
+  "name": "hseparation"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message about the theme file not being found.
+
+---
+
+#### Scenario 4: Get a constant from an invalid theme_type
+
+**Description**: Query a constant using a theme_type that is not a valid Control class.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "NotARealClass",
+  "name": "hseparation"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message about the invalid theme_type.
+
+---
+
+#### Scenario 5: Missing required parameter (one at a time)
+
+**Description**: Omit each required parameter individually.
+
+**Call** (each separately):
+```json
+{"theme_type": "Button", "name": "hseparation"}
+{"path": "res://themes/test_theme.tres", "name": "hseparation"}
+{"path": "res://themes/test_theme.tres", "theme_type": "Button"}
+```
+
+**Expected result**: All three should return `isError: true` with a message about the missing field.
+
+---
+
+## Tool: `get_theme_font_size`
+
+**Description**: Get a specific font size value from a theme
+**Godot method**: `theme/get_font_size`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `path` | `string` (ResourcePath) | **yes** | — | Theme resource path |
+| `theme_type` | `string` (z.string()) | **yes** | — | Control type |
+| `name` | `string` (z.string()) | **yes** | — | Size name (e.g. `font_size`) |
+
+### Test Scenarios
+
+#### Scenario 1: Get an existing font size (happy path)
+
+**Description**: Set a font size first, then read it back and verify the value matches.
+
+**Prerequisites**: Theme must exist and have a font size override set.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "Label",
+  "name": "font_size"
+}
+```
+
+**Expected result**: Success. Response should contain the integer size value. The value must match what was set with `set_theme_font_size`.
+
+**Notes**: This is the primary read-back validation. After setting a font size with `set_theme_font_size`, use `get_theme_font_size` to confirm the value persisted correctly.
+
+---
+
+#### Scenario 2: Get a font size that does not exist
+
+**Description**: Query a font size name that was never set on the given theme type.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "Label",
+  "name": "nonexistent_size"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message indicating the font size was not found for the given type.
+
+---
+
+#### Scenario 3: Get a font size from a non-existent theme
+
+**Description**: Query a font size from a theme file that doesn't exist.
+
+**Call**:
+```json
+{
+  "path": "res://themes/does_not_exist.tres",
+  "theme_type": "Label",
+  "name": "font_size"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message about the theme file not being found.
+
+---
+
+#### Scenario 4: Get a font size from an invalid theme_type
+
+**Description**: Query a font size using a theme_type that is not a valid Control class.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "NotARealClass",
+  "name": "font_size"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message about the invalid theme_type.
+
+---
+
+#### Scenario 5: Missing required parameter (one at a time)
+
+**Description**: Omit each required parameter individually.
+
+**Call** (each separately):
+```json
+{"theme_type": "Label", "name": "font_size"}
+{"path": "res://themes/test_theme.tres", "name": "font_size"}
+{"path": "res://themes/test_theme.tres", "theme_type": "Label"}
+```
+
+**Expected result**: All three should return `isError: true` with a message about the missing field.
+
+---
+
+## Tool: `get_theme_stylebox`
+
+**Description**: Get a specific StyleBox and its properties from a theme
+**Godot method**: `theme/get_stylebox`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `path` | `string` (ResourcePath) | **yes** | — | Theme resource path |
+| `theme_type` | `string` (z.string()) | **yes** | — | Control type |
+| `name` | `string` (z.string()) | **yes** | — | StyleBox name (e.g. `normal`, `hover`, `pressed`) |
+
+### Test Scenarios
+
+#### Scenario 1: Get an existing StyleBoxFlat (happy path)
+
+**Description**: Set a StyleBoxFlat first, then read it back and verify all properties match.
+
+**Prerequisites**: Theme must exist and have a StyleBoxFlat override set.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "Button",
+  "name": "normal"
+}
+```
+
+**Expected result**: Success. Response should contain a `properties` dictionary with `type: "Flat"` and all StyleBoxFlat properties (bg_color, border_color, border widths, corner radii, content margins). Values must match what was set with `set_theme_stylebox`.
+
+**Notes**: This is the most comprehensive read-back test. The response includes the full StyleBox property set, not just the type.
+
+---
+
+#### Scenario 2: Get a StyleBoxLine
+
+**Description**: Set a StyleBoxLine first, then read it back.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "Button",
+  "name": "focus"
+}
+```
+
+**Expected result**: Success. Response should contain `type: "Line"` with `color` and `thickness` properties.
+
+---
+
+#### Scenario 3: Get a StyleBoxEmpty
+
+**Description**: Set a StyleBoxEmpty first, then read it back.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "Panel",
+  "name": "empty"
+}
+```
+
+**Expected result**: Success. Response should contain `type: "Empty"` with no additional properties.
+
+---
+
+#### Scenario 4: Get a stylebox that does not exist
+
+**Description**: Query a stylebox name that was never set on the given theme type.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "Button",
+  "name": "nonexistent_style"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message indicating the stylebox was not found for the given type.
+
+---
+
+#### Scenario 5: Get a stylebox from a non-existent theme
+
+**Description**: Query a stylebox from a theme file that doesn't exist.
+
+**Call**:
+```json
+{
+  "path": "res://themes/does_not_exist.tres",
+  "theme_type": "Button",
+  "name": "normal"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message about the theme file not being found.
+
+---
+
+#### Scenario 6: Get a stylebox from an invalid theme_type
+
+**Description**: Query a stylebox using a theme_type that is not a valid Control class.
+
+**Call**:
+```json
+{
+  "path": "res://themes/test_theme.tres",
+  "theme_type": "NotARealClass",
+  "name": "normal"
+}
+```
+
+**Expected result**: Error. Response should contain `isError: true` with a message about the invalid theme_type.
+
+---
+
+#### Scenario 7: Missing required parameter (one at a time)
+
+**Description**: Omit each required parameter individually.
+
+**Call** (each separately):
+```json
+{"theme_type": "Button", "name": "normal"}
+{"path": "res://themes/test_theme.tres", "name": "normal"}
+{"path": "res://themes/test_theme.tres", "theme_type": "Button"}
+```
+
+**Expected result**: All three should return `isError: true` with a message about the missing field.
+
+---
+
 ## Cross-Tool Integration Test: Full Theme Lifecycle
 
-**Description**: End-to-end test that exercises all 7 tools in sequence.
+**Description**: End-to-end test that exercises all 11 tools in sequence.
 
 ### Step-by-step flow:
 
@@ -1002,10 +1454,23 @@ Theme tools have dependencies on the theme resource existing. Execute in this or
 {"tool": "get_theme_info", "params": {"path": "res://themes/integration_test.tres"}}
 // Expected: Theme with Button having font_color=#FFFFFF, hseparation=8, font_size=20, and StyleBox normal with bg_color=#2A2A2A + corner radii
 
-// Step 8: Delete theme
+// Step 8: Read back individual values
+{"tool": "get_theme_color", "params": {"path": "res://themes/integration_test.tres", "theme_type": "Button", "name": "font_color"}}
+// Expected: {"color": "#FFFFFF"}
+
+{"tool": "get_theme_constant", "params": {"path": "res://themes/integration_test.tres", "theme_type": "Button", "name": "hseparation"}}
+// Expected: {"value": 8}
+
+{"tool": "get_theme_font_size", "params": {"path": "res://themes/integration_test.tres", "theme_type": "Button", "name": "font_size"}}
+// Expected: {"size": 20}
+
+{"tool": "get_theme_stylebox", "params": {"path": "res://themes/integration_test.tres", "theme_type": "Button", "name": "normal"}}
+// Expected: {"type": "Flat", "bg_color": "#2A2A2A", ...}
+
+// Step 9: Delete theme
 {"tool": "delete_theme", "params": {"path": "res://themes/integration_test.tres"}}
 
-// Step 9: Confirm deletion
+// Step 10: Confirm deletion
 {"tool": "get_theme_info", "params": {"path": "res://themes/integration_test.tres"}}
 // Expected: Error — file not found
 ```
@@ -1015,6 +1480,10 @@ Theme tools have dependencies on the theme resource existing. Execute in this or
 - [ ] `get_theme_info` on empty theme shows no overrides
 - [ ] Each `set_theme_*` returns success
 - [ ] `get_theme_info` after all sets shows all 4 overrides correctly
+- [ ] `get_theme_color` returns the correct hex color value
+- [ ] `get_theme_constant` returns the correct integer value
+- [ ] `get_theme_font_size` returns the correct integer size
+- [ ] `get_theme_stylebox` returns the correct StyleBox type and properties
 - [ ] `delete_theme` returns success
 - [ ] `get_theme_info` after delete returns error
 
@@ -1031,9 +1500,13 @@ Theme tools have dependencies on the theme resource existing. Execute in this or
 | `set_theme_font_size` | `ResourcePath` ✅ required | `z.string()` ✅ required | `z.string()` ✅ required | — | — | `z.number().int().positive()` ✅ required | — |
 | `set_theme_stylebox` | `ResourcePath` ✅ required | `z.string()` ✅ required | `z.string()` ✅ required | — | — | — | `z.record(z.unknown())` ✅ required |
 | `get_theme_info` | `ResourcePath` ✅ required | — | — | — | — | — | — |
+| `get_theme_color` | `ResourcePath` ✅ required | `z.string()` ✅ required | `z.string()` ✅ required | — | — | — | — |
+| `get_theme_constant` | `ResourcePath` ✅ required | `z.string()` ✅ required | `z.string()` ✅ required | — | — | — | — |
+| `get_theme_font_size` | `ResourcePath` ✅ required | `z.string()` ✅ required | `z.string()` ✅ required | — | — | — | — |
+| `get_theme_stylebox` | `ResourcePath` ✅ required | `z.string()` ✅ required | `z.string()` ✅ required | — | — | — | — |
 
 ### Schema validation notes:
-- All parameters across all 7 tools are **required** — there are no optional parameters
+- All parameters across all 11 tools are **required** — there are no optional parameters
 - `ResourcePath` is `z.string().describe(...)` — accepts any string including empty
 - `z.string()` — accepts any string including empty
 - `z.number().int()` — rejects floats, accepts negative and zero

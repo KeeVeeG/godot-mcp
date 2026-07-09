@@ -1,5 +1,5 @@
 /**
- * Physics tools - 8 tools for physics setup
+ * Physics tools - 11 tools for physics setup
  */
 import { callGodot } from '../server.js';
 import { z, NodePath, ParentPath, Properties, OptionalProperties } from './shared-types.js';
@@ -70,5 +70,28 @@ export function registerPhysicsTools(server, bridge) {
             absorbent: z.boolean().optional().describe('Whether the surface absorbs impact energy'),
         },
     }, async (args) => callGodot(bridge, 'physics/set_material', args));
+    // 9. get_physics_body
+    server.registerTool('get_physics_body', {
+        description: 'Get physics body properties from a node (mass, gravity_scale, linear_damp, angular_damp)',
+        inputSchema: {
+            path: NodePath.describe('Physics body node path'),
+        },
+    }, async (args) => callGodot(bridge, 'physics/get_body', args));
+    // 10. remove_collision
+    server.registerTool('remove_collision', {
+        description: 'Remove collision shape(s) from a physics body',
+        inputSchema: {
+            path: NodePath.describe('Parent node path'),
+            name: z.string().optional().describe('Collision shape name to remove (omit to remove all)'),
+        },
+    }, async (args) => callGodot(bridge, 'physics/remove_collision', args));
+    // 11. remove_raycast
+    server.registerTool('remove_raycast', {
+        description: 'Remove a RayCast node from a parent',
+        inputSchema: {
+            path: NodePath.describe('Parent node path'),
+            name: z.string().optional().describe('RayCast node name to remove (omit to remove all)'),
+        },
+    }, async (args) => callGodot(bridge, 'physics/remove_raycast', args));
 }
 //# sourceMappingURL=physics.js.map

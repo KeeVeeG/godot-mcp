@@ -1,6 +1,6 @@
 # Shader Tools Test Plan
 
-> **Source**: `server/src/tools/shader.ts` (9 tools)
+> **Source**: `server/src/tools/shader.ts` (10 tools)
 > **Shared types**: `server/src/tools/shared-types.ts`
 > **Bridge call**: `callGodot(bridge, 'shader/<action>', args)` — forwards to Godot via WebSocket, returns `ToolResult { content: [{ type: 'text', text }] }`
 
@@ -12,7 +12,8 @@
 2. [read_shader](#tool-read_shader)
 3. [edit_shader](#tool-edit_shader)
 4. [assign_shader_material](#tool-assign_shader_material)
-5. [set_shader_param](#tool-set_shader_param)
+5. [unassign_material](#tool-unassign_material)
+6. [set_shader_param](#tool-set_shader_param)
 6. [get_shader_params](#tool-get_shader_params)
 7. [list_shaders](#tool-list_shaders)
 8. [validate_shader](#tool-validate_shader)
@@ -34,10 +35,11 @@ Shader tools have dependencies. Execute in this order for a clean integration fl
 7. assign_shader_material — attach shader to a node (requires a scene + node to exist)
 8. set_shader_param       — set a uniform on the material
 9. get_shader_params      — read back uniforms
-10. delete_shader         — cleanup
+10. unassign_material     — remove material from a node
+11. delete_shader         — cleanup
 ```
 
-**Prerequisites for tools 7–9** (`assign_shader_material`, `set_shader_param`, `get_shader_params`):
+**Prerequisites for tools 7–10** (`assign_shader_material`, `set_shader_param`, `get_shader_params`, `unassign_material`):
 - A scene must be open (use `create_scene` or `open_scene`)
 - A node must exist in the scene (use `add_node` to create one, e.g. `Sprite2D`)
 - A shader file must exist (use `create_shader` first)
@@ -461,6 +463,119 @@ void fragment() {
 ```
 
 **Expected result**: Schema validation error.
+
+---
+
+## Tool: `unassign_material`
+
+**Description**: Remove a shader material from a node (set material/material_override to null)
+**Godot method**: `shader/unassign_material`
+
+### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `node_path` | `string` (NodePath) | **yes** | — | Node path to remove the material from |
+
+### Test Scenarios
+
+#### Scenario 1: Remove shader material from Sprite2D (happy path)
+
+**Description**: Remove a previously assigned shader from a Sprite2D node.
+
+**Prerequisites** (execute in order):
+1. `create_scene` → `{ "path": "res://scenes/unassign_test.tscn", "root_node_type": "Node2D" }`
+2. `add_node` → `{ "parent_path": "", "type": "Sprite2D", "name": "TestSprite" }`
+3. `create_shader` → `{ "path": "res://shaders/unassign_test.gdshader", "content": "shader_type canvas_item;\nvoid fragment() { COLOR = vec4(1.0); }" }`
+4. `assign_shader_material` → `{ "node_path": "TestSprite", "shader_path": "res://shaders/unassign_test.gdshader" }`
+
+**Call**:
+```json
+{
+  "node_path": "TestSprite"
+}
+```
+
+**Expected result**: Success. The `TestSprite` node's `material` property is now `null`. Verify via `get_node_properties` that `material` is unset.
+
+**Notes**: After this call, `get_shader_params` on the same node should fail with "Node does not have a ShaderMaterial".
+
+---
+
+#### Scenario 2: Remove shader material from MeshInstance3D (3D variant)
+
+**Description**: Remove a material_override from a 3D node.
+
+**Prerequisites**:
+1. Create a 3D scene with a MeshInstance3D node
+2. Assign a shader via `assign_shader_material`
+
+**Call**:
+```json
+{
+  "node_path": "TestMesh"
+}
+```
+
+**Expected result**: Success. The `material_override` property on the MeshInstance3D is set to `null`.
+
+---
+
+#### Scenario 3: Remove material from node without material
+
+**Description**: Try to remove a material from a node that has no material assigned.
+
+**Prerequisites**: Create a Sprite2D node without assigning any shader.
+
+**Call**:
+```json
+{
+  "node_path": "PlainSprite"
+}
+```
+
+**Expected result**: Success (no-op). Setting `null` on an already-null property should succeed without error. The node simply has no material before and after the call.
+
+**Notes**: Document whether this returns success or an error. The implementation sets to `null` unconditionally, so it should succeed.
+
+---
+
+#### Scenario 4: Remove material from non-existent node
+
+**Call**:
+```json
+{
+  "node_path": "NonExistentNode"
+}
+```
+
+**Expected result**: Error — node not found.
+
+---
+
+#### Scenario 5: Missing required `node_path`
+
+**Call**:
+```json
+{}
+```
+
+**Expected result**: Error — `node_path` is required.
+
+---
+
+#### Scenario 6: Remove material from node type that doesn't support materials
+
+**Description**: Try to remove a material from a plain Node (not CanvasItem or Node3D).
+
+**Call**:
+```json
+{
+  "node_path": "PlainNode"
+}
+```
+
+**Expected result**: Error — "Node does not support materials: Node".
 
 ---
 
@@ -956,7 +1071,7 @@ void fragment() {
 
 ## Full Integration Test Sequence
 
-Execute all 9 tools in sequence to validate the complete shader workflow:
+Execute all 10 tools in sequence to validate the complete shader workflow:
 
 ### Setup Phase
 
@@ -1020,16 +1135,23 @@ Step 12: set_shader_param
 Step 13: get_shader_params
   { "node_path": "ShaderSprite" }
   → Verify: brightness=0.8, tint_color=[0.2,0.5,1.0,1.0], alpha_override=0.75
+
+Step 14: unassign_material
+  { "node_path": "ShaderSprite" }
+  → Verify: material is now null on ShaderSprite
+
+Step 15: assign_shader_material (re-assign for delete test)
+  { "node_path": "ShaderSprite", "shader_path": "res://shaders/integration_test.gdshader" }
 ```
 
 ### Listing Phase
 
 ```
-Step 14: list_shaders
+Step 16: list_shaders
   {}
   → Verify: "res://shaders/integration_test.gdshader" appears in the list
 
-Step 15: list_shaders
+Step 17: list_shaders
   { "filter": "res://shaders/integration*" }
   → Verify: only integration test shader appears
 ```
@@ -1037,15 +1159,15 @@ Step 15: list_shaders
 ### Cleanup Phase
 
 ```
-Step 16: delete_shader
+Step 18: delete_shader
   { "path": "res://shaders/integration_test.gdshader", "force": true }
   → Should succeed (force=true even though node references it)
 
-Step 17: list_shaders
+Step 19: list_shaders
   {}
   → Verify: "res://shaders/integration_test.gdshader" no longer appears
 
-Step 18: delete_scene
+Step 20: delete_scene
   { "path": "res://scenes/shader_integration_test.tscn", "force": true }
 ```
 
