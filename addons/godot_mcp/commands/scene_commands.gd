@@ -64,6 +64,7 @@ func _serialize_node(node: Node, depth: int, max_depth: int) -> Dictionary:
 		"name": str(node.name),
 		"type": node.get_class(),
 		"path": MCPCommandHelpers.get_node_path(node, _plugin),
+		"unique_name_in_owner": node.unique_name_in_owner,
 		"children": [],
 	}
 	if node is Node2D:

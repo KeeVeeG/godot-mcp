@@ -143,15 +143,15 @@ func _set_group(params: Dictionary) -> Dictionary:
 		var ur: EditorUndoRedoManager = _undo_helper.get_undo_redo_manager()
 		ur.create_action("MCP: %s node %s %s group '%s'" % ["Add" if add else "Remove", node_path, "to" if add else "from", group])
 		if add:
-			ur.add_do_method(node, "add_to_group", group)
+			ur.add_do_method(node, "add_to_group", group, true)
 			ur.add_undo_method(node, "remove_from_group", group)
 		else:
 			ur.add_do_method(node, "remove_from_group", group)
-			ur.add_undo_method(node, "add_to_group", group)
+			ur.add_undo_method(node, "add_to_group", group, true)
 		ur.commit_action()
 	else:
 		if add:
-			node.add_to_group(group)
+			node.add_to_group(group, true)
 		else:
 			node.remove_from_group(group)
 	_plugin.get_editor_interface().mark_scene_as_unsaved()
@@ -173,6 +173,9 @@ func _get_meta(params: Dictionary) -> Dictionary:
 		root = scene.instantiate()
 	if root == null:
 		return {"success": false, "error": "No scene available"}
+	# Resolve scene_path from root if not provided
+	if scene_path.is_empty():
+		scene_path = root.scene_file_path
 	var meta: Array = []
 	for key: String in root.get_meta_list():
 		meta.append({"key": key, "value": MCPVariantCodec.serialize_value(root.get_meta(key))})
@@ -188,6 +191,8 @@ func _set_meta(params: Dictionary) -> Dictionary:
 	var value: Variant = params.get("value")
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
+	if value == null:
+		return {"success": false, "error": "Value cannot be null. Godot treats set_meta(key, null) as remove_meta(key). Use remove_scene_meta to delete a key, or provide a non-null value."}
 	var root: Node = null
 	if scene_path.is_empty():
 		root = _plugin.get_editor_interface().get_edited_scene_root()
@@ -215,6 +220,9 @@ func _set_meta(params: Dictionary) -> Dictionary:
 ## Recursive helper: collect groups from all nodes.
 func _collect_groups(node: Node, groups: Dictionary) -> void:
 	for group: String in node.get_groups():
+		# Skip Godot-internal groups (prefixed with _)
+		if group.begins_with("_"):
+			continue
 		if not groups.has(group):
 			groups[group] = []
 		groups[group].append(MCPCommandHelpers.get_node_path(node, _plugin))
