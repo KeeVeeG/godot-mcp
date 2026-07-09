@@ -154,7 +154,7 @@ project_creation → project → scene → node → script → runtime → expor
 - [x] 20. `script_test_plan.md`
 - [x] 21. `theme_test_plan.md`
 - [x] 22. `shader_test_plan.md`
-- [ ] 23. `animation_test_plan.md`
+- [x] 23. `animation_test_plan.md`
 - [ ] 24. `physics_test_plan.md`
 - [ ] 25. `particles_test_plan.md`
 - [ ] 26. `navigation_test_plan.md`
