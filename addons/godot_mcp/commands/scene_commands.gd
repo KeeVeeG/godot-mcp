@@ -1,4 +1,4 @@
-## Scene commands module - 12 tools.
+## Scene commands module - 13 tools.
 ## Handles scene tree, file operations, play/stop, and instancing.
 class_name MCPSceneCommands
 extends RefCounted
@@ -28,6 +28,7 @@ func get_commands() -> Dictionary:
 		"scene/get_loaded": func(params: Dictionary) -> Dictionary: return execute("get_loaded_scenes", params),
 		"scene/set_main": func(params: Dictionary) -> Dictionary: return execute("set_main_scene", params),
 		"scene/get_main": func(params: Dictionary) -> Dictionary: return execute("get_main_scene", params),
+		"scene/close": func(params: Dictionary) -> Dictionary: return execute("close_scene", params),
 	}
 
 
@@ -46,6 +47,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"get_loaded_scenes": return _get_loaded_scenes()
 		"set_main_scene": return _set_main_scene(params)
 		"get_main_scene": return _get_main_scene(params)
+		"close_scene": return _close_scene()
 	return {"error": "Unknown method: " + method}
 
 
@@ -157,6 +159,12 @@ func _open_scene(params: Dictionary) -> Dictionary:
 		return {"error": "Scene file not found: %s" % path}
 	_plugin.get_editor_interface().open_scene_from_path(path)
 	return {"result": {"message": "Scene opened: %s" % path}}
+
+
+## Close the currently edited scene in the editor.
+func _close_scene(_params: Dictionary = {}) -> Dictionary:
+	_plugin.get_editor_interface().close_scene()
+	return {"result": {"message": "Scene closed"}}
 
 
 ## Delete a scene file from disk.

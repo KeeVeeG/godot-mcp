@@ -1,5 +1,5 @@
 /**
- * Scene tools - 12 tools for scene management
+ * Scene tools - 13 tools for scene management
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -150,5 +150,15 @@ export function registerSceneTools(server: McpServer, bridge: GodotBridge): void
       inputSchema: {},
     },
     async () => callGodot(bridge, 'scene/get_main', {}),
+  );
+
+  // 13. close_scene
+  server.registerTool(
+    'close_scene',
+    {
+      description: 'Close the currently edited scene in the editor',
+      inputSchema: {},
+    },
+    async () => callGodot(bridge, 'scene/close'),
   );
 }

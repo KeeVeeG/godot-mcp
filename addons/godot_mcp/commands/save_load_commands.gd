@@ -300,27 +300,24 @@ func _serialize_node_tree(node: Node) -> Dictionary:
 
 ## Helper: Restore node properties from saved data with type verification.
 func _restore_node_tree(node: Node, data: Dictionary) -> int:
-	var restored: int = 0
+	var count: int = 1
 
-	# Restore properties with type verification
 	var properties: Dictionary = data.get("properties", {})
 	for prop_name: String in properties:
 		if MCPCommandHelpers.has_property(node, prop_name):
 			var prop_type: int = MCPCommandHelpers.get_property_type(node, prop_name)
 			var value: Variant = MCPVariantCodec.parse_for_property(properties[prop_name], prop_type)
 			node.set(prop_name, value)
-			restored += 1
 
-	# Restore children
 	var children_data: Array = data.get("children", [])
 	var existing_children: Array = node.get_children()
 	for i: int in range(min(children_data.size(), existing_children.size())):
 		var child_data: Dictionary = children_data[i] as Dictionary
 		var child: Node = existing_children[i]
 		if child.name == child_data.get("name", ""):
-			restored += _restore_node_tree(child, child_data)
+			count += _restore_node_tree(child, child_data)
 
-	return restored
+	return count
 
 
 ## Helper: Check if a value is JSON-serializable.

@@ -1,5 +1,5 @@
 /**
- * Scene tools - 12 tools for scene management
+ * Scene tools - 13 tools for scene management
  */
 import { callGodot } from '../server.js';
 import { z, ScenePath } from './shared-types.js';
@@ -88,5 +88,10 @@ export function registerSceneTools(server, bridge) {
         description: 'Get the project main scene path',
         inputSchema: {},
     }, async () => callGodot(bridge, 'scene/get_main', {}));
+    // 13. close_scene
+    server.registerTool('close_scene', {
+        description: 'Close the currently edited scene in the editor',
+        inputSchema: {},
+    }, async () => callGodot(bridge, 'scene/close'));
 }
 //# sourceMappingURL=scene.js.map
