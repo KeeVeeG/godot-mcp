@@ -219,7 +219,16 @@ func _reload_project() -> Dictionary:
 
 ## Get the output log content from the editor's log panel.
 func _get_output_log() -> Dictionary:
-	# Try file-based approach first — works in headless/test mode and is more reliable
+	# Primary: read from EditorLog RichTextLabel — always active, no config needed
+	var editor_log: Node = _find_editor_log()
+	if editor_log:
+		var rich_text: RichTextLabel = MCPCommandHelpers.find_node_by_class(editor_log, "RichTextLabel") as RichTextLabel
+		if rich_text:
+			var content: String = rich_text.get_parsed_text()
+			if not content.is_empty():
+				return {"success": true, "content": content}
+	
+	# Fallback: read from log file (may be empty if enable_file_logging is off)
 	var log_dir: String = ProjectSettings.globalize_path("user://logs")
 	var log_path: String = log_dir + "/godot.log"
 	if FileAccess.file_exists(log_path):
@@ -228,21 +237,9 @@ func _get_output_log() -> Dictionary:
 			var content: String = file.get_as_text()
 			file.close()
 			if not content.is_empty():
-				# Return last 5000 chars to avoid huge payloads
 				if content.length() > 5000:
 					content = content.substr(content.length() - 5000)
 				return {"success": true, "content": content}
-	
-	# Fallback: try reading from the EditorLog RichTextLabel in the UI
-	var editor_log: Node = _find_editor_log()
-	if editor_log:
-		var rich_text: RichTextLabel = null
-		for child: Node in editor_log.get_children():
-			if child is RichTextLabel:
-				rich_text = child as RichTextLabel
-				break
-		if rich_text and not rich_text.get_parsed_text().is_empty():
-			return {"success": true, "content": rich_text.get_parsed_text()}
 	
 	return {"success": true, "content": "(No output log available)"}
 

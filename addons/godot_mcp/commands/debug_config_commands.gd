@@ -132,32 +132,48 @@ func _set_error_handling(params: Dictionary) -> Dictionary:
 func _get_log(params: Dictionary) -> Dictionary:
 	var filter: String = params.get("filter", "")
 	var limit: int = params.get("limit", 50)
-	# Try to read from the editor log file
-	var log_path: String = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log") as String
 	var entries: Array = []
-	if FileAccess.file_exists(log_path):
-		var file: FileAccess = FileAccess.open(log_path, FileAccess.READ)
-		if file:
-			var lines: PackedStringArray = file.get_as_text().split("\n")
-			file.close()
-			# Process from end (most recent first)
-			var count: int = 0
-			for i: int in range(lines.size() - 1, -1, -1):
-				if count >= limit:
-					break
-				var line: String = lines[i].strip_edges()
-				if line.is_empty():
-					continue
-				var entry_type: String = "info"
-				if line.find("ERROR") != -1 or line.find("error") != -1:
-					entry_type = "error"
-				elif line.find("WARNING") != -1 or line.find("warning") != -1:
-					entry_type = "warning"
-				if filter != "" and entry_type != filter:
-					continue
-				entries.append({"type": entry_type, "message": line})
-				count += 1
-			entries.reverse()
+	var lines: PackedStringArray
+	
+	# Primary: read from EditorLog RichTextLabel — always active
+	var base: Control = _plugin.get_editor_interface().get_base_control()
+	var editor_log: Node = MCPCommandHelpers.find_node_by_class(base, "EditorLog")
+	if editor_log:
+		var rich_text: RichTextLabel = MCPCommandHelpers.find_node_by_class(editor_log, "RichTextLabel") as RichTextLabel
+		if rich_text:
+			var content: String = rich_text.get_parsed_text()
+			if not content.is_empty():
+				lines = content.split("\n")
+	
+	# Fallback: read from log file (may be empty if enable_file_logging is off)
+	if lines.is_empty():
+		var log_path: String = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log") as String
+		if FileAccess.file_exists(log_path):
+			var file: FileAccess = FileAccess.open(log_path, FileAccess.READ)
+			if file:
+				lines = file.get_as_text().split("\n")
+				file.close()
+	
+	if not lines.is_empty():
+		var count: int = 0
+		for i: int in range(lines.size() - 1, -1, -1):
+			if count >= limit:
+				break
+			var line: String = lines[i].strip_edges()
+			if line.is_empty():
+				continue
+			var entry_type: String = "info"
+			if line.find("ERROR") != -1 or line.find("error") != -1:
+				entry_type = "error"
+			elif line.find("WARNING") != -1 or line.find("warning") != -1:
+				entry_type = "warning"
+			if filter != "" and entry_type != filter:
+				continue
+			entries.append({"type": entry_type, "message": line})
+			count += 1
+		entries.reverse()
+	
+	var log_path: String = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log") as String
 	return {"success": true, "entries": entries, "count": entries.size(), "log_path": log_path}
 
 
