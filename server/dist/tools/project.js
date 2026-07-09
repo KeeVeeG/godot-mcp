@@ -1,5 +1,5 @@
 /**
- * Project tools - 7 tools for project management
+ * Project tools - 8 tools for project management
  */
 import { callGodot } from '../server.js';
 import { z, ResourcePath, SearchQuery } from './shared-types.js';
@@ -42,14 +42,21 @@ export function registerProjectTools(server, bridge) {
             value: z.unknown().describe('New value for the setting (string, number, boolean, etc.)'),
         },
     }, async (args) => callGodot(bridge, 'project/set_setting', args));
-    // 6. uid_to_project_path
+    // 6. remove_project_setting
+    server.registerTool('remove_project_setting', {
+        description: "Remove a project setting from project.godot. Use this instead of passing null to set_project_setting.",
+        inputSchema: {
+            key: z.string().describe("ProjectSettings key to remove (e.g. 'application/config/name')"),
+        },
+    }, async (args) => callGodot(bridge, 'project/remove_setting', args));
+    // 7. uid_to_project_path
     server.registerTool('uid_to_project_path', {
         description: 'Convert a Godot UID to a project file path',
         inputSchema: {
             uid: z.string().describe("The UID to look up (e.g. 'uid://abc123')"),
         },
     }, async (args) => callGodot(bridge, 'project/uid_to_path', args));
-    // 7. project_path_to_uid
+    // 8. project_path_to_uid
     server.registerTool('project_path_to_uid', {
         description: 'Convert a project file path to its UID',
         inputSchema: {

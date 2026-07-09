@@ -62,9 +62,9 @@ func _create_project(params: Dictionary) -> Dictionary:
 
 	# Detect invalid Windows filename characters before attempting directory creation
 	var invalid_chars: RegEx = RegEx.new()
-	invalid_chars.compile("[<>:\"/\\\\|?*]")
+	invalid_chars.compile("[<>\"|?*]")
 	if invalid_chars.search(path):
-		return {"success": false, "error": "Path contains invalid characters: %s. Windows disallows: < > : \" / \\ | ? *" % path}
+		return {"success": false, "error": "Path contains invalid characters: %s. Windows disallows: < > \" | ? *" % path}
 
 	# Check if project already exists at this path
 	var config_path: String = path.path_join("project.godot")
@@ -342,6 +342,9 @@ func _create_project_license(params: Dictionary) -> Dictionary:
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
 
+	if not FileAccess.file_exists(project_path.path_join("project.godot")):
+		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
+
 	var license_text: String = ""
 	match license_type:
 		"MIT":
@@ -376,6 +379,9 @@ func _setup_project_dependencies(params: Dictionary) -> Dictionary:
 
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
+
+	if not FileAccess.file_exists(project_path.path_join("project.godot")):
+		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
 
 	var addons_dir: String = project_path.path_join("addons")
 	if not DirAccess.dir_exists_absolute(addons_dir):
@@ -545,14 +551,14 @@ func _remove_project_dependencies(params: Dictionary) -> Dictionary:
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
 
+	if addons.is_empty():
+		return {"success": false, "error": "addons array is required and must not be empty"}
+
 	if not MCPCommandHelpers.validate_path(project_path):
 		return {"success": false, "error": "Invalid path"}
 
 	if not FileAccess.file_exists(project_path.path_join("project.godot")):
 		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
-
-	if addons.is_empty():
-		return {"success": false, "error": "addons array is required and must not be empty"}
 
 	var addons_dir: String = project_path.path_join("addons")
 	var removed: Array = []

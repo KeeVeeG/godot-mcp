@@ -1,5 +1,5 @@
 /**
- * Project tools - 7 tools for project management
+ * Project tools - 8 tools for project management
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -71,7 +71,19 @@ export function registerProjectTools(server: McpServer, bridge: GodotBridge): vo
     async (args) => callGodot(bridge, 'project/set_setting', args as Record<string, unknown>),
   );
 
-  // 6. uid_to_project_path
+  // 6. remove_project_setting
+  server.registerTool(
+    'remove_project_setting',
+    {
+      description: 'Remove a project setting from project.godot. Use this instead of passing null to set_project_setting.',
+      inputSchema: {
+        key: z.string().describe("ProjectSettings key to remove (e.g. 'application/config/name')"),
+      },
+    },
+    async (args) => callGodot(bridge, 'project/remove_setting', args as Record<string, unknown>),
+  );
+
+  // 7. uid_to_project_path
   server.registerTool(
     'uid_to_project_path',
     {
@@ -83,7 +95,7 @@ export function registerProjectTools(server: McpServer, bridge: GodotBridge): vo
     async (args) => callGodot(bridge, 'project/uid_to_path', args as Record<string, unknown>),
   );
 
-  // 7. project_path_to_uid
+  // 8. project_path_to_uid
   server.registerTool(
     'project_path_to_uid',
     {

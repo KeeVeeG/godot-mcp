@@ -18,6 +18,7 @@ func get_commands() -> Dictionary:
 		"project/search_files": func(params: Dictionary) -> Dictionary: return execute("search_files", params),
 		"project/get_settings": func(params: Dictionary) -> Dictionary: return execute("get_project_settings", params),
 		"project/set_setting": func(params: Dictionary) -> Dictionary: return execute("set_project_setting", params),
+		"project/remove_setting": func(params: Dictionary) -> Dictionary: return execute("remove_project_setting", params),
 		"project/uid_to_path": func(params: Dictionary) -> Dictionary: return execute("uid_to_project_path", params),
 		"project/path_to_uid": func(params: Dictionary) -> Dictionary: return execute("project_path_to_uid", params),
 	}
@@ -31,6 +32,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"search_files": return _search_files(params)
 		"get_project_settings": return _get_project_settings(params)
 		"set_project_setting": return _set_project_setting(params)
+		"remove_project_setting": return _remove_project_setting(params)
 		"uid_to_project_path": return _uid_to_project_path(params)
 		"project_path_to_uid": return _project_path_to_uid(params)
 	return {"success": false, "error": "Unknown method: " + method}
@@ -233,7 +235,7 @@ func _get_project_settings(params: Dictionary) -> Dictionary:
 
 
 ## Set a project setting and save.
-## Pass null as value to delete the setting (returns "deleted" message).
+## Null values are rejected — use remove_project_setting to delete a setting.
 func _set_project_setting(params: Dictionary) -> Dictionary:
 	var key: String = params.get("key", "")
 	if key.is_empty():
@@ -242,16 +244,23 @@ func _set_project_setting(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Missing required parameter: 'value'"}
 	var value: Variant = params.get("value", null)
 	if MCPCommandHelpers.is_null(value):
-		ProjectSettings.set_setting(key, null)
-		var err: Error = ProjectSettings.save()
-		if err != OK:
-			return {"success": false, "error": "Failed to save project settings: %s" % error_string(err)}
-		return {"success": true, "message": "Setting '%s' deleted" % key}
+		return {"success": false, "error": "value cannot be null. Use remove_project_setting to delete a setting."}
 	ProjectSettings.set_setting(key, value)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save project settings: %s" % error_string(err)}
 	return {"success": true, "message": "Setting '%s' saved" % key}
+
+
+## Remove a project setting from project.godot.
+## Use this instead of passing null to set_project_setting.
+func _remove_project_setting(params: Dictionary) -> Dictionary:
+	var key: String = params.get("key", "")
+	if key.is_empty():
+		return {"success": false, "error": "key is required"}
+	ProjectSettings.clear(key)
+	ProjectSettings.save()
+	return {"success": true, "message": "Setting '%s' removed" % key}
 
 
 ## Convert uid:// to res:// path.
