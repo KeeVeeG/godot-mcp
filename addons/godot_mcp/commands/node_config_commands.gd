@@ -337,8 +337,9 @@ func _get_types(params: Dictionary) -> Dictionary:
 		if not ClassDB.is_parent_class(cls, "Node"):
 			continue
 		# Filter out editor-only classes (EditorPlugins, editor dialogs, etc.)
+		# API_CORE=0, API_EDITOR=1, API_EXTENSION=2, API_EDITOR_EXTENSION=3, API_NONE=4
 		var api_type: int = ClassDB.class_get_api_type(cls)
-		if api_type == ClassDB.APIType.API_EDITOR or api_type == ClassDB.APIType.API_EDITOR_EXTENSION:
+		if api_type == ClassDB.API_EDITOR or api_type == ClassDB.API_EDITOR_EXTENSION:
 			continue
 		if category != "":
 			var matches: bool = false
