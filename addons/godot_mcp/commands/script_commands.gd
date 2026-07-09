@@ -301,48 +301,45 @@ func _validate_script(params: Dictionary) -> Dictionary:
 	return {"result": {"valid": true, "path": path, "base_class": script.get_instance_base_type()}}
 
 
-## Helper: parse the most recent compilation error for a script from the log file.
-## Log file format (Logger::log_error):
-##   SCRIPT ERROR: Parse Error: <message>
-##      at: GDScript::reload (<path>:<line>)
-## NOT the EditorLog display format (ERROR: path:line - message).
+## Helper: parse the most recent compilation error for a script from the EditorLog panel.
+## File logging (enable_file_logging) is off by default and can't be enabled at runtime.
+## EditorLog RichTextLabel is always active — plain text format: " ERROR: path:LINE - message"
 func _parse_script_error_from_log(script_path: String) -> Dictionary:
-	var log_path: String = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log")
-	if not FileAccess.file_exists(log_path):
-		return {"message": "Compilation failed. No log file available for details."}
+	var result: Dictionary = {}
 	
-	var file: FileAccess = FileAccess.open(log_path, FileAccess.READ)
-	if file == null:
-		return {"message": "Compilation failed. Cannot read log file."}
+	# Access EditorLog RichTextLabel via editor UI tree
+	var base: Node = _plugin.get_editor_interface().get_base_control()
+	var log_node: Node = MCPCommandHelpers.find_node_by_class(base, "EditorLog")
+	if log_node == null or log_node.get_child_count() == 0:
+		result["message"] = "Compilation failed. EditorLog not accessible."
+		return result
 	
-	var content: String = file.get_as_text()
-	file.close()
+	var label: RichTextLabel = log_node.get_child(0) as RichTextLabel
+	if label == null:
+		result["message"] = "Compilation failed. Cannot read EditorLog."
+		return result
 	
-	# Search only the last ~4000 chars — error is recent
+	# get_text() returns plain text without BBCode
+	var content: String = label.get_text()
+	if content.is_empty():
+		result["message"] = "Compilation failed. EditorLog is empty."
+		return result
+	
+	# Search only the last ~4000 chars
 	if content.length() > 4000:
 		content = content.substr(content.length() - 4000)
 	
-	var result: Dictionary = {}
+	# EditorLog plain text format: " ERROR: path:LINE - message"
+	# (thin space + ERROR: is stripped by strip_edges below)
+	var re: RegEx = RegEx.new()
+	re.compile("ERROR:\\s*" + MCPCommandHelpers.escape_regex(script_path) + ":(\\d+)\\s*-\\s*(.+)")
+	
 	var lines: PackedStringArray = content.split("\n")
-	
-	# Regex for the location line: "   at: GDScript::reload (path:LINE)"
-	var re_loc: RegEx = RegEx.new()
-	re_loc.compile("\\s*at:\\s*\\S+\\s*\\(" + MCPCommandHelpers.escape_regex(script_path) + ":(\\d+)\\)")
-	
-	# Reverse search: find most recent reference to our script
 	for i: int in range(lines.size() - 1, -1, -1):
-		var loc_match: RegExMatch = re_loc.search(lines[i])
-		if loc_match:
-			result["line"] = loc_match.get_string(1).to_int()
-			# Error message is on the previous line: "SCRIPT ERROR: <message>"
-			if i > 0:
-				var prev: String = lines[i - 1].strip_edges()
-				if prev.begins_with("SCRIPT ERROR:"):
-					result["message"] = prev.substr(13).strip_edges()
-				elif prev.begins_with("ERROR:"):
-					result["message"] = prev.substr(6).strip_edges()
-				else:
-					result["message"] = prev
+		var match: RegExMatch = re.search(lines[i].strip_edges())
+		if match:
+			result["line"] = match.get_string(1).to_int()
+			result["message"] = match.get_string(2).strip_edges()
 			break
 	
 	if result.is_empty():
