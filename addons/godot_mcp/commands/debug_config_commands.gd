@@ -147,7 +147,7 @@ func _get_log(params: Dictionary) -> Dictionary:
 	
 	# Fallback: read from log file (may be empty if enable_file_logging is off)
 	if lines.is_empty():
-		var log_path: String = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log") as String
+	log_path = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log") as String
 		if FileAccess.file_exists(log_path):
 			var file: FileAccess = FileAccess.open(log_path, FileAccess.READ)
 			if file:
