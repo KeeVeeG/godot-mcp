@@ -60,6 +60,12 @@ func _create_project(params: Dictionary) -> Dictionary:
 	if not MCPCommandHelpers.validate_path(path):
 		return {"success": false, "error": "Invalid path"}
 
+	# Detect invalid Windows filename characters before attempting directory creation
+	var invalid_chars: RegEx = RegEx.new()
+	invalid_chars.compile("[<>:\"/\\\\|?*]")
+	if invalid_chars.search(path):
+		return {"success": false, "error": "Path contains invalid characters: %s. Windows disallows: < > : \" / \\ | ? *" % path}
+
 	# Check if project already exists at this path
 	var config_path: String = path.path_join("project.godot")
 	var overwrite: bool = params.get("overwrite", false)
@@ -124,6 +130,10 @@ func _create_project_from_template(params: Dictionary) -> Dictionary:
 	if not DirAccess.dir_exists_absolute(template_path):
 		return {"success": false, "error": "Template path not found: %s" % template_path}
 
+	# Validate template is a Godot project BEFORE parent/child checks
+	if not FileAccess.file_exists(template_path.path_join("project.godot")):
+		return {"success": false, "error": "Template path is not a valid Godot project (missing project.godot)"}
+
 	# Prevent self-copy: normalize paths for comparison (handle / vs \ on Windows)
 	var normalized_path: String = path.replace("\\", "/").trim_suffix("/")
 	var normalized_template: String = template_path.replace("\\", "/").trim_suffix("/")
@@ -131,10 +141,6 @@ func _create_project_from_template(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Cannot copy template into itself (path equals template_path)"}
 	if normalized_path.begins_with(normalized_template + "/"):
 		return {"success": false, "error": "Cannot copy template into a subdirectory of itself"}
-
-	# Validate template is a Godot project
-	if not FileAccess.file_exists(template_path.path_join("project.godot")):
-		return {"success": false, "error": "Template path is not a valid Godot project (missing project.godot)"}
 
 	# Copy template to new location
 	var err: Error = MCPCommandHelpers.copy_directory_recursive(template_path, path)
@@ -165,8 +171,11 @@ func _scaffold_project_structure(params: Dictionary) -> Dictionary:
 	if not MCPCommandHelpers.validate_path(project_path):
 		return {"success": false, "error": "Invalid path"}
 
+	if not DirAccess.dir_exists_absolute(project_path):
+		return {"success": false, "error": "Path does not exist: %s" % project_path}
+
 	if not FileAccess.file_exists(project_path.path_join("project.godot")):
-		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
+		return {"success": false, "error": "Not a valid Godot project: %s (missing project.godot)" % project_path}
 
 	var folders: PackedStringArray = _get_template_folders(structure)
 	var created: Array = []
@@ -237,8 +246,9 @@ func _create_project_with_assets(params: Dictionary) -> Dictionary:
 		else:
 			errors.append("Source file not found: %s" % source)
 
+	var all_success: bool = not (errors.size() > 0 and imported.size() == 0)
 	return {
-		"success": true,
+		"success": all_success,
 		"path": path,
 		"name": name,
 		"imported": imported,
@@ -410,7 +420,8 @@ func _setup_project_dependencies(params: Dictionary) -> Dictionary:
 			_:
 				errors.append("Unknown addon source: %s" % source)
 
-	return {"success": true, "installed": installed, "errors": errors}
+	var all_success: bool = not (errors.size() > 0 and installed.size() == 0)
+	return {"success": all_success, "installed": installed, "errors": errors}
 
 
 ## Validate a project's folder structure.
@@ -420,9 +431,12 @@ func _validate_project_structure(params: Dictionary) -> Dictionary:
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
 
+	if not DirAccess.dir_exists_absolute(project_path):
+		return {"success": false, "error": "Path does not exist: %s" % project_path}
+
 	var config_path: String = project_path.path_join("project.godot")
 	if not FileAccess.file_exists(config_path):
-		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
+		return {"success": false, "error": "Not a valid Godot project: %s (missing project.godot)" % project_path}
 
 	var issues: Array = []
 	var warnings: Array = []

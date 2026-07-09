@@ -529,11 +529,12 @@
 **Params**:
 ```json
 {
-  "path": "res://project.godot"
+  "path": "res://icon.svg"
 }
 ```
 **Expected result**: Returns a UID string in the format `uid://...` (e.g. `uid://c5uab4k3u7qmr`).  
-**Pay attention**: Verify that a string in the format `uid://...` is returned. UIDs should be stable across calls for the same file.
+**Pay attention**: Verify that a string in the format `uid://...` is returned. UIDs should be stable across calls for the same file.  
+**Note**: Do NOT use `res://project.godot` — it is a configuration file, not a resource, and has no UID in Godot's resource system. Use resource files only (`.tscn`, `.gd`, `.svg`, `.png`, etc.).
 
 #### Scenario 2: Happy path — convert scene file
 
@@ -596,12 +597,12 @@ To fully test UID tools, use them as a pair:
 **Sequence**:
 ```json
 // Step 1
-{ "tool": "project_path_to_uid", "params": { "path": "res://project.godot" } }
+{ "tool": "project_path_to_uid", "params": { "path": "res://icon.svg" } }
 // → save returned UID
 
 // Step 2
 { "tool": "uid_to_project_path", "params": { "uid": "<saved_uid>" } }
-// → expect "res://project.godot"
+// → expect "res://icon.svg"
 ```
 
 ### Settings read-write verification

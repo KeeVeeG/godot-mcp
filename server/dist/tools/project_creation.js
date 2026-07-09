@@ -1,5 +1,5 @@
 /**
- * Project creation tools - 10 tools for project scaffolding and setup
+ * Project creation tools - 12 tools for project scaffolding, cleanup, and setup
  */
 import { callGodot } from '../server.js';
 import { z, Name, FilePath } from './shared-types.js';
@@ -100,5 +100,21 @@ export function registerProjectCreationTools(server, bridge) {
         description: 'List all available project templates that can be used with create_project',
         inputSchema: {},
     }, async () => callGodot(bridge, 'project_creation/get_templates'));
+    // 11. delete_project
+    server.registerTool('delete_project', {
+        description: 'Delete a Godot project entirely from disk. Requires confirmation to prevent accidental data loss.',
+        inputSchema: {
+            project_path: FilePath.describe('Path to the Godot project root'),
+            confirm: z.boolean().optional().default(false).describe('Set to true to confirm deletion (required for safety)'),
+        },
+    }, async (args) => callGodot(bridge, 'project_creation/delete_project', args));
+    // 12. remove_project_dependencies
+    server.registerTool('remove_project_dependencies', {
+        description: 'Remove installed addon dependencies from a Godot project',
+        inputSchema: {
+            project_path: FilePath.describe('Path to the Godot project root'),
+            addons: z.array(z.string()).describe('List of addon names to remove'),
+        },
+    }, async (args) => callGodot(bridge, 'project_creation/remove_dependencies', args));
 }
 //# sourceMappingURL=project_creation.js.map

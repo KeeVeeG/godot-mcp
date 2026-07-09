@@ -238,6 +238,8 @@ func _set_project_setting(params: Dictionary) -> Dictionary:
 	var key: String = params.get("key", "")
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
+	if not params.has("value"):
+		return {"success": false, "error": "Missing required parameter: 'value'"}
 	var value: Variant = params.get("value", null)
 	if MCPCommandHelpers.is_null(value):
 		ProjectSettings.set_setting(key, null)
