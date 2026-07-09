@@ -22,6 +22,7 @@ func get_commands() -> Dictionary:
 		"scene_config/set_group": func(params: Dictionary) -> Dictionary: return execute("set_group", params),
 		"scene_config/get_meta": func(params: Dictionary) -> Dictionary: return execute("get_meta", params),
 		"scene_config/set_meta": func(params: Dictionary) -> Dictionary: return execute("set_meta", params),
+		"scene_config/remove_meta": func(params: Dictionary) -> Dictionary: return execute("remove_meta", params),
 	}
 
 
@@ -34,6 +35,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"set_group": return _set_group(params)
 		"get_meta": return _get_meta(params)
 		"set_meta": return _set_meta(params)
+		"remove_meta": return _remove_meta(params)
 	return {"success": false, "error": "Unknown method: " + method}
 
 
@@ -215,6 +217,29 @@ func _set_meta(params: Dictionary) -> Dictionary:
 		root.set_meta(key, value)
 	_plugin.get_editor_interface().mark_scene_as_unsaved()
 	return {"success": true, "key": key, "message": "Metadata set"}
+
+
+## Remove metadata from the current scene's root node.
+func _remove_meta(params: Dictionary) -> Dictionary:
+	var key: String = params.get("key", "")
+	if key.is_empty():
+		return {"success": false, "error": "Key cannot be empty"}
+	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
+	if root == null:
+		return {"success": false, "error": "No scene open"}
+	if not root.has_meta(key):
+		return {"success": false, "error": "Metadata key not found: %s" % key}
+	var old_val: Variant = root.get_meta(key)
+	if _undo_helper:
+		var ur: EditorUndoRedoManager = _undo_helper.get_undo_redo_manager()
+		ur.create_action("MCP: Remove meta '%s' on scene root" % key)
+		ur.add_do_method(root, "remove_meta", key)
+		ur.add_undo_method(root, "set_meta", key, old_val)
+		ur.commit_action()
+	else:
+		root.remove_meta(key)
+	_plugin.get_editor_interface().mark_scene_as_unsaved()
+	return {"success": true, "key": key, "message": "Metadata removed"}
 
 
 ## Recursive helper: collect groups from all nodes.

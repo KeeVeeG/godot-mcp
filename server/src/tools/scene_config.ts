@@ -1,5 +1,5 @@
 /**
- * Scene configuration tools - 6 tools for scene metadata and properties
+ * Scene configuration tools - 7 tools for scene metadata and properties
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -83,5 +83,17 @@ export function registerSceneConfigTools(server: McpServer, bridge: GodotBridge)
       },
     },
     async (args) => callGodot(bridge, 'scene_config/set_meta', args as Record<string, unknown>),
+  );
+
+  // 7. remove_scene_meta
+  server.registerTool(
+    'remove_scene_meta',
+    {
+      description: "Remove metadata from the current scene's root node",
+      inputSchema: {
+        key: z.string().describe('Metadata key to remove'),
+      },
+    },
+    async (args) => callGodot(bridge, 'scene_config/remove_meta', args as Record<string, unknown>),
   );
 }

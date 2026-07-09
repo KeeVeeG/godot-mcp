@@ -1,5 +1,5 @@
 /**
- * Scene configuration tools - 6 tools for scene metadata and properties
+ * Scene configuration tools - 7 tools for scene metadata and properties
  */
 import { callGodot } from '../server.js';
 import { z, NodePath, OptionalScenePath } from './shared-types.js';
@@ -51,5 +51,12 @@ export function registerSceneConfigTools(server, bridge) {
             value: z.unknown().describe('Metadata value (string, number, bool, array, or dict)'),
         },
     }, async (args) => callGodot(bridge, 'scene_config/set_meta', args));
+    // 7. remove_scene_meta
+    server.registerTool('remove_scene_meta', {
+        description: "Remove metadata from the current scene's root node",
+        inputSchema: {
+            key: z.string().describe('Metadata key to remove'),
+        },
+    }, async (args) => callGodot(bridge, 'scene_config/remove_meta', args));
 }
 //# sourceMappingURL=scene_config.js.map
