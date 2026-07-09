@@ -222,6 +222,22 @@ const GLOBAL_ENUMS: Dictionary = {
 	},
 }
 
+# Editor-internal Node subclasses that do NOT contain "Editor" or "Dock"
+# in their name (those are already filtered by the substring check).
+# Verified against Godot 4.x class list — no game-runtime node matches any entry.
+const EDITOR_ONLY_CLASSES: Array[String] = [
+	"AnimationBezierTrackEdit", "AnimationMarkerEdit", "AnimationTimelineEdit",
+	"AudioStreamImportSettingsDialog", "AudioStreamPreviewGenerator",
+	"ControlOffsetTransformPreview",
+	"GameView", "ScreenSelect", "WindowWrapper",
+	"ObjectDBProfilerPanel", "SectionedInspector",
+	"ProjectExportTextureFormatError", "ProjectSettingsGDExtension",
+	"QuickOpenResultContainer",
+	"ThemeItemImportTree",
+	"TileAtlasView", "TileSetSourceItemList",
+	"ViewportNavigationControl", "ViewportRotationControl",
+]
+
 
 func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
@@ -345,12 +361,18 @@ func _get_types(params: Dictionary) -> Dictionary:
 		# Layer 2: EditorPlugin subclass check (catches EditorPlugins that may not have correct API type)
 		if ClassDB.is_parent_class(cls, "EditorPlugin"):
 			continue
-		# Layer 3: Name-based blacklist for remaining editor classes that slip through layers 1-2.
-		# These patterns match NO game-runtime nodes. Verified against Godot 4.x class list:
-		# - No game node starts with "Editor"  (EditorPlugin, EditorInspector, …)
-		# - No game node ends with "Editor"    (NavigationRegion2DEditor, ThemeEditor, …)
-		# - No game node ends with "Dock"      (FileSystemDock, SceneTreeDock, …)
-		if cls.begins_with("Editor") or cls.ends_with("Editor") or cls.ends_with("EditorPlugin") or cls.ends_with("Dock"):
+		# Layer 3: Name-based exclusion for remaining editor classes.
+		# Verified against Godot 4.x class list — no game-runtime node:
+		# - contains "Editor" (Node3DEditorViewport, ThemeEditorPreview, …)
+		# - contains "Dock"   (DockSlotGrid, SideDockTabContainer, …)
+		# - starts with "Snapshot"  (SnapshotView, SnapshotInspector, …)
+		# - ends with "PresetPicker" (AnchorPresetPicker, SizeFlagPresetPicker)
+		# - ends with "Dragger"      (SplitContainerDragger, …)
+		var cls_str: String = cls
+		if cls_str.contains("Editor") or cls_str.contains("Dock") or cls_str.begins_with("Snapshot") or cls_str.ends_with("PresetPicker") or cls_str.ends_with("Dragger"):
+			continue
+		# Explicit list of editor-internal classes without the above patterns
+		if cls_str in EDITOR_ONLY_CLASSES:
 			continue
 		# ────────────────────────────────────────────────────────────────
 		if category != "":
