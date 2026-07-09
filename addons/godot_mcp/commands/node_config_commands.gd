@@ -336,15 +336,23 @@ func _get_types(params: Dictionary) -> Dictionary:
 	for cls: String in all_classes:
 		if not ClassDB.is_parent_class(cls, "Node"):
 			continue
-		# Filter out editor-only classes (EditorPlugins, editor dialogs, etc.)
+		# ── Filter out editor-only classes ──────────────────────────────
+		# Layer 1: API type check (official Godot approach, catches most editor classes)
 		# API_CORE=0, API_EDITOR=1, API_EXTENSION=2, API_EDITOR_EXTENSION=3, API_NONE=4
-		# Use raw integers to avoid enum binding ambiguity across Godot versions
 		var api_type: int = ClassDB.class_get_api_type(cls)
 		if api_type == 1 or api_type == 3:  # API_EDITOR or API_EDITOR_EXTENSION
 			continue
-		# Fallback: also filter EditorPlugin subclasses that might not have correct API type
+		# Layer 2: EditorPlugin subclass check (catches EditorPlugins that may not have correct API type)
 		if ClassDB.is_parent_class(cls, "EditorPlugin"):
 			continue
+		# Layer 3: Name-based blacklist for remaining editor classes that slip through layers 1-2.
+		# These patterns match NO game-runtime nodes. Verified against Godot 4.x class list:
+		# - No game node starts with "Editor"  (EditorPlugin, EditorInspector, …)
+		# - No game node ends with "Editor"    (NavigationRegion2DEditor, ThemeEditor, …)
+		# - No game node ends with "Dock"      (FileSystemDock, SceneTreeDock, …)
+		if cls.begins_with("Editor") or cls.ends_with("Editor") or cls.ends_with("EditorPlugin") or cls.ends_with("Dock"):
+			continue
+		# ────────────────────────────────────────────────────────────────
 		if category != "":
 			var matches: bool = false
 			match category:
