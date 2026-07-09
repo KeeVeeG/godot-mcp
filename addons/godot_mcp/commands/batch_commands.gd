@@ -414,6 +414,10 @@ func _tscn_contains_node_path(file_path: String, node_path: String) -> bool:
 
 	# Also check for literal path in connection lines and other references
 	return content.contains(node_path)
+
+
+## Helper: check if a file contains a search term.
+func _file_contains(file_path: String, term: String) -> bool:
 	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
 	if file == null:
 		return false
