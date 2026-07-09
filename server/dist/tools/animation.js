@@ -91,7 +91,7 @@ export function registerAnimationTools(server, bridge) {
         inputSchema: {
             path: NodePath.describe('AnimationTree node path'),
             parameter: z.string().describe("Parameter path (e.g. 'parameters/blend_position')"),
-            value: PropertyValue.describe('Parameter value'),
+            value: z.unknown().refine((v) => v !== null, { message: 'Parameter value cannot be null. AnimationTree parameters require typed values (float, int, bool, string, Vector2, etc.). Use reset_tree_parameter to reset to default.' }).describe('Parameter value (cannot be null)'),
         },
     }, async (args) => callGodot(bridge, 'animation/set_tree_parameter', args));
     // 10. add_state_machine_state — {path: string, state_name: string, animation?: string} -> success
