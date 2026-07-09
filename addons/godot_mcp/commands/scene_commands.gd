@@ -97,8 +97,8 @@ func _get_scene_file_content(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
-		if root == null:
-			return {"error": "No scene open and no path specified"}
+		if root == null or root.scene_file_path.is_empty():
+			return {"error": "Path is required — no scene is currently open to read from"}
 		path = root.scene_file_path
 	if not FileAccess.file_exists(path):
 		return {"error": "Scene file not found: %s" % path}
@@ -113,9 +113,14 @@ func _get_scene_file_content(params: Dictionary) -> Dictionary:
 ## Create a new scene with a specified root type and save to disk.
 func _create_scene(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
-	var root_type: String = params.get("root_node_type", params.get("root_type", "Node2D"))
+	var root_type: String = params.get("root_node_type", params.get("root_type", "Node"))
 	if path.is_empty():
 		return {"error": "Path is required"}
+
+	# Check for overwrite
+	var overwrite: bool = params.get("overwrite", false)
+	if FileAccess.file_exists(path) and not overwrite:
+		return {"error": "Scene file already exists: %s. Use overwrite=true to replace." % path}
 
 	# Create the root node
 	var root_node: Node = MCPNodeFactory.create_node(root_type)
@@ -225,12 +230,19 @@ func _play_scene(params: Dictionary) -> Dictionary:
 	var scene_path: String = params.get("scene_path", "")
 	match mode:
 		"main":
+			var main_scene: String = ProjectSettings.get_setting("application/run/main_scene", "")
+			if main_scene.is_empty():
+				return {"error": "No main scene configured. Set one with set_main_scene first."}
+			if not FileAccess.file_exists(main_scene):
+				return {"error": "Main scene file not found: %s" % main_scene}
 			_plugin.get_editor_interface().play_main_scene()
 		"current":
 			_plugin.get_editor_interface().play_current_scene()
 		"custom":
 			if scene_path.is_empty():
 				return {"error": "scene_path required for custom mode"}
+			if not FileAccess.file_exists(scene_path):
+				return {"error": "Scene file not found: %s" % scene_path}
 			_plugin.get_editor_interface().play_custom_scene(scene_path)
 		_:
 			_plugin.get_editor_interface().play_current_scene()
@@ -254,6 +266,11 @@ func _save_scene(params: Dictionary) -> Dictionary:
 	if path.is_empty():
 		return {"error": "No path specified and scene has no file path"}
 
+	# Reject save-as if target path differs from original and not explicitly allowed
+	var original_path: String = root.scene_file_path
+	if original_path != "" and original_path != path and not params.get("save_as", false):
+		return {"error": "Cannot save to a different path (%s). Scene was loaded from %s. Use save_as=true to save a copy." % [path, original_path]}
+
 	var scene: PackedScene = PackedScene.new()
 	var err: Error = scene.pack(root)
 	if err != OK:
@@ -269,6 +286,8 @@ func _get_loaded_scenes() -> Dictionary:
 	var scenes: Array = []
 	var open_scenes: PackedStringArray = _plugin.get_editor_interface().get_open_scenes()
 	for scene_path: String in open_scenes:
+		if scene_path.is_empty():
+			continue
 		scenes.append({"path": scene_path})
 	# Also include the currently edited scene
 	var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
