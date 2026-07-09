@@ -28,7 +28,7 @@ func get_commands() -> Dictionary:
 	}
 
 
-## Read a .tres/.res resource's properties.
+## Read a Godot resource's properties.
 func read_resource(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
@@ -142,7 +142,7 @@ func create_resource(params: Dictionary) -> Dictionary:
 		else:
 			not_found.append(prop)
 
-	if not path.ends_with(".tres"):
+	if not path.get_extension():
 		path += ".tres"
 	if FileAccess.file_exists(path):
 		return {"success": false, "error": "Resource already exists: %s" % path}
@@ -317,7 +317,10 @@ func list_resources(params: Dictionary) -> Dictionary:
 	var type_filter: String = params.get("type", "")
 	var path: String = params.get("directory", params.get("path", "res://"))
 	var files: Array = []
-	MCPCommandHelpers.walk_directory(path, PackedStringArray(["tres", "res"]), func(fp, _name): files.append(fp))
+	MCPCommandHelpers.walk_directory(path, PackedStringArray(), func(fp, _name):
+		var res: Resource = load(fp)
+		if res != null:
+			files.append(fp))
 	if not type_filter.is_empty():
 		var filtered: Array = []
 		for f: String in files:

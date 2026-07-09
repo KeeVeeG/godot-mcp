@@ -6,7 +6,7 @@ import { z, ResourcePath, Properties, OptionalProperties } from './shared-types.
 export function registerResourceTools(server, bridge) {
     // 1. read_resource
     server.registerTool('read_resource', {
-        description: 'Read a Godot resource file (.tres, .res) and get its properties',
+        description: 'Read a Godot resource file and get its properties',
         inputSchema: {
             path: ResourcePath,
         },
@@ -30,7 +30,7 @@ export function registerResourceTools(server, bridge) {
     }, async (args) => callGodot(bridge, 'resource/create', args));
     // 10. delete_resource
     server.registerTool('delete_resource', {
-        description: 'Delete a Godot resource file (.tres, .res) from the project',
+        description: 'Delete a Godot resource file from the project',
         inputSchema: {
             path: ResourcePath.describe('Resource file path to delete'),
         },

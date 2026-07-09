@@ -151,10 +151,13 @@ static func walk_directory(dir_path: String, extensions: PackedStringArray, call
 		if dir.current_is_dir():
 			walk_directory(full_path, extensions, callback)
 		else:
-			for ext in extensions:
-				if file_name.get_extension().to_lower() == ext.to_lower():
-					callback.call(full_path, file_name)
-					break
+			if extensions.is_empty():
+				callback.call(full_path, file_name)
+			else:
+				for ext in extensions:
+					if file_name.get_extension().to_lower() == ext.to_lower():
+						callback.call(full_path, file_name)
+						break
 		file_name = dir.get_next()
 	dir.list_dir_end()
 

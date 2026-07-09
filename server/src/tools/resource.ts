@@ -12,7 +12,7 @@ export function registerResourceTools(server: McpServer, bridge: GodotBridge): v
   server.registerTool(
     'read_resource',
     {
-      description: 'Read a Godot resource file (.tres, .res) and get its properties',
+      description: 'Read a Godot resource file and get its properties',
       inputSchema: {
         path: ResourcePath,
       },
@@ -51,7 +51,7 @@ export function registerResourceTools(server: McpServer, bridge: GodotBridge): v
   server.registerTool(
     'delete_resource',
     {
-      description: 'Delete a Godot resource file (.tres, .res) from the project',
+      description: 'Delete a Godot resource file from the project',
       inputSchema: {
         path: ResourcePath.describe('Resource file path to delete'),
       },

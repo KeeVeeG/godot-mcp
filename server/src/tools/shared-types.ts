@@ -28,8 +28,8 @@ export const OptionalScenePath = z.string().optional().describe('Scene file path
 /** Script file path (e.g. "res://scripts/player.gd") */
 export const ScriptPath = z.string().describe("Script file path (e.g. 'res://scripts/player.gd')");
 
-/** Resource file path (.tres, .res) */
-export const ResourcePath = z.string().describe("Resource file path (e.g. 'res://assets/theme.tres')");
+/** Godot resource file path (e.g. 'res://assets/theme.tres', 'res://shaders/water.gdshader') */
+export const ResourcePath = z.string().describe("Godot resource file path (e.g. 'res://assets/theme.tres')");
 
 /** Generic file path */
 export const FilePath = z.string().describe("File path (e.g. 'res://path/to/file')");
