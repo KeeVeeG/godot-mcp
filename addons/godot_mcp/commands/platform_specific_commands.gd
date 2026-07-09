@@ -149,6 +149,7 @@ func get_platform_settings(params: Dictionary) -> Dictionary:
 				"signing_style": ProjectSettings.get_setting("export/ios/signing_style", defaults.get("signing_style", "automatic")),
 				"architecture": ProjectSettings.get_setting("export/ios/architecture", defaults.get("architecture", "universal")),
 				"min_ios_version": defaults.get("min_ios_version", "12.0"),
+				"signing": _read_nested_settings("export/ios", ["identity", "provisioning_profile"]),
 			}
 		"android":
 			current_settings = {
@@ -156,6 +157,7 @@ func get_platform_settings(params: Dictionary) -> Dictionary:
 				"min_sdk": ProjectSettings.get_setting("export/android/min_sdk", defaults.get("min_sdk", 21)),
 				"target_sdk": ProjectSettings.get_setting("export/android/target_sdk", defaults.get("target_sdk", 34)),
 				"permissions": ProjectSettings.get_setting("export/android/permissions", defaults.get("permissions", [])),
+				"keystore": _read_nested_settings("export/android", ["path", "password", "alias"]),
 			}
 		"web":
 			current_settings = {
@@ -180,7 +182,7 @@ func configure_ios(params: Dictionary) -> Dictionary:
 	var settings: Dictionary = params.get("settings", {})
 
 	if settings.is_empty():
-		return {"error": "settings object is required"}
+		return {"result": {"success": true, "platform": "ios", "applied_changes": [], "change_count": 0, "message": "No settings to apply"}}
 
 	var applied: Array = []
 
@@ -216,7 +218,7 @@ func configure_android(params: Dictionary) -> Dictionary:
 	var settings: Dictionary = params.get("settings", {})
 
 	if settings.is_empty():
-		return {"error": "settings object is required"}
+		return {"result": {"success": true, "platform": "android", "applied_changes": [], "change_count": 0, "message": "No settings to apply"}}
 
 	var applied: Array = []
 
@@ -252,7 +254,7 @@ func configure_web(params: Dictionary) -> Dictionary:
 	var settings: Dictionary = params.get("settings", {})
 
 	if settings.is_empty():
-		return {"error": "settings object is required"}
+		return {"result": {"success": true, "platform": "web", "applied_changes": [], "change_count": 0, "message": "No settings to apply"}}
 
 	var applied: Array = []
 
@@ -313,10 +315,13 @@ func get_platform_capabilities(params: Dictionary) -> Dictionary:
 
 ## Validate the project for a platform build.
 func validate_platform_build(params: Dictionary) -> Dictionary:
-	var platform: String = params.get("platform", "").to_lower()
+	var platform: String = params.get("platform", "").to_lower().strip_edges()
 
 	if platform.is_empty():
 		return {"error": "platform is required"}
+
+	if not PLATFORM_DEFAULTS.has(platform):
+		return {"error": "Unknown platform: %s. Supported: %s" % [platform, ", ".join(PLATFORM_DEFAULTS.keys())]}
 
 	var issues: Array = []
 	var warnings: Array = []
@@ -397,6 +402,19 @@ func validate_platform_build(params: Dictionary) -> Dictionary:
 		"scripts_with_errors": script_errors,
 		"message": "Platform validation for %s: %d error(s), %d warning(s)" % [platform, error_count, warning_count] if error_count + warning_count > 0 else "Platform validation passed for %s" % platform,
 	}}
+
+
+## Helper: Read nested settings from ProjectSettings with a common prefix.
+## Returns a dictionary of only the keys that have non-empty values.
+func _read_nested_settings(prefix: String, keys: Array) -> Dictionary:
+	var result: Dictionary = {}
+	for key: String in keys:
+		var full_key: String = "%s/%s" % [prefix, key]
+		if ProjectSettings.has_setting(full_key):
+			var val = ProjectSettings.get_setting(full_key)
+			if val != null and (typeof(val) != TYPE_STRING or not (val as String).is_empty()):
+				result[key] = val
+	return result
 
 
 ## Helper: Check if a platform has custom configuration.
