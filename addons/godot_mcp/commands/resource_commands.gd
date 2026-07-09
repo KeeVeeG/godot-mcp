@@ -190,7 +190,7 @@ func get_resource_preview(params: Dictionary) -> Dictionary:
 	if res == null:
 		return {"success": false, "error": "Resource not found: %s" % path}
 
-	var previewer: EditorResourcePreview = EditorInterface.get_singleton().get_resource_previewer()
+	var previewer: EditorResourcePreview = _plugin.get_editor_interface().get_resource_previewer()
 	var receiver: _PreviewReceiver = _PreviewReceiver.new()
 	_plugin.add_child(receiver)
 
