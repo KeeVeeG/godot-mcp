@@ -145,7 +145,15 @@ export function registerAnimationTools(server: McpServer, bridge: GodotBridge): 
         ).describe('Parameter value (cannot be null)'),
       },
     },
-    async (args) => callGodot(bridge, 'animation/set_tree_parameter', args as Record<string, unknown>),
+    async (args) => {
+      if (args.value === null) {
+        throw new Error(
+          'Parameter value cannot be null. AnimationTree parameters require typed values ' +
+          '(float, int, bool, string, Vector2, etc.). Use reset_tree_parameter to reset to default.',
+        );
+      }
+      return callGodot(bridge, 'animation/set_tree_parameter', args as Record<string, unknown>);
+    },
   );
 
   // 10. reset_tree_parameter — {path, parameter} -> success

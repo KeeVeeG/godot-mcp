@@ -93,7 +93,13 @@ export function registerAnimationTools(server, bridge) {
             parameter: z.string().describe("Parameter path (e.g. 'parameters/blend_position')"),
             value: z.unknown().refine((v) => v !== null, { message: 'Parameter value cannot be null. AnimationTree parameters require typed values (float, int, bool, string, Vector2, etc.). Use reset_tree_parameter to reset to default.' }).describe('Parameter value (cannot be null)'),
         },
-    }, async (args) => callGodot(bridge, 'animation/set_tree_parameter', args));
+    }, async (args) => {
+        if (args.value === null) {
+            throw new Error('Parameter value cannot be null. AnimationTree parameters require typed values ' +
+                '(float, int, bool, string, Vector2, etc.). Use reset_tree_parameter to reset to default.');
+        }
+        return callGodot(bridge, 'animation/set_tree_parameter', args);
+    });
     // 10. reset_tree_parameter — {path, parameter} -> success
     server.registerTool('reset_tree_parameter', {
         description: 'Reset an AnimationTree parameter to its type-based default (0.0, false, 0, "", Vector2.ZERO). NOTE: Godot does not expose per-parameter defaults to GDScript — this uses pragmatic type inference.',
