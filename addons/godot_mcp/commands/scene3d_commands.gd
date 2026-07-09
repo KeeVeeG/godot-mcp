@@ -88,6 +88,8 @@ func add_mesh_instance(params: Dictionary) -> Dictionary:
 	# Apply position
 	if properties.has("position"):
 		mi.position = MCPVariantCodec._parse_vector3(properties["position"])
+	if properties.has("scale"):
+		mi.scale = MCPVariantCodec._parse_vector3(properties["scale"])
 
 	# Apply material
 	if properties.has("material_path"):
@@ -139,8 +141,10 @@ func setup_camera_3d(params: Dictionary) -> Dictionary:
 		cam.far = properties["far"] as float
 	if properties.has("projection"):
 		cam.projection = properties["projection"] as int
-	if properties.has("current"):
-		cam.current = properties["current"] as bool
+	if properties.has("current") or properties.has("make_current"):
+		cam.current = properties.get("current", properties.get("make_current", false)) as bool
+	if properties.has("look_at"):
+		cam.look_at(MCPVariantCodec._parse_vector3(properties["look_at"]))
 	if properties.has("position"):
 		cam.position = MCPVariantCodec._parse_vector3(properties["position"])
 	if properties.has("rotation"):
@@ -185,6 +189,8 @@ func setup_lighting(params: Dictionary) -> Dictionary:
 		light.position = MCPVariantCodec._parse_vector3(properties["position"])
 	if properties.has("rotation"):
 		light.rotation = MCPVariantCodec._parse_vector3(properties["rotation"])
+	if properties.has("shadow_enabled"):
+		light.shadow_enabled = properties["shadow_enabled"] as bool
 
 	if _undo_helper:
 		_undo_helper.add_node_with_undo(light, parent)
@@ -219,22 +225,7 @@ func setup_environment(params: Dictionary) -> Dictionary:
 			_apply_environment_props(cam_env, properties)
 			return {"result": "Environment set on camera: %s" % path}
 		elif node == null:
-			# Create new WorldEnvironment at the requested path
-			var last_slash: int = path.rfind("/")
-			var create_parent: Node = root
-			var create_name: String = path
-			if last_slash != -1:
-				create_parent = MCPCommandHelpers.resolve_node_path(_plugin, path.substr(0, last_slash))
-				create_name = path.substr(last_slash + 1)
-				if create_parent == null:
-					return {"error": "Parent not found for path: %s" % path}
-			env_node = WorldEnvironment.new()
-			env_node.name = create_name
-			if _undo_helper:
-				_undo_helper.add_node_with_undo(env_node, create_parent)
-			else:
-				create_parent.add_child(env_node)
-				env_node.set_owner(root)
+			return {"error": "Node not found: %s" % path}
 		else:
 			return {"error": "Node is not a WorldEnvironment or Camera3D: %s (type: %s)" % [path, node.get_class()]}
 	else:
@@ -329,6 +320,8 @@ func set_material_3d(params: Dictionary) -> Dictionary:
 	var mat: Material = null
 	if properties.has("material_path"):
 		mat = ResourceLoader.load(properties["material_path"] as String) as Material
+		if mat == null:
+			return {"error": "Material resource not found: %s" % properties["material_path"]}
 	else:
 		var sm: StandardMaterial3D = StandardMaterial3D.new()
 		if properties.has("albedo_color"):
@@ -340,7 +333,7 @@ func set_material_3d(params: Dictionary) -> Dictionary:
 		if properties.has("emission_enabled"):
 			sm.emission_enabled = properties["emission_enabled"] as bool
 		if properties.has("emission_color"):
-			sm.emission_color = MCPVariantCodec._parse_color(properties["emission_color"])
+			sm.emission = MCPVariantCodec._parse_color(properties["emission_color"])
 		if properties.has("emission_energy_multiplier"):
 			sm.emission_energy_multiplier = properties["emission_energy_multiplier"] as float
 		mat = sm
