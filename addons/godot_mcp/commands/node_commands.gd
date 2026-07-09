@@ -125,12 +125,14 @@ func _duplicate_node(params: Dictionary) -> Dictionary:
 	var node: Node = _resolve_node(path, root)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
+	if node == root:
+		return {"error": "Cannot duplicate scene root"}
 
 	if _undo_helper:
 		var dupe: Node = _undo_helper.duplicate_node_with_undo(node)
 		if dupe:
 			return {"result": {"original": path, "duplicate": MCPCommandHelpers.get_node_path(dupe, _plugin), "name": str(dupe.name)}}
-		return {"error": "Duplication failed"}
+		return {"error": "Duplication failed: %s" % path}
 	else:
 		var dupe2: Node = node.duplicate()
 		if dupe2 == null:
@@ -165,8 +167,8 @@ func _move_node(params: Dictionary) -> Dictionary:
 		node.set_owner(MCPCommandHelpers.get_scene_root(_plugin))
 
 	var display_parent: String = new_parent_path
-	if display_parent == "." or display_parent == "/":
-		display_parent = "root (.)"
+	if display_parent == "" or display_parent == "." or display_parent == "/":
+		display_parent = "root"
 	return {"result": {"message": "Node moved to %s" % display_parent}}
 
 
@@ -185,10 +187,25 @@ func _update_property(params: Dictionary) -> Dictionary:
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
-	# Parse value for the expected type
-	if MCPCommandHelpers.has_property(node, property):
-		var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
-		value = MCPVariantCodec.parse_for_property(value, expected_type)
+	# Validate property exists and is settable
+	if not MCPCommandHelpers.has_property(node, property):
+		return {"error": "Property '%s' not found on %s (type: %s)" % [property, node.name, node.get_class()]}
+
+	# Get expected type and validate value compatibility
+	var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
+
+	# Reject type mismatches: string→number that can't parse
+	if value is String:
+		var s: String = value as String
+		match expected_type:
+			TYPE_INT:
+				if not s.is_valid_int():
+					return {"error": "Type mismatch for '%s': expected int, got string '%s'" % [property, s]}
+			TYPE_FLOAT:
+				if not s.is_valid_float() and not s.is_valid_int():
+					return {"error": "Type mismatch for '%s': expected float, got string '%s'" % [property, s]}
+
+	value = MCPVariantCodec.parse_for_property(value, expected_type)
 
 	if _undo_helper:
 		_undo_helper.set_property_with_undo(node, property, value)
@@ -344,6 +361,8 @@ func _set_anchor_preset(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var raw_preset = params.get("preset", 0)
 	var preset: int = _resolve_preset(raw_preset)
+	if preset == -1:
+		return {"error": "Invalid anchor preset: '%s'. Valid presets (0-15): top_left, top_right, bottom_left, bottom_right, center_left, center_top, center_right, center_bottom, center, left_wide, top_wide, right_wide, bottom_wide, vcenter_wide, hcenter_wide, full_rect" % str(raw_preset)}
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
@@ -599,22 +618,43 @@ func _create_node_by_type(type_name: String) -> Node:
 
 
 ## Helper: resolve a preset value (string name or int) to Control.LayoutPreset int.
+## Returns -1 if the preset is invalid — caller must return an error.
 func _resolve_preset(raw) -> int:
 	if raw is int:
-		return raw
+		if raw >= 0 and raw <= 15:
+			return raw
+		return -1
 	if raw is float:
-		return int(raw)
+		var as_int := int(raw)
+		if as_int >= 0 and as_int <= 15:
+			return as_int
+		return -1
 	if raw is String:
-		var mapping: Dictionary = {
-			"top_left": 0, "top_right": 1, "bottom_left": 2, "bottom_right": 3,
-			"center_left": 4, "center_top": 5, "center_right": 6, "center_bottom": 7,
-			"center": 8, "left_wide": 9, "top_wide": 10, "right_wide": 11,
-			"bottom_wide": 12, "vcenter_wide": 13, "hcenter_wide": 14, "full_rect": 15,
-		}
 		var lower: String = raw.to_lower()
-		if mapping.has(lower):
-			return mapping[lower]
+		var enum_map: Dictionary = {
+			"top_left": Control.PRESET_TOP_LEFT,
+			"top_right": Control.PRESET_TOP_RIGHT,
+			"bottom_left": Control.PRESET_BOTTOM_LEFT,
+			"bottom_right": Control.PRESET_BOTTOM_RIGHT,
+			"center_left": Control.PRESET_CENTER_LEFT,
+			"center_top": Control.PRESET_CENTER_TOP,
+			"center_right": Control.PRESET_CENTER_RIGHT,
+			"center_bottom": Control.PRESET_CENTER_BOTTOM,
+			"center": Control.PRESET_CENTER,
+			"left_wide": Control.PRESET_LEFT_WIDE,
+			"top_wide": Control.PRESET_TOP_WIDE,
+			"right_wide": Control.PRESET_RIGHT_WIDE,
+			"bottom_wide": Control.PRESET_BOTTOM_WIDE,
+			"vcenter_wide": Control.PRESET_VCENTER_WIDE,
+			"hcenter_wide": Control.PRESET_HCENTER_WIDE,
+			"full_rect": Control.PRESET_FULL_RECT,
+		}
+		if enum_map.has(lower):
+			return enum_map[lower]
 		# Try parsing as int string
 		if raw.is_valid_int():
-			return raw.to_int()
-	return 0
+			var as_int := raw.to_int()
+			if as_int >= 0 and as_int <= 15:
+				return as_int
+		return -1
+	return -1
