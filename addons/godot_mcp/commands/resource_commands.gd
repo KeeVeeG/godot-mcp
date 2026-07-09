@@ -338,8 +338,6 @@ func delete_resource_file(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Path is required"}
 	if not MCPCommandHelpers.validate_path(path):
 		return {"success": false, "error": "Invalid path"}
-	if not (path.ends_with(".tres") or path.ends_with(".res")):
-		return {"success": false, "error": "Not a valid resource file. Only .tres and .res files can be deleted."}
 	if not FileAccess.file_exists(path):
 		return {"success": false, "error": "Resource not found: %s" % path}
 	
