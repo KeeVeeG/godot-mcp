@@ -284,7 +284,7 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 		else:
 			errors.append("Unknown import option '%s' — not found in existing import settings" % option_key)
 	if not errors.is_empty():
-		return {"error": "Invalid import settings", "details": errors}
+		return {"error": "Invalid import settings: %s" % ", ".join(errors)}
 
 	# All keys validated — write to [params] section
 	for key: String in settings:
