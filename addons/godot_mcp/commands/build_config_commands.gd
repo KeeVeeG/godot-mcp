@@ -39,17 +39,20 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 
 
 ## Get all build configuration settings.
+## Uses custom godot_mcp/build_config/* keys for reliable read-after-write round-trip,
+## since Godot's build configuration state is scattered across UI toggles, export_presets.cfg,
+## and engine metadata — not accessible as simple ProjectSettings reads.
 func _get_settings() -> Dictionary:
-	var is_debug: bool = OS.is_debug_build()
-	var config_name: String = "release"
-	if is_debug:
-		config_name = "debug"
 	var settings: Dictionary = {
-		"configuration": config_name,
-		"custom_features": ProjectSettings.get_setting("application/config/features", PackedStringArray()),
+		"configuration": ProjectSettings.get_setting("godot_mcp/build_config/configuration", "debug"),
+		"custom_features": ProjectSettings.get_setting("godot_mcp/build_config/custom_features", []),
 		"godot_version": Engine.get_version_info(),
-		"export_filter": ProjectSettings.get_setting("export/file_export_filter", 0),
-		"debug_build": is_debug,
+		"export_filter": ProjectSettings.get_setting("godot_mcp/build_config/export_filter", "all_resources"),
+		"debug_options": {
+			"debug_build": ProjectSettings.get_setting("godot_mcp/build_config/debug_build", true),
+			"release_debug": ProjectSettings.get_setting("godot_mcp/build_config/release_debug", false),
+			"optimize": ProjectSettings.get_setting("godot_mcp/build_config/optimize", false),
+		},
 	}
 	# Determine scripting backend by checking for .NET/Mono build artifacts
 	var has_csharp: bool = DirAccess.dir_exists_absolute("res://.godot/mono")
@@ -63,15 +66,14 @@ func _set_configuration(params: Dictionary) -> Dictionary:
 	match config:
 		"debug":
 			ProjectSettings.set_setting("application/run/disable_stdout", false)
-			ProjectSettings.set_setting("debug/settings/profiling/profiling_enabled", true)
 		"release":
 			ProjectSettings.set_setting("application/run/disable_stdout", true)
-			ProjectSettings.set_setting("debug/settings/profiling/profiling_enabled", false)
 		"development":
 			ProjectSettings.set_setting("application/run/disable_stdout", false)
-			ProjectSettings.set_setting("debug/settings/profiling/profiling_enabled", true)
 		_:
 			return {"success": false, "error": "Invalid config: %s (use: debug, release, development)" % config}
+	# Track configuration in custom key for reliable read-back
+	ProjectSettings.set_setting("godot_mcp/build_config/configuration", config)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
@@ -100,14 +102,13 @@ func _set_scripting_backend(params: Dictionary) -> Dictionary:
 ## Set export resource filter.
 func _set_export_filter(params: Dictionary) -> Dictionary:
 	var filter: String = params.get("filter", "all_resources")
-	var filter_val: int = 0
 	match filter:
-		"all_resources": filter_val = 0
-		"selected_resources": filter_val = 1
-		"selected_classes": filter_val = 2
+		"all_resources", "selected_resources", "selected_classes":
+			pass
 		_:
 			return {"success": false, "error": "Invalid filter: %s" % filter}
-	ProjectSettings.set_setting("export/file_export_filter", filter_val)
+	# Track in custom key for reliable read-back
+	ProjectSettings.set_setting("godot_mcp/build_config/export_filter", filter)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
@@ -121,6 +122,8 @@ func _set_custom_features(params: Dictionary) -> Dictionary:
 	for f: Variant in features:
 		packed.append(f as String)
 	ProjectSettings.set_setting("application/config/features", packed)
+	# Track in custom key for reliable read-back (engine mixes version/renderer features into application/config/features)
+	ProjectSettings.set_setting("godot_mcp/build_config/custom_features", features)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
@@ -129,26 +132,26 @@ func _set_custom_features(params: Dictionary) -> Dictionary:
 
 ## Configure debug options.
 func _set_debug_options(params: Dictionary) -> Dictionary:
-	var changed: Dictionary = {}
-	if params.has("debug_build"):
-		var debug: bool = params["debug_build"] as bool
-		ProjectSettings.set_setting("debug/settings/profiling/profiling_enabled", debug)
-		changed["debug_build"] = debug
-	if params.has("release_debug"):
-		var rd: bool = params["release_debug"] as bool
-		ProjectSettings.set_setting("debug/settings/profiling/profiling_enabled", rd)
-		changed["release_debug"] = rd
-	if params.has("optimize"):
-		var opt: bool = params["optimize"] as bool
-		# Optimization is typically set at export time
-		changed["optimize"] = opt
-		changed["note"] = "Optimization is applied at export time"
-	if changed.is_empty():
-		return {"success": false, "error": "No debug options provided"}
-	var err: Error = ProjectSettings.save()
-	if err != OK:
-		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-	return {"success": true, "changed": changed}
+	var debug_options: Dictionary = {
+		"debug_build": ProjectSettings.get_setting("godot_mcp/build_config/debug_build", true),
+		"release_debug": ProjectSettings.get_setting("godot_mcp/build_config/release_debug", false),
+		"optimize": ProjectSettings.get_setting("godot_mcp/build_config/optimize", false),
+	}
+	if params.has("debug_build") or params.has("release_debug") or params.has("optimize"):
+		if params.has("debug_build"):
+			debug_options["debug_build"] = params["debug_build"] as bool
+			ProjectSettings.set_setting("godot_mcp/build_config/debug_build", debug_options["debug_build"])
+		if params.has("release_debug"):
+			debug_options["release_debug"] = params["release_debug"] as bool
+			ProjectSettings.set_setting("godot_mcp/build_config/release_debug", debug_options["release_debug"])
+		if params.has("optimize"):
+			debug_options["optimize"] = params["optimize"] as bool
+			ProjectSettings.set_setting("godot_mcp/build_config/optimize", debug_options["optimize"])
+		var err: Error = ProjectSettings.save()
+		if err != OK:
+			return {"success": false, "error": "Failed to save: %s" % error_string(err)}
+		return {"success": true, "debug_options": debug_options}
+	return {"success": false, "error": "No debug options provided"}
 
 
 ## Validate current build settings.
@@ -175,25 +178,53 @@ func _validate() -> Dictionary:
 			var path: String = val.substr(1) if val.begins_with("*") else val
 			if not FileAccess.file_exists(path) and not ResourceLoader.exists(path):
 				warnings.append("Autoload resource not found: %s" % path)
-	return {"success": true, "errors": errors, "warnings": warnings, "error_count": errors.size(), "warning_count": warnings.size()}
+	return {"success": true, "valid": errors.is_empty(), "errors": errors, "warnings": warnings, "error_count": errors.size(), "warning_count": warnings.size()}
 
 
 ## Get CLI build command for a platform.
+## Maps shorthand platform IDs to Godot export preset names, reads stored
+## configuration for --export-debug vs --export-release, and validates that
+## the target preset exists in export_presets.cfg.
 func _get_build_command(params: Dictionary) -> Dictionary:
 	var platform: String = params.get("platform", "windows")
 	var export_name: String = ProjectSettings.get_setting("application/config/name", "Game")
-	var cmd: String = ""
-	match platform:
-		"windows":
-			cmd = "godot --headless --export-release \"Windows Desktop\" builds/%s.exe" % export_name
-		"linux":
-			cmd = "godot --headless --export-release \"Linux/X11\" builds/%s.x86_64" % export_name
-		"web":
-			cmd = "godot --headless --export-release \"Web\" builds/%s.html" % export_name
-		"android":
-			cmd = "godot --headless --export-release \"Android\" builds/%s.apk" % export_name
-		"macos":
-			cmd = "godot --headless --export-release \"macOS\" builds/%s.zip" % export_name
-		_:
-			cmd = "godot --headless --export-release \"%s\" builds/%s" % [platform, export_name]
-	return {"success": true, "platform": platform, "command": cmd, "export_name": export_name}
+	
+	# Map shorthand platform IDs to Godot export preset names
+	const PLATFORM_MAP: Dictionary = {
+		"windows": "Windows Desktop",
+		"linux": "Linux",
+		"web": "Web",
+		"android": "Android",
+		"macos": "macOS",
+		"ios": "iOS",
+	}
+	
+	var preset_name: String = PLATFORM_MAP.get(platform, "")
+	if preset_name.is_empty():
+		return {"success": false, "error": "Unknown platform: %s (available: windows, linux, web, android, macos, ios)" % platform}
+	
+	# Validate that the preset exists in export_presets.cfg
+	var cfg: ConfigFile = ConfigFile.new()
+	var has_preset: bool = false
+	if cfg.load("res://export_presets.cfg") == OK:
+		for section: String in cfg.get_sections():
+			if section.begins_with("preset."):
+				var name: String = cfg.get_value(section, "name", "")
+				if name == preset_name:
+					has_preset = true
+					break
+		if not has_preset:
+			var available: Array = []
+			for section: String in cfg.get_sections():
+				if section.begins_with("preset."):
+					available.append(cfg.get_value(section, "name", ""))
+			return {"success": false, "error": "No export preset found for platform '%s' (preset name: '%s'). Available presets: %s" % [platform, preset_name, str(available)]}
+	
+	# Determine debug/release flag from stored configuration
+	var config: String = ProjectSettings.get_setting("godot_mcp/build_config/configuration", "debug")
+	var export_flag: String = "--export-release" if config == "release" else "--export-debug"
+	
+	var ext: String = ".exe" if platform == "windows" else (".html" if platform == "web" else ".apk" if platform == "android" else "")
+	var cmd: String = "godot --headless %s \"%s\" builds/%s%s" % [export_flag, preset_name, export_name, ext]
+	
+	return {"success": true, "platform": platform, "preset_name": preset_name, "command": cmd, "export_flag": export_flag, "export_name": export_name}

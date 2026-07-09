@@ -59,7 +59,7 @@ export function registerBuildConfigTools(server, bridge) {
     server.registerTool('get_build_command', {
         description: 'Get the CLI command to export/build the project for a specific platform',
         inputSchema: {
-            platform: z.string().describe("Target platform (e.g. 'windows', 'linux', 'web', 'android')"),
+            platform: z.enum(['windows', 'linux', 'web', 'android', 'macos', 'ios']).describe('Target platform: windows, linux, web, android, macos, or ios'),
         },
     }, async (args) => callGodot(bridge, 'build_config/get_build_command', args));
 }
