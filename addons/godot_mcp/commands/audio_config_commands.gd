@@ -1,5 +1,5 @@
-## Audio configuration commands module - 6 tools.
-## Handles audio bus layout, effects, and settings.
+## Audio configuration commands module - 9 tools.
+## Handles audio bus layout, effects, driver, and render settings.
 class_name MCPAudioConfigCommands
 extends RefCounted
 
@@ -19,6 +19,9 @@ func get_commands() -> Dictionary:
 		"audio_config/remove_bus": func(params: Dictionary) -> Dictionary: return execute("remove_bus", params),
 		"audio_config/set_bus_volume": func(params: Dictionary) -> Dictionary: return execute("set_bus_volume", params),
 		"audio_config/get_bus_effects": func(params: Dictionary) -> Dictionary: return execute("get_bus_effects", params),
+		"audio_config/set_driver": func(params: Dictionary) -> Dictionary: return execute("set_driver", params),
+		"audio_config/set_mix_rate": func(params: Dictionary) -> Dictionary: return execute("set_mix_rate", params),
+		"audio_config/set_output_latency": func(params: Dictionary) -> Dictionary: return execute("set_output_latency", params),
 	}
 
 
@@ -31,6 +34,9 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"remove_bus": return _remove_bus(params)
 		"set_bus_volume": return _set_bus_volume(params)
 		"get_bus_effects": return _get_bus_effects(params)
+		"set_driver": return _set_driver(params)
+		"set_mix_rate": return _set_mix_rate(params)
+		"set_output_latency": return _set_output_latency(params)
 	return {"success": false, "error": "Unknown method: " + method}
 
 
@@ -60,8 +66,8 @@ func _set_bus_layout(params: Dictionary) -> Dictionary:
 	if buses.size() > 0:
 		var master: Dictionary = buses[0] as Dictionary
 		AudioServer.set_bus_name(0, master.get("name", "Master"))
-		if master.has("volume"):
-			AudioServer.set_bus_volume_db(0, master["volume"] as float)
+		if master.has("volume_db"):
+			AudioServer.set_bus_volume_db(0, master["volume_db"] as float)
 		if master.has("solo"):
 			AudioServer.set_bus_solo(0, master["solo"] as bool)
 		if master.has("mute"):
@@ -72,8 +78,8 @@ func _set_bus_layout(params: Dictionary) -> Dictionary:
 		AudioServer.add_bus()
 		var idx: int = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(idx, bus_data.get("name", "Bus%d" % idx))
-		if bus_data.has("volume"):
-			AudioServer.set_bus_volume_db(idx, bus_data["volume"] as float)
+		if bus_data.has("volume_db"):
+			AudioServer.set_bus_volume_db(idx, bus_data["volume_db"] as float)
 		if bus_data.has("solo"):
 			AudioServer.set_bus_solo(idx, bus_data["solo"] as bool)
 		if bus_data.has("mute"):
@@ -161,6 +167,33 @@ func _get_bus_effects(params: Dictionary) -> Dictionary:
 				"properties": props,
 			})
 	return {"success": true, "bus": bus_name, "effects": effects, "count": effects.size()}
+
+
+## Set the audio driver name (takes effect on next restart).
+func _set_driver(params: Dictionary) -> Dictionary:
+	var driver_name: String = params.get("driver", "")
+	if driver_name.is_empty():
+		return {"success": false, "error": "Driver name is required"}
+	ProjectSettings.set_setting("audio/driver/driver", driver_name)
+	return {"success": true, "driver": driver_name, "message": "Driver set. Restart Godot for the change to take effect."}
+
+
+## Set the audio mix rate (takes effect on next restart).
+func _set_mix_rate(params: Dictionary) -> Dictionary:
+	var mix_rate: int = params.get("mix_rate", 0)
+	if mix_rate < 11025 or mix_rate > 192000:
+		return {"success": false, "error": "Mix rate must be between 11025 and 192000 Hz"}
+	ProjectSettings.set_setting("audio/driver/mix_rate", mix_rate)
+	return {"success": true, "mix_rate": mix_rate, "message": "Mix rate set. Restart Godot for the change to take effect."}
+
+
+## Set the audio output latency (takes effect on next restart).
+func _set_output_latency(params: Dictionary) -> Dictionary:
+	var latency: int = params.get("output_latency", 0)
+	if latency < 1 or latency > 100:
+		return {"success": false, "error": "Output latency must be between 1 and 100 ms"}
+	ProjectSettings.set_setting("audio/driver/output_latency", latency)
+	return {"success": true, "output_latency": latency, "message": "Latency set. Restart Godot for the change to take effect."}
 
 
 

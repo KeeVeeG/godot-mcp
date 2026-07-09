@@ -1,5 +1,5 @@
 /**
- * Audio configuration tools - 6 tools for audio bus and settings management
+ * Audio configuration tools - 9 tools for audio bus and settings management
  */
 import { callGodot } from '../server.js';
 import { z, Name } from './shared-types.js';
@@ -16,7 +16,7 @@ export function registerAudioConfigTools(server, bridge) {
             buses: z
                 .array(z.object({
                 name: z.string().describe('Bus name'),
-                volume: z.number().optional().describe('Volume in dB'),
+                volume_db: z.number().optional().describe('Volume in dB'),
                 solo: z.boolean().optional().describe('Solo this bus'),
                 mute: z.boolean().optional().describe('Mute this bus'),
             }))
@@ -53,5 +53,26 @@ export function registerAudioConfigTools(server, bridge) {
             bus: Name.describe('Bus name to inspect'),
         },
     }, async (args) => callGodot(bridge, 'audio_config/get_bus_effects', args));
+    // 7. set_audio_driver
+    server.registerTool('set_audio_driver', {
+        description: 'Set the audio driver (takes effect on next Godot restart). Valid values: WASAPI, XAudio2, PulseAudio, ALSA, CoreAudio, Android, Web, Dummy',
+        inputSchema: {
+            driver: z.string().describe('Audio driver name (e.g. WASAPI, PulseAudio, CoreAudio)'),
+        },
+    }, async (args) => callGodot(bridge, 'audio_config/set_driver', args));
+    // 8. set_audio_mix_rate
+    server.registerTool('set_audio_mix_rate', {
+        description: 'Set the audio mix rate in Hz (takes effect on next Godot restart). Range: 11025-192000',
+        inputSchema: {
+            mix_rate: z.number().int().min(11025).max(192000).describe('Mix rate in Hz (e.g. 44100, 48000)'),
+        },
+    }, async (args) => callGodot(bridge, 'audio_config/set_mix_rate', args));
+    // 9. set_audio_output_latency
+    server.registerTool('set_audio_output_latency', {
+        description: 'Set the audio output latency in milliseconds (takes effect on next Godot restart). Range: 1-100',
+        inputSchema: {
+            output_latency: z.number().int().min(1).max(100).describe('Output latency in milliseconds (e.g. 15)'),
+        },
+    }, async (args) => callGodot(bridge, 'audio_config/set_output_latency', args));
 }
 //# sourceMappingURL=audio_config.js.map
