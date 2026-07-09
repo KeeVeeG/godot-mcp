@@ -302,7 +302,10 @@ func _validate_script(params: Dictionary) -> Dictionary:
 
 
 ## Helper: parse the most recent compilation error for a script from the log file.
-## Godot log format: "ERROR: res://path:LINE - Parse Error: MESSAGE"
+## Log file format (Logger::log_error):
+##   SCRIPT ERROR: Parse Error: <message>
+##      at: GDScript::reload (<path>:<line>)
+## NOT the EditorLog display format (ERROR: path:line - message).
 func _parse_script_error_from_log(script_path: String) -> Dictionary:
 	var log_path: String = ProjectSettings.get_setting("debug/file_logging/log_path", "user://logs/godot.log")
 	if not FileAccess.file_exists(log_path):
@@ -322,17 +325,24 @@ func _parse_script_error_from_log(script_path: String) -> Dictionary:
 	var result: Dictionary = {}
 	var lines: PackedStringArray = content.split("\n")
 	
-	# Build regex: "ERROR: <path>:<line> - <message>"
-	var re: RegEx = RegEx.new()
-	re.compile("ERROR:\\s*" + MCPCommandHelpers.escape_regex(script_path) + ":(\\d+)\\s*-\\s*(.+)")
+	# Regex for the location line: "   at: GDScript::reload (path:LINE)"
+	var re_loc: RegEx = RegEx.new()
+	re_loc.compile("\\s*at:\\s*\\S+\\s*\\(" + MCPCommandHelpers.escape_regex(script_path) + ":(\\d+)\\)")
 	
 	# Reverse search: find most recent reference to our script
 	for i: int in range(lines.size() - 1, -1, -1):
-		var line: String = lines[i].strip_edges()
-		var match: RegExMatch = re.search(line)
-		if match:
-			result["line"] = match.get_string(1).to_int()
-			result["message"] = match.get_string(2).strip_edges()
+		var loc_match: RegExMatch = re_loc.search(lines[i])
+		if loc_match:
+			result["line"] = loc_match.get_string(1).to_int()
+			# Error message is on the previous line: "SCRIPT ERROR: <message>"
+			if i > 0:
+				var prev: String = lines[i - 1].strip_edges()
+				if prev.begins_with("SCRIPT ERROR:"):
+					result["message"] = prev.substr(13).strip_edges()
+				elif prev.begins_with("ERROR:"):
+					result["message"] = prev.substr(6).strip_edges()
+				else:
+					result["message"] = prev
 			break
 	
 	if result.is_empty():
