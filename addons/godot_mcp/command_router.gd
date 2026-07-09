@@ -72,6 +72,7 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 		"gameplay/simulate",      # simulate_gameplay_scenario
 		"gameplay/replay",         # replay_gameplay
 		"visual_testing/",         # record_visual_regression (frame captures)
+		"resource/get_preview",     # async preview generation via EditorResourcePreview
 	]
 	var is_async: bool = false
 	for p in _async_prefixes:
