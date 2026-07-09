@@ -1,4 +1,4 @@
-## Shader commands module - 9 tools.
+## Shader commands module - 8 tools.
 ## Handles shader creation, editing, and material assignment.
 class_name MCPShaderCommands
 extends RefCounted
@@ -23,7 +23,6 @@ func get_commands() -> Dictionary:
 		"shader/reset_param": reset_shader_param,
 		"shader/get_params": get_shader_params,
 		"shader/list": list_shaders,
-		"shader/validate": validate_shader,
 		"shader/delete": _delete_shader,
 	}
 
@@ -273,94 +272,14 @@ func list_shaders(params: Dictionary) -> Dictionary:
 		filter_str = path
 	if filter_str.is_empty():
 		filter_str = "res://"
+	var is_glob: bool = "*" in filter_str or "?" in filter_str
 	var shaders: Array = []
 	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["gdshader", "shader"]),
 		func(fp, _name):
-			if filter_str == "res://" or fp.contains(filter_str):
+			if filter_str == "res://" or (is_glob and fp.match(filter_str)) or (not is_glob and fp.contains(filter_str)):
 				shaders.append(fp)
 	)
 	return {"result": {"shaders": shaders, "count": shaders.size()}}
-
-
-## Validate a shader for compilation errors.
-func validate_shader(params: Dictionary) -> Dictionary:
-	var path: String = params.get("path", "")
-	if path.is_empty():
-		return {"error": "Path is required"}
-	if not FileAccess.file_exists(path):
-		return {"error": "Shader not found: %s" % path}
-	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		return {"error": "Cannot read shader: %s" % path}
-	var code: String = file.get_as_text()
-	file.close()
-
-	var errors: Array[String] = []
-	var warnings: Array[String] = []
-	var lines: int = code.count("\n") + 1
-
-	# Preprocessor check: loading a resource catches import/preprocessor errors
-	var shader: Shader = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Shader
-	if shader == null:
-		errors.append("Failed to load shader resource (preprocessor or file format error)")
-
-	# shader_type declaration
-	var type_match: RegEx = RegEx.new()
-	type_match.compile(r"(?m)^shader_type\s+(spatial|canvas_item|particles|sky|fog|texture_blit)\s*;")
-	if type_match.search(code) == null:
-		errors.append("Missing or invalid 'shader_type' declaration (expected: spatial, canvas_item, particles, sky, fog, or texture_blit)")
-	else:
-		var st: String = type_match.get_string(1)
-		if st in ["spatial", "particles", "sky", "fog"]:
-			warnings.append("Shader type is '%s', not canvas_item" % st)
-
-	# Balanced braces
-	var depth: int = 0
-	var i: int = 0
-	for ch: String in code:
-		if ch == "{":
-			depth += 1
-		elif ch == "}":
-			depth -= 1
-		if depth < 0:
-			errors.append("Unexpected '}' at position %d" % i)
-			break
-		i += 1
-	if depth > 0:
-		errors.append("Unclosed '{' — %d opening brace(s) without matching close" % depth)
-
-	# vec4 with wrong component count: 2-3 args (not 4)
-	var vec4_raw: RegEx = RegEx.new()
-	vec4_raw.compile(r"vec4\s*\(\s*\S[^;]*\)")
-	for m: RegExMatch in vec4_raw.search_all(code):
-		var args: String = m.get_string()
-		var comma_count: int = 0
-		var paren_depth: int = 0
-		for c: String in args:
-			if c == "(": paren_depth += 1
-			elif c == ")": paren_depth -= 1
-			elif c == "," and paren_depth == 1: comma_count += 1
-		if comma_count != 3 and args.contains("("):  # vec4 should have 3 commas (4 args)
-			errors.append("Possible vec4 with wrong component count: %s" % args.replace("\n", " ").strip_edges())
-
-	# Use of 'texture' function without sampler2D — common mistake with TEXTURE built-in
-	var texture_misuse: RegEx = RegEx.new()
-	texture_misuse.compile(r"\btexture\s*\(")
-	if texture_misuse.search(code) and code.contains("canvas_item"):
-		warnings.append("'texture()' is used — for canvas_item shaders, use 'texture(TEXTURE, UV)' or 'TEXTURE' directly")
-
-	if errors.is_empty():
-		var result: Dictionary = {"path": path, "valid": true, "lines": lines}
-		if shader != null:
-			result["type"] = shader.get_class()
-		if not warnings.is_empty():
-			result["warnings"] = warnings
-		return {"result": result}
-	else:
-		return {"result": {"path": path, "valid": false, "lines": lines, "errors": errors}}
-
-
-
 
 
 ## Delete a shader file from the project.

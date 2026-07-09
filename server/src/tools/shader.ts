@@ -1,5 +1,5 @@
 /**
- * Shader tools - 10 tools for shader management
+ * Shader tools - 9 tools for shader management
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -116,19 +116,7 @@ export function registerShaderTools(server: McpServer, bridge: GodotBridge): voi
     async (args) => callGodot(bridge, 'shader/list', args as Record<string, unknown>),
   );
 
-  // 8. validate_shader
-  server.registerTool(
-    'validate_shader',
-    {
-      description: 'Validate a shader file for compilation errors',
-      inputSchema: {
-        path: FilePath.describe('Shader file path'),
-      },
-    },
-    async (args) => callGodot(bridge, 'shader/validate', args as Record<string, unknown>),
-  );
-
-  // 9. delete_shader
+  // 8. delete_shader
   server.registerTool(
     'delete_shader',
     {

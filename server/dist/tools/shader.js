@@ -1,5 +1,5 @@
 /**
- * Shader tools - 10 tools for shader management
+ * Shader tools - 9 tools for shader management
  */
 import { callGodot } from '../server.js';
 import { z, NodePath, FilePath, PropertyValue, SearchQuery } from './shared-types.js';
@@ -72,14 +72,7 @@ export function registerShaderTools(server, bridge) {
             filter: SearchQuery.optional().describe('Filter by path pattern'),
         },
     }, async (args) => callGodot(bridge, 'shader/list', args));
-    // 8. validate_shader
-    server.registerTool('validate_shader', {
-        description: 'Validate a shader file for compilation errors',
-        inputSchema: {
-            path: FilePath.describe('Shader file path'),
-        },
-    }, async (args) => callGodot(bridge, 'shader/validate', args));
-    // 9. delete_shader
+    // 8. delete_shader
     server.registerTool('delete_shader', {
         description: 'Delete a shader file from the project',
         inputSchema: {
