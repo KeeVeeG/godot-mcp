@@ -159,8 +159,12 @@ func _collect_runtime_connections(node: Node, connections: Array, seen: Dictiona
 			if sig_name.begins_with("__") or target_method.begins_with("__"):
 				continue
 			if target is Node:
-				target_path = str((target as Node).get_path())
-				# Skip connections to editor-internal nodes
+				target_path = MCPCommandHelpers.get_node_path(target as Node, _plugin)
+				# Skip connections to editor-internal nodes.
+				# In the editor, all scene node paths start with /root/@EditorNode@...,
+				# so we must use get_node_path() first to get scene-relative paths
+				# before checking for the /root/@ prefix (which only editor-internal
+				# nodes still have after stripping the scene root prefix).
 				if target_path.begins_with("/root/@"):
 					continue
 			var source_path: String = MCPCommandHelpers.get_node_path(node, _plugin)
