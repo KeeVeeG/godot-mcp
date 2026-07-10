@@ -292,8 +292,18 @@ func get_shader_params(params: Dictionary) -> Dictionary:
 
 	var shader_mat: ShaderMaterial = mat as ShaderMaterial
 	var shader: Shader = shader_mat.shader
-	
-	# Force reload shader from disk to pick up file changes.
+
+	# Save current parameter overrides BEFORE reloading the shader.
+	# Reassigning shader_mat.shader = fresh_shader may clear user-set
+	# parameter values, so we snapshot and restore them afterward.
+	var saved_overrides: Dictionary = {}
+	if shader:
+		var old_uniforms: Array = shader.get_shader_uniform_list()
+		for u: Dictionary in old_uniforms:
+			var pname: String = u["name"] as String
+			saved_overrides[pname] = shader_mat.get_shader_parameter(pname)
+
+	# Force reload shader from disk to pick up file changes (new uniforms).
 	# ShaderMaterial caches the compiled shader internally. By loading
 	# a fresh copy (CACHE_MODE_IGNORE) and reassigning, we force Godot
 	# to recompile and expose any new uniforms added to the .gdshader file.
@@ -307,7 +317,16 @@ func get_shader_params(params: Dictionary) -> Dictionary:
 			shader_mat.shader = fresh_shader
 			shader = fresh_shader
 			reloaded = true
-	
+
+	# Restore previously-set parameter overrides (D1 fix).
+	# Only restore overrides for uniforms that still exist in the reloaded shader.
+	if reloaded and not saved_overrides.is_empty() and shader:
+		var fresh_uniforms: Array = shader.get_shader_uniform_list()
+		for u: Dictionary in fresh_uniforms:
+			var pname: String = u["name"] as String
+			if saved_overrides.has(pname):
+				shader_mat.set_shader_parameter(pname, saved_overrides[pname])
+
 	var result: Dictionary = {
 		"node_path": node_path,
 		"shader_path": shader.resource_path if shader else "",
@@ -316,6 +335,10 @@ func get_shader_params(params: Dictionary) -> Dictionary:
 	}
 	if shader:
 		var param_list: Array = shader.get_shader_uniform_list()
+		# Fallback: if Godot returns no uniforms (e.g. shader not compiled yet),
+		# try parsing the shader file text for uniform declarations.
+		if param_list.is_empty():
+			param_list = _parse_uniforms_from_text(shader.resource_path)
 		for p: Dictionary in param_list:
 			var pname: String = p["name"] as String
 			var val: Variant = shader_mat.get_shader_parameter(pname)
@@ -354,15 +377,21 @@ func _delete_shader(params: Dictionary) -> Dictionary:
 	
 	# Check if shader is used by any ShaderMaterial in the current scene
 	var force: bool = params.get("force", false)
-	if not force:
-		var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
-		if root:
-			var refs: Array = _find_shader_refs_in_scene(root, path, 0, 20)
-			if not refs.is_empty():
+	var ref_warning: String = ""
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root:
+		var refs: Array = _find_shader_refs_in_scene(root, path, 0, 20)
+		if not refs.is_empty():
+			if not force:
 				var ref_paths: PackedStringArray = []
 				for r in refs:
 					ref_paths.append(str(r))
 				return {"error": "Shader is in use by %d node(s): %s. Use force=true to delete anyway." % [refs.size(), ", ".join(ref_paths)]}
+			# force=true: warn about zombie references
+			var ref_paths: PackedStringArray = []
+			for r in refs:
+				ref_paths.append(str(r))
+			ref_warning = "Shader was referenced by %d node(s): %s. These materials now reference a missing shader." % [refs.size(), ", ".join(ref_paths)]
 	
 	# Convert res:// to global path for DirAccess
 	var global_path: String = ProjectSettings.globalize_path(path)
@@ -381,7 +410,10 @@ func _delete_shader(params: Dictionary) -> Dictionary:
 		DirAccess.remove_absolute(uid_path)
 	
 	_plugin.safe_scan_filesystem()
-	return {"result": {"deleted": path}}
+	var result_dict: Dictionary = {"deleted": path}
+	if not ref_warning.is_empty():
+		result_dict["warning"] = ref_warning
+	return {"result": result_dict}
 
 
 ## Validate a shader file for compilation errors.
@@ -398,7 +430,7 @@ func validate_shader(params: Dictionary) -> Dictionary:
 	var content: String = file.get_as_text()
 	file.close()
 	
-	var result: Dictionary = {"path": path, "valid": true, "line_count": content.count("\n") + 1}
+	var result: Dictionary = {"path": path, "valid": true, "line_count": content.count("\n") + 1, "warnings": []}
 	
 	# Basic validation: shader must start with shader_type declaration
 	if not content.strip_edges().begins_with("shader_type"):
@@ -414,6 +446,10 @@ func validate_shader(params: Dictionary) -> Dictionary:
 			result["type"] = stripped.trim_prefix("shader_type").strip_edges().trim_suffix(";").strip_edges()
 			break
 	
+	# --- Best-effort syntax checks (D4) ---
+	# These catch common issues that ResourceLoader.load() won't report.
+	_basic_syntax_checks(content, result)
+	
 	# Try loading as Shader resource (CACHE_MODE_IGNORE to get fresh version)
 	var shader: Shader = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Shader
 	if shader == null:
@@ -427,7 +463,7 @@ func validate_shader(params: Dictionary) -> Dictionary:
 	for u: Dictionary in uniforms:
 		result["uniforms"].append({"name": u.get("name", ""), "type": str(u.get("type", ""))})
 	
-	result["message"] = "Shader validated successfully. Note: Some compilation errors may only appear in the Godot Output panel."
+	result["message"] = "Shader passed basic validation. IMPORTANT: ResourceLoader.load() succeeds even for shaders with runtime syntax errors (e.g., wrong arg count, undeclared variables). Compilation errors only appear in the Godot Output panel at runtime. Use Godot's Shader Editor or check the Output panel for definitive validation."
 	
 	return {"result": result}
 
@@ -454,6 +490,74 @@ func _find_shader_refs_in_scene(node: Node, shader_path: String, depth: int = 0,
 				break
 	for child in node.get_children():
 		result.append_array(_find_shader_refs_in_scene(child, shader_path, depth + 1, max_depth))
+	return result
+
+
+## Best-effort syntax checks for validate_shader (D4).
+## Catches common errors that ResourceLoader.load() won't report.
+func _basic_syntax_checks(content: String, result: Dictionary) -> void:
+	var lines: PackedStringArray = content.split("\n")
+	var brace_depth: int = 0
+	var line_num: int = 0
+	for line in lines:
+		line_num += 1
+		var stripped: String = line.strip_edges()
+		# Skip comments and blank lines
+		if stripped.begins_with("//") or stripped.is_empty():
+			continue
+		# Track brace depth
+		for ch in line:
+			if ch == "{": brace_depth += 1
+			if ch == "}": brace_depth -= 1
+		# Check uniform declarations end with semicolon
+		if stripped.begins_with("uniform ") and not stripped.ends_with(";"):
+			result["warnings"].append("Line %d: uniform declaration missing semicolon — '%s'" % [line_num, stripped])
+		# Check for multi-line comments start/end
+		if stripped.begins_with("/*") and not stripped.ends_with("*/"):
+			result["warnings"].append("Line %d: multi-line comment block may not be closed" % line_num)
+	
+	if brace_depth != 0:
+		result["warnings"].append("Brace mismatch: %s extra %s brace(s)" % [abs(brace_depth), "opening" if brace_depth > 0 else "closing"])
+		result["valid"] = false
+		if not result.has("error"):
+			result["error"] = "Brace mismatch detected (%d unclosed)" % brace_depth
+
+
+## Fallback: parse uniform declarations directly from shader file text.
+## Used when get_shader_uniform_list() returns empty (shader not yet compiled).
+func _parse_uniforms_from_text(path: String) -> Array:
+	var result: Array = []
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return result
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return result
+	var content: String = file.get_as_text()
+	file.close()
+
+	# Normalize: collapse multi-line declarations to single lines
+	var normalized: String = ""
+	for ch in content:
+		if ch == "\n" or ch == "\r":
+			normalized += " "
+		else:
+			normalized += ch
+
+	# Match patterns like: uniform <type> <name> [= <default>] [: hint] [;]
+	# Examples:
+	#   uniform float brightness = 1.0;
+	#   uniform vec4 tint_color : source_color;
+	#   uniform sampler2D main_texture : hint_albedo;
+	var regex: RegEx = RegEx.new()
+	regex.compile("uniform\\s+(\\w+)\\s+(\\w+)\\s*(?:=\\s*([^;:]+?))?\\s*(?::\\s*([^;]+?))?\\s*;")
+	for m: RegExMatch in regex.search_all(normalized):
+		var uniform_type: String = m.get_string(1)
+		var uniform_name: String = m.get_string(2)
+		result.append({
+			"name": uniform_name,
+			"type": uniform_type,
+			"_parsed_from_text": true,
+		})
 	return result
 
 
