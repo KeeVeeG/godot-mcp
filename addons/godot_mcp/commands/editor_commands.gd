@@ -15,7 +15,7 @@ func get_commands() -> Dictionary:
 	return {
 		"editor/get_errors": func(params: Dictionary) -> Dictionary: return execute("get_editor_errors", params),
 		"editor/get_screenshot": func(params: Dictionary) -> Dictionary: return execute("get_editor_screenshot", params),
-		"editor/get_game_screenshot": func(params: Dictionary): return execute("get_game_screenshot", params),
+		"editor/get_game_screenshot": _get_game_screenshot,
 		"editor/execute_script": func(params: Dictionary) -> Dictionary: return execute("execute_editor_script", params),
 		"editor/clear_output": func(params: Dictionary) -> Dictionary: return execute("clear_output", params),
 		"editor/get_signals": func(params: Dictionary) -> Dictionary: return execute("get_signals", params),
@@ -26,11 +26,10 @@ func get_commands() -> Dictionary:
 
 
 ## Main dispatcher.
-func execute(method: String, params: Dictionary):
+func execute(method: String, params: Dictionary) -> Dictionary:
 	match method:
 		"get_editor_errors": return _get_editor_errors(params)
 		"get_editor_screenshot": return _get_editor_screenshot(params)
-		"get_game_screenshot": return _get_game_screenshot(params)
 		"execute_editor_script": return _execute_editor_script(params)
 		"clear_output": return _clear_output()
 		"get_signals": return _get_signals(params)
