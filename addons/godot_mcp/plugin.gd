@@ -143,10 +143,9 @@ func _exit_tree() -> void:
 
 
 ## Ensure the mcp_runtime autoload is registered in project.godot.
-## Uses direct file I/O to avoid triggering ProjectSettings.save() reload.
+## Uses direct FileAccess text I/O to bypass ConfigFile format/parsing issues.
 func _ensure_runtime_autoload() -> void:
-	var autoload_path: String = "res://addons/godot_mcp/services/mcp_runtime.gd"
-	var autoload_entry: String = autoload_path
+	var autoload_line: String = "MCPRuntime=\"res://addons/godot_mcp/services/mcp_runtime.gd\""
 	var config_path: String = "res://project.godot"
 
 	if not FileAccess.file_exists(config_path):
@@ -155,39 +154,65 @@ func _ensure_runtime_autoload() -> void:
 			_status_panel.log_activity("project.godot not found — cannot register autoload", "error")
 		return
 
-	# Check if already registered (autoloads are stored under numeric keys)
-	var config := ConfigFile.new()
-	var err: Error = config.load(config_path)
-	if err != OK:
-		push_warning("[MCP] Failed to load project.godot")
+	# Read project.godot as plain text
+	var read_file := FileAccess.open(config_path, FileAccess.READ)
+	if not read_file:
+		push_warning("[MCP] Failed to open project.godot for reading")
 		if _status_panel:
-			_status_panel.log_activity("Failed to load project.godot: %s" % error_string(err), "error")
+			_status_panel.log_activity("Failed to open project.godot for reading", "error")
 		return
 
-	# Scan existing autoload entries for mcp_runtime to avoid duplicates
-	if config.has_section("autoload"):
-		var existing_keys: PackedStringArray = config.get_section_keys("autoload")
-		for key in existing_keys:
-			var val: String = config.get_value("autoload", key, "")
-			if val.ends_with("mcp_runtime.gd"):
-				# Fix stale editor-only prefix or numeric key
-				if key != "MCPRuntime" or val.begins_with("*"):
-					config.erase_section_key("autoload", key)
-					config.set_value("autoload", "MCPRuntime", autoload_entry)
-					var fix_err: Error = config.save(config_path)
-					if fix_err == OK:
-						print("[MCP] Fixed autoload entry (key: %s → MCPRuntime)" % key)
-				return  # Already registered
+	var content: String = read_file.get_as_text()
+	read_file.close()
 
-	# Add the autoload with a named key for predictable /root/MCPRuntime access
-	config.set_value("autoload", "MCPRuntime", autoload_entry)
-	var save_err: Error = config.save(config_path)
-	if save_err != OK:
-		push_warning("[MCP] Failed to save autoload to project.godot")
+	# Normalize line endings (handle Windows CRLF)
+	content = content.replace("\r\n", "\n")
+
+	# Check if MCPRuntime is already registered
+	if "MCPRuntime=" in content:
+		return  # Already registered
+
+	# Find the [autoload] section and insert MCPRuntime
+	var autoload_idx: int = content.find("[autoload]")
+
+	if autoload_idx != -1:
+		# [autoload] section exists — insert MCPRuntime after section header
+		var header_end: int = content.find("\n", autoload_idx)
+		if header_end == -1:
+			header_end = content.length()
+		else:
+			header_end += 1  # include the newline
+		content = content.substr(0, header_end) + autoload_line + "\n" + content.substr(header_end)
+	else:
+		# [autoload] section does not exist — append at end
+		if not content.is_empty() and not content.ends_with("\n"):
+			content += "\n"
+		content += "[autoload]\n\n" + autoload_line + "\n"
+
+	# Write back
+	var write_file := FileAccess.open(config_path, FileAccess.WRITE)
+	if not write_file:
+		push_warning("[MCP] Failed to open project.godot for writing")
 		if _status_panel:
-			_status_panel.log_activity("Failed to save autoload to project.godot: %s" % error_string(save_err), "error")
+			_status_panel.log_activity("Failed to open project.godot for writing", "error")
 		return
-	print("[MCP] Registered runtime autoload MCPRuntime in project.godot")
+
+	write_file.store_string(content)
+	write_file.close()
+
+	# Verify the write succeeded by re-reading the file
+	var verify_file := FileAccess.open(config_path, FileAccess.READ)
+	if verify_file:
+		var verify_content: String = verify_file.get_as_text()
+		verify_file.close()
+		if "MCPRuntime=" in verify_content:
+			print("[MCP] Registered runtime autoload MCPRuntime in project.godot")
+		else:
+			push_warning("[MCP] Write verification failed — MCPRuntime not found in project.godot after write")
+			if _status_panel:
+				_status_panel.log_activity("Write verification failed — MCPRuntime not found after write", "error")
+	else:
+		push_warning("[MCP] Failed to verify write to project.godot")
 
 
 ## Remove the mcp_runtime autoload from project.godot on plugin unload.
@@ -196,22 +221,29 @@ func _remove_runtime_autoload() -> void:
 	if not FileAccess.file_exists(config_path):
 		return
 
-	var config := ConfigFile.new()
-	var err: Error = config.load(config_path)
-	if err != OK:
+	var read_file := FileAccess.open(config_path, FileAccess.READ)
+	if not read_file:
 		return
 
-	var autoload_path: String = "res://addons/godot_mcp/services/mcp_runtime.gd"
+	var content: String = read_file.get_as_text()
+	read_file.close()
 
-	# Find and remove the mcp_runtime entry — exact match only
-	var keys: PackedStringArray = config.get_section_keys("autoload")
-	for key: String in keys:
-		var val: String = config.get_value("autoload", key, "")
-		if val == autoload_path or val == "*" + autoload_path:
-			config.erase_section_key("autoload", key)
-			print("[MCP] Removed autoload entry '%s' from project.godot" % key)
+	if "MCPRuntime=" not in content:
+		return  # Nothing to remove
 
-	config.save(config_path)
+	# Normalize line endings and filter out the MCPRuntime line
+	content = content.replace("\r\n", "\n")
+	var lines: PackedStringArray = content.split("\n")
+	var filtered: Array[String] = []
+	for line in lines:
+		if "MCPRuntime=" not in line:
+			filtered.append(line)
+
+	var write_file := FileAccess.open(config_path, FileAccess.WRITE)
+	if write_file:
+		write_file.store_string("\n".join(filtered))
+		write_file.close()
+		print("[MCP] Removed autoload entry 'MCPRuntime' from project.godot")
 
 
 ## Register all command modules.
