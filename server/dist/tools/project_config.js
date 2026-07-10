@@ -97,8 +97,8 @@ export function registerProjectConfigTools(server, bridge) {
             order: z.array(z.string()).describe('Ordered list of autoload names (first loads first)'),
         },
     }, async (args) => callGodot(bridge, 'project_config/reorder_autoloads', args));
-    // 13. remove_project_setting
-    server.registerTool('remove_project_setting', {
+    // 13. remove_project_config_setting
+    server.registerTool('remove_project_config_setting', {
         description: 'Remove a project setting from project.godot. Use this instead of setting a value to null.',
         inputSchema: {
             key: z.string().describe('Project setting key to remove (e.g. custom/my_setting)'),
