@@ -21,7 +21,7 @@ export const PING_TIMEOUT_MS = 15_000;
 export const MAX_MESSAGE_SIZE = 10 * 1024 * 1024;
 
 /** Server version */
-export const SERVER_VERSION = '1.0.14';
+export const SERVER_VERSION = '1.0.15';
 
 /** Server name for MCP identification */
 export const SERVER_NAME = 'godot-mcp';
