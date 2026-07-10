@@ -52,27 +52,26 @@ func _meta_path(slot: int) -> String:
 
 
 ## Check if a real scene is open (not a null root or auto-created empty scene).
-## D4 fix: after close_scene(), Godot auto-creates a new empty scene tab
-## with root=null and path="".  get_edited_scene_root() may still return
-## the old (stale) root due to reference-counting lag, and scene_file_path
-## on that stale root still holds the old path.
-## The reliable check: get_open_scenes() returns [""] after close_scene
-## (one entry with empty string), so we check for at least one non-empty path.
+## Uses a combined defensive strategy because Godot may still return stale
+## references after close_scene():
+##   1. Root must not be null.
+##   2. Root must have a non-empty scene_file_path (came from a saved .tscn).
+##   3. Root must still be inside the editor scene tree — after close_scene()
+##      Godot removes the root from the tree, so a stale reference fails here.
+##   4. Root's scene_file_path must exactly match an entry in get_open_scenes().
+## After close_scene(), get_open_scenes() no longer contains the old path.
 func _is_scene_open(root: Node) -> bool:
 	if root == null:
 		return false
-	# Primary guard: get_open_scenes() is authoritative.
-	# After close_scene() it returns [""] (one empty-string entry).
-	# Only treat a scene as open when at least one entry has a non-empty path.
-	var open_scenes: PackedStringArray = _plugin.get_editor_interface().get_open_scenes()
-	var has_valid_scene: bool = false
-	for path in open_scenes:
-		if not path.is_empty():
-			has_valid_scene = true
-			break
-	if not has_valid_scene:
+	if root.scene_file_path.is_empty():
 		return false
-	return true
+	if not root.is_inside_tree():
+		return false
+	var open_scenes: PackedStringArray = _plugin.get_editor_interface().get_open_scenes()
+	for path in open_scenes:
+		if not path.is_empty() and path == root.scene_file_path:
+			return true
+	return false
 
 
 ## Resolve the authoritative scene path for the currently edited scene.
