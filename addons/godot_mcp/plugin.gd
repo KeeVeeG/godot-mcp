@@ -31,6 +31,29 @@ var _dialog_timer: Timer
 ## Track game start/stop
 var _game_running: bool = false
 
+## D4 workaround: Godot 4's close_scene() does NOT clear
+## get_edited_scene_root(), get_open_scenes(), scene_file_path,
+## or is_inside_tree().  We track the logical "scene open" state
+## ourselves so that save/load tools can reliably reject requests
+## after a close_scene() call.
+var _scene_open: bool = true
+
+
+## Called by scene_commands when close_scene() succeeds.
+func notify_scene_closed() -> void:
+	_scene_open = false
+
+
+## Called by scene_commands when a scene is opened or created.
+func notify_scene_opened() -> void:
+	_scene_open = true
+
+
+## Returns true when a scene is logically open in the editor
+## (opened/created but not yet closed via godot_close_scene).
+func is_scene_logically_open() -> bool:
+	return _scene_open
+
 
 func _enter_tree() -> void:
 	print("[MCP] Godot MCP Plugin loading...")

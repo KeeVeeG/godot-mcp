@@ -52,15 +52,17 @@ func _meta_path(slot: int) -> String:
 
 
 ## Check if a real scene is open (not a null root or auto-created empty scene).
-## Uses a combined defensive strategy because Godot may still return stale
-## references after close_scene():
-##   1. Root must not be null.
-##   2. Root must have a non-empty scene_file_path (came from a saved .tscn).
-##   3. Root must still be inside the editor scene tree — after close_scene()
-##      Godot removes the root from the tree, so a stale reference fails here.
-##   4. Root's scene_file_path must exactly match an entry in get_open_scenes().
-## After close_scene(), get_open_scenes() no longer contains the old path.
+## Guard 0 (D4 workaround): plugin tracks logical close_scene() calls via
+##   notify_scene_closed/notify_scene_opened because Godot 4 does NOT clear
+##   get_edited_scene_root(), get_open_scenes(), scene_file_path, or
+##   is_inside_tree() after close_scene().
+## Guards 1-4: API-based fallback for cases where the user closes a scene
+##   via the Godot UI instead of the MCP godot_close_scene tool.
 func _is_scene_open(root: Node) -> bool:
+	# Guard 0: logical state tracking (catches godot_close_scene calls).
+	if _plugin.has_method("is_scene_logically_open") and not _plugin.is_scene_logically_open():
+		return false
+	# Guards 1-4: API-based fallback.
 	if root == null:
 		return false
 	if root.scene_file_path.is_empty():

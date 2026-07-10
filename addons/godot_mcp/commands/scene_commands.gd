@@ -156,6 +156,8 @@ func _create_scene(params: Dictionary) -> Dictionary:
 		# Return soft warning so caller can retry.
 		return {"result": {"path": path, "root_type": root_type, "warning": "Scene saved but not opened — the editor may be busy. Call open_scene to switch to it."}}
 
+	if _plugin.has_method("notify_scene_opened"):
+		_plugin.notify_scene_opened()
 	return {"result": {"path": path, "root_type": root_type}}
 
 
@@ -182,12 +184,16 @@ func _open_scene(params: Dictionary) -> Dictionary:
 		return {"error": "Failed to open scene: no scene root loaded"}
 	if root.scene_file_path != normalized_path:
 		return {"error": "Failed to open scene: editor is showing '%s' instead of '%s'. A scene change may be in progress — close the current scene first." % [root.scene_file_path, normalized_path]}
+	if _plugin.has_method("notify_scene_opened"):
+		_plugin.notify_scene_opened()
 	return {"result": {"message": "Scene opened: %s" % path}}
 
 
 ## Close the currently edited scene in the editor.
 func _close_scene(_params: Dictionary = {}) -> Dictionary:
 	_plugin.get_editor_interface().close_scene()
+	if _plugin.has_method("notify_scene_closed"):
+		_plugin.notify_scene_closed()
 	return {"result": {"message": "Scene closed"}}
 
 
