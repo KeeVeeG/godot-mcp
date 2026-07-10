@@ -30,7 +30,7 @@ func execute(method: String, params: Dictionary):
 	match method:
 		"get_editor_errors": return _get_editor_errors(params)
 		"get_editor_screenshot": return _get_editor_screenshot(params)
-		"get_game_screenshot": return await _get_game_screenshot(params)
+		"get_game_screenshot": return _get_game_screenshot(params)
 		"execute_editor_script": return _execute_editor_script(params)
 		"clear_output": return _clear_output()
 		"get_signals": return _get_signals(params)
