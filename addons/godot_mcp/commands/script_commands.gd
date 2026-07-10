@@ -159,15 +159,25 @@ func _delete_script(params: Dictionary) -> Dictionary:
 	
 	# Check if script is attached to any node in the current scene
 	var force: bool = params.get("force", false)
-	if not force:
-		var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
-		if root:
-			var attached_nodes: Array = _find_nodes_with_script(root, path, 0, 20)
-			if not attached_nodes.is_empty():
+	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
+	if root:
+		var attached_nodes: Array = _find_nodes_with_script(root, path, 0, 20)
+		if not attached_nodes.is_empty():
+			if not force:
 				var ref_paths: PackedStringArray = []
 				for r in attached_nodes:
 					ref_paths.append(str(r))
 				return {"error": "Script is attached to %d node(s): %s. Use force=true to delete anyway." % [attached_nodes.size(), ", ".join(ref_paths)]}
+			# force=true: detach from all attached nodes before deleting the file
+			for node_path in attached_nodes:
+				var node: Node = root.get_node_or_null(node_path)
+				if node:
+					var old_scr: Script = node.get_script()
+					var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
+					ur.create_action("MCP: Force-detach script from %s" % node_path)
+					ur.add_do_property(node, "script", null)
+					ur.add_undo_property(node, "script", old_scr)
+					ur.commit_action()
 	
 	var err: Error = DirAccess.remove_absolute(path)
 	if err != OK:

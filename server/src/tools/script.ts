@@ -1,5 +1,5 @@
 /**
- * Script tools - 9 tools for script management
+ * Script tools - 10 tools for script management
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -86,7 +86,19 @@ export function registerScriptTools(server: McpServer, bridge: GodotBridge): voi
     async (args) => callGodot(bridge, 'script/attach', args as Record<string, unknown>),
   );
 
-  // 7. get_open_scripts
+  // 7. detach_script
+  server.registerTool(
+    'detach_script',
+    {
+      description: 'Detach a script from a node (sets script to null)',
+      inputSchema: {
+        node_path: NodePath.describe('Node to detach script from'),
+      },
+    },
+    async (args) => callGodot(bridge, 'script/detach', args as Record<string, unknown>),
+  );
+
+  // 8. get_open_scripts
   server.registerTool(
     'get_open_scripts',
     {
@@ -96,7 +108,7 @@ export function registerScriptTools(server: McpServer, bridge: GodotBridge): voi
     async () => callGodot(bridge, 'script/get_open'),
   );
 
-  // 8. validate_script
+  // 9. validate_script
   server.registerTool(
     'validate_script',
     {
@@ -108,7 +120,7 @@ export function registerScriptTools(server: McpServer, bridge: GodotBridge): voi
     async (args) => callGodot(bridge, 'script/validate', args as Record<string, unknown>),
   );
 
-  // 9. search_in_files
+  // 10. search_in_files
   server.registerTool(
     'search_in_files',
     {

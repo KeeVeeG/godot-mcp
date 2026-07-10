@@ -1,5 +1,5 @@
 /**
- * Shader tools - 9 tools for shader management
+ * Shader tools - 11 tools for shader management
  */
 import { callGodot } from '../server.js';
 import { z, NodePath, FilePath, PropertyValue, SearchQuery } from './shared-types.js';
@@ -80,5 +80,19 @@ export function registerShaderTools(server, bridge) {
             force: z.boolean().optional().default(false).describe('Delete even if shader is referenced by nodes'),
         },
     }, async (args) => callGodot(bridge, 'shader/delete', args));
+    // 9. unassign_material
+    server.registerTool('unassign_material', {
+        description: 'Remove ShaderMaterial from a node (set material/material_override to null)',
+        inputSchema: {
+            node_path: NodePath.describe('Node path to remove the material from'),
+        },
+    }, async (args) => callGodot(bridge, 'shader/unassign_material', args));
+    // 10. validate_shader
+    server.registerTool('validate_shader', {
+        description: 'Validate a shader file for compilation errors',
+        inputSchema: {
+            path: FilePath.describe('Shader file path to validate'),
+        },
+    }, async (args) => callGodot(bridge, 'shader/validate', args));
 }
 //# sourceMappingURL=shader.js.map

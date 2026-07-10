@@ -1,5 +1,5 @@
 /**
- * Script tools - 9 tools for script management
+ * Script tools - 10 tools for script management
  */
 import { callGodot } from '../server.js';
 import { z, ScriptPath, NodePath, GDScriptCode, SearchQuery } from './shared-types.js';
@@ -52,19 +52,26 @@ export function registerScriptTools(server, bridge) {
             node_path: NodePath.describe("Node to attach script to (e.g. 'Player' or '' for scene root)"),
         },
     }, async (args) => callGodot(bridge, 'script/attach', args));
-    // 7. get_open_scripts
+    // 7. detach_script
+    server.registerTool('detach_script', {
+        description: 'Detach a script from a node (sets script to null)',
+        inputSchema: {
+            node_path: NodePath.describe('Node to detach script from'),
+        },
+    }, async (args) => callGodot(bridge, 'script/detach', args));
+    // 8. get_open_scripts
     server.registerTool('get_open_scripts', {
         description: 'Get list of scripts currently open in the script editor',
         inputSchema: {},
     }, async () => callGodot(bridge, 'script/get_open'));
-    // 8. validate_script
+    // 9. validate_script
     server.registerTool('validate_script', {
         description: 'Validate a GDScript file for syntax errors',
         inputSchema: {
             path: ScriptPath.describe('Script file path to validate'),
         },
     }, async (args) => callGodot(bridge, 'script/validate', args));
-    // 9. search_in_files
+    // 10. search_in_files
     server.registerTool('search_in_files', {
         description: 'Search for text across project files',
         inputSchema: {

@@ -25,6 +25,7 @@ func get_commands() -> Dictionary:
 		"shader/get_params": get_shader_params,
 		"shader/list": list_shaders,
 		"shader/delete": _delete_shader,
+		"shader/validate": validate_shader,
 	}
 
 
@@ -82,8 +83,10 @@ func edit_shader(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var old_text: String = params.get("old_text", "")
 	var new_text: String = params.get("new_text", "")
-	if path.is_empty() or old_text.is_empty():
-		return {"error": "path and old_text are required"}
+	if path.is_empty():
+		return {"error": "path is required"}
+	if old_text.is_empty():
+		return {"error": "old_text must not be empty"}
 	if not FileAccess.file_exists(path):
 		return {"error": "Shader not found: %s" % path}
 
@@ -200,6 +203,19 @@ func set_shader_param(params: Dictionary) -> Dictionary:
 		return {"error": "Node does not have a ShaderMaterial"}
 
 	var shader_mat: ShaderMaterial = mat as ShaderMaterial
+	
+	# Verify the uniform exists on the shader
+	var shader: Shader = shader_mat.shader
+	if shader:
+		var uniform_list: Array = shader.get_shader_uniform_list()
+		var found: bool = false
+		for u: Dictionary in uniform_list:
+			if u.get("name", "") == param:
+				found = true
+				break
+		if not found:
+			return {"error": "Shader does not have uniform '%s'" % param}
+	
 	# Parse value appropriately
 	var parsed: Variant = value
 	if value is String:
@@ -276,10 +292,27 @@ func get_shader_params(params: Dictionary) -> Dictionary:
 
 	var shader_mat: ShaderMaterial = mat as ShaderMaterial
 	var shader: Shader = shader_mat.shader
+	
+	# Force reload shader from disk to pick up file changes.
+	# ShaderMaterial caches the compiled shader internally. By loading
+	# a fresh copy (CACHE_MODE_IGNORE) and reassigning, we force Godot
+	# to recompile and expose any new uniforms added to the .gdshader file.
+	# NOTE: This is a best-effort approach. If the shader file has been
+	# saved with syntax errors, the reload may result in a broken shader
+	# that returns no uniforms. In that case, fix the shader and try again.
+	var reloaded: bool = false
+	if shader and not shader.resource_path.is_empty():
+		var fresh_shader: Shader = ResourceLoader.load(shader.resource_path, "", ResourceLoader.CACHE_MODE_IGNORE) as Shader
+		if fresh_shader:
+			shader_mat.shader = fresh_shader
+			shader = fresh_shader
+			reloaded = true
+	
 	var result: Dictionary = {
 		"node_path": node_path,
 		"shader_path": shader.resource_path if shader else "",
 		"parameters": {},
+		"reloaded_from_disk": reloaded,
 	}
 	if shader:
 		var param_list: Array = shader.get_shader_uniform_list()
@@ -349,6 +382,54 @@ func _delete_shader(params: Dictionary) -> Dictionary:
 	
 	_plugin.safe_scan_filesystem()
 	return {"result": {"deleted": path}}
+
+
+## Validate a shader file for compilation errors.
+func validate_shader(params: Dictionary) -> Dictionary:
+	var path: String = params.get("path", "")
+	if path.is_empty():
+		return {"error": "path is required"}
+	if not FileAccess.file_exists(path):
+		return {"error": "Shader not found: %s" % path}
+	
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {"error": "Cannot read shader: %s" % path}
+	var content: String = file.get_as_text()
+	file.close()
+	
+	var result: Dictionary = {"path": path, "valid": true, "line_count": content.count("\n") + 1}
+	
+	# Basic validation: shader must start with shader_type declaration
+	if not content.strip_edges().begins_with("shader_type"):
+		result["valid"] = false
+		result["error"] = "Missing shader_type declaration"
+		return {"result": result}
+	
+	# Extract shader type from the declaration line
+	var lines: PackedStringArray = content.split("\n")
+	for line in lines:
+		var stripped: String = line.strip_edges()
+		if stripped.begins_with("shader_type"):
+			result["type"] = stripped.trim_prefix("shader_type").strip_edges().trim_suffix(";").strip_edges()
+			break
+	
+	# Try loading as Shader resource (CACHE_MODE_IGNORE to get fresh version)
+	var shader: Shader = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as Shader
+	if shader == null:
+		result["valid"] = false
+		result["error"] = "Failed to load shader resource. Check Godot Output panel for compilation errors."
+		return {"result": result}
+	
+	# Get uniforms as a rough compilation check
+	var uniforms: Array = shader.get_shader_uniform_list()
+	result["uniforms"] = []
+	for u: Dictionary in uniforms:
+		result["uniforms"].append({"name": u.get("name", ""), "type": str(u.get("type", ""))})
+	
+	result["message"] = "Shader validated successfully. Note: Some compilation errors may only appear in the Godot Output panel."
+	
+	return {"result": result}
 
 
 ## Helper: find nodes that reference a specific shader path.

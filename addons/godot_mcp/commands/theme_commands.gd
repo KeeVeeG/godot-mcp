@@ -18,6 +18,36 @@ func _is_valid_theme_type(type_name: String) -> bool:
 	return ClassDB.class_exists(type_name) and ClassDB.is_parent_class(type_name, "Control")
 
 
+## Check if a color name looks like a standard Godot theme color name.
+## Non-ASCII names are likely to be silently dropped by Godot.
+func _is_valid_theme_color_name(name_str: String) -> bool:
+	# Standard Godot theme color names for common Control types
+	var _known: PackedStringArray = [
+		"font_color", "font_hover_color", "font_pressed_color", "font_focus_color",
+		"font_hover_pressed_color", "font_disabled_color", "font_outline_color",
+		"font_placeholder_color", "font_selection_color",
+		"icon_normal_color", "icon_hover_color", "icon_pressed_color",
+		"icon_focus_color", "icon_disabled_color",
+		"font_color_hover", "font_color_pressed",
+		"title_color",
+		"default_color",
+		"read_only_color",
+		"search_right_color", "search_mismatch_color",
+		"caret_color", "selection_color", "background_color",
+		"current_line_color", "word_highlighted_color",
+		"line_number_color", "safe_line_number_color",
+		"folded_code_region_color",
+		"brace_mismatch_color",
+		"bookmark_color", "breakpoint_color", "executing_line_color",
+	]
+	if name_str in _known:
+		return true
+	# Check if it's a reasonable ASCII snake_case identifier
+	var regex: RegEx = RegEx.new()
+	regex.compile("^[a-z][a-z0-9_]*$")
+	return regex.search(name_str) != null
+
+
 func get_commands() -> Dictionary:
 	return {
 		"theme/create": create_theme,
@@ -37,6 +67,10 @@ func get_commands() -> Dictionary:
 ## Create a new theme resource.
 func create_theme(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "res://theme.tres")
+	if path.is_empty():
+		return {"error": "Path cannot be empty"}
+	if not path.begins_with("res://") and not path.begins_with("user://"):
+		return {"error": "Path must start with 'res://' or 'user://' (e.g. 'res://assets/theme.tres')"}
 	var theme: Theme = Theme.new()
 	MCPCommandHelpers.ensure_dir(path.get_base_dir())
 	var err: Error = ResourceSaver.save(theme, path)
@@ -55,11 +89,12 @@ func _delete_theme(params: Dictionary) -> Dictionary:
 		return {"error": "Theme not found: %s" % path}
 	
 	# Check if theme is used by any Control node in the current scene
+	var _delete_warning: String = ""
 	var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
 	if root:
 		var refs: Array = _find_theme_refs_in_scene(root, path, 0, 20)
 		if not refs.is_empty():
-			return {"error": "Theme is used by nodes: %s. Remove references first." % str(refs)}
+			_delete_warning = "Warning: Theme is currently referenced by nodes: %s. These nodes now have dangling theme references." % str(refs)
 	
 	# Convert res:// to global path for DirAccess
 	var global_path: String = ProjectSettings.globalize_path(path)
@@ -78,7 +113,10 @@ func _delete_theme(params: Dictionary) -> Dictionary:
 		DirAccess.remove_absolute(uid_path)
 	
 	_plugin.safe_scan_filesystem()
-	return {"result": {"deleted": path}}
+	var msg: String = str({"deleted": path})
+	if not _delete_warning.is_empty():
+		msg = str({"deleted": path, "warning": _delete_warning})
+	return {"result": msg}
 
 
 ## Helper: find nodes that reference a specific theme path.
@@ -117,13 +155,21 @@ func set_theme_color(params: Dictionary) -> Dictionary:
 	if theme == null:
 		return {"error": "Theme not found: %s" % path}
 
+	# Warn on non-standard color names (non-ASCII chars may be silently dropped by Godot)
+	var _warning: String = ""
+	if not _is_valid_theme_color_name(name_str):
+		_warning = "Warning: '%s' is a non-standard color name. Use standard names like 'font_color', 'font_hover_color', etc. Non-standard names may be silently dropped by Godot." % name_str
+
 	var parsed_color: Color = MCPVariantCodec._parse_color(color)
 	theme.set_color(name_str, theme_type, parsed_color)
 
 	var err: Error = ResourceSaver.save(theme, path)
 	if err != OK:
 		return {"error": "Failed to save theme: %s" % error_string(err)}
-	return {"result": "Color '%s' set for '%s' in theme" % [name_str, theme_type]}
+	var msg: String = "Color '%s' set for '%s' in theme" % [name_str, theme_type]
+	if not _warning.is_empty():
+		msg += ". " + _warning
+	return {"result": msg}
 
 
 ## Set a constant in a theme.
@@ -199,8 +245,45 @@ func set_theme_stylebox(params: Dictionary) -> Dictionary:
 	if theme == null:
 		return {"error": "Theme not found: %s" % path}
 
-	var style_type: String = properties.get("type", "Flat")
+	# Read stylebox_type from top-level param (Defect #4), fall back to properties.type for backwards compat
+	var style_type: String = params.get("stylebox_type", "")
+	if style_type.is_empty():
+		style_type = properties.get("type", "Flat")
+	else:
+		# Remove 'type' from properties to avoid treating it as an unknown property
+		properties.erase("type")
+
 	var stylebox: StyleBox = null
+	var _style_warning: String = ""
+
+	# Validate property names before applying (Defect #3)
+	var _flat_valid_props: PackedStringArray = [
+		"bg_color", "border_color",
+		"border_width_left", "border_width_right", "border_width_top", "border_width_bottom",
+		"corner_radius_top_left", "corner_radius_top_right", "corner_radius_bottom_left", "corner_radius_bottom_right",
+		"content_margin_left", "content_margin_top", "content_margin_right", "content_margin_bottom",
+		"draw_center", "anti_aliased",
+		"shadow_size", "shadow_offset", "shadow_color",
+		"expand_margin_left", "expand_margin_right", "expand_margin_top", "expand_margin_bottom",
+		"aa_size", "aa_on",
+	]
+	var _line_valid_props: PackedStringArray = ["color", "thickness"]
+	var _tex_valid_props: PackedStringArray = ["texture", "region_rect", "margin_left", "margin_right", "margin_top", "margin_bottom", "draw_center", "modulate_color"]
+	var _empty_valid_props: PackedStringArray = []  # StyleBoxEmpty has no properties
+	var _valid_props: PackedStringArray = _flat_valid_props
+	match style_type:
+		"Line": _valid_props = _line_valid_props
+		"Empty": _valid_props = _empty_valid_props
+		"Texture": _valid_props = _tex_valid_props
+		_: _valid_props = _flat_valid_props
+
+	var _invalid_keys: Array = []
+	for key in properties.keys():
+		if key != "type" and not key in _valid_props:
+			_invalid_keys.append(key)
+	if not _invalid_keys.is_empty():
+		_style_warning = "Warning: unrecognized StyleBox property names ignored: %s" % str(_invalid_keys)
+
 	match style_type:
 		"Flat":
 			var flat: StyleBoxFlat = StyleBoxFlat.new()
@@ -268,7 +351,10 @@ func set_theme_stylebox(params: Dictionary) -> Dictionary:
 	var err: Error = ResourceSaver.save(theme, path)
 	if err != OK:
 		return {"error": "Failed to save theme: %s" % error_string(err)}
-	return {"result": "StyleBox '%s' (%s) set for '%s' in theme" % [name_str, style_type, theme_type]}
+	var msg: String = "StyleBox '%s' (%s) set for '%s' in theme" % [name_str, style_type, theme_type]
+	if not _style_warning.is_empty():
+		msg += ". " + _style_warning
+	return {"result": msg}
 
 
 ## Get info about a theme resource.
