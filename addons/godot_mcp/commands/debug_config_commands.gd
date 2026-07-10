@@ -72,8 +72,9 @@ func _set_remote_debug(params: Dictionary) -> Dictionary:
 		editor_settings.set_setting("network/debug/remote_host", host)
 		editor_settings.set_setting("network/debug/remote_port", port)
 	else:
-		editor_settings.set_setting("network/debug/remote_host", "")
-		# Don't set port when disabling — it's irrelevant when remote debug is off
+		# Restore factory defaults when disabling
+		editor_settings.set_setting("network/debug/remote_host", "127.0.0.1")
+		editor_settings.set_setting("network/debug/remote_port", 6007)
 	return {"success": true, "enabled": enabled, "host": host, "port": port}
 
 

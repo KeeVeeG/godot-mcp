@@ -149,6 +149,9 @@ func _set_scale(params: Dictionary) -> Dictionary:
 
 
 ## Save the current editor configuration (theme, font, scale, tab) to a named config file.
+## Uses atomic write-then-rename to avoid Windows file-locking issues
+## when a layout with the same name was recently deleted (antivirus may hold
+## a lock on the deleted path, causing ConfigFile.save() to fail).
 func _save_layout(params: Dictionary) -> Dictionary:
 	var name: String = params.get("name", "")
 	if name.is_empty():
@@ -167,15 +170,26 @@ func _save_layout(params: Dictionary) -> Dictionary:
 	config.set_value("scale", "custom_display_scale", es.get_setting("interface/editor/appearance/custom_display_scale"))
 	# Active tab
 	config.set_value("layout", "main_screen", _current_tab)
-	var err: Error = config.save(layout_path)
+	# Atomic write: save to temp file, then rename to final path.
+	# This avoids the delete-then-write race on Windows where antivirus
+	# may still hold a lock after DirAccess.remove_absolute().
+	var tmp_path: String = layout_path + ".tmp"
+	var err: Error = config.save(tmp_path)
 	if err != OK:
 		return {"success": false, "error": "Failed to save layout: %s" % error_string(err)}
+	err = DirAccess.rename_absolute(ProjectSettings.globalize_path(tmp_path), ProjectSettings.globalize_path(layout_path))
+	if err != OK:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp_path))
+		return {"success": false, "error": "Failed to finalize layout save: %s" % error_string(err)}
 	# Register layout in EditorSettings (avoids DirAccess race conditions)
 	_register_layout_name(es, name)
 	return {"success": true, "name": name, "path": layout_path, "message": "Editor config '%s' saved (theme, font, scale, tab)" % name}
 
 
 ## Load a saved editor configuration.
+## Scale changes require an editor restart because EDSCALE is set at startup
+## and not changeable at runtime. The response includes a `restart_required`
+## flag so MCP clients can prompt or auto-restart via EditorInterface.restart_editor().
 func _load_layout(params: Dictionary) -> Dictionary:
 	var name: String = params.get("name", "")
 	if name.is_empty():
@@ -197,13 +211,19 @@ func _load_layout(params: Dictionary) -> Dictionary:
 		es.set_setting("interface/theme/base_color", config.get_value("theme", "base_color", Color(0.14, 0.14, 0.14)))
 	# Font
 	es.set_setting("interface/editor/fonts/main_font_size", config.get_value("font", "main_font_size", 14))
-	# Scale
-	es.set_setting("interface/editor/appearance/custom_display_scale", config.get_value("scale", "custom_display_scale", 1.0))
+	# Scale — detect if scale actually changed to determine if restart is needed
+	var old_scale: float = es.get_setting("interface/editor/appearance/custom_display_scale") if es.has_setting("interface/editor/appearance/custom_display_scale") else 1.0
+	var new_scale: float = config.get_value("scale", "custom_display_scale", 1.0)
+	es.set_setting("interface/editor/appearance/custom_display_scale", new_scale)
+	var restart_required: bool = abs(old_scale - new_scale) > 0.001
 	# Active tab
 	var main_screen: String = config.get_value("layout", "main_screen", "2D") as String
 	EditorInterface.set_main_screen_editor(main_screen)
 	_current_tab = main_screen
-	return {"success": true, "name": name, "message": "Editor config '%s' loaded (theme, font, scale, tab). Scale changes require editor restart." % name}
+	var message: String = "Editor config '%s' loaded (theme, font, scale, tab)." % name
+	if restart_required:
+		message += " Scale changed (%.1f → %.1f) — restart required. Call EditorInterface.restart_editor(true) to apply now." % [old_scale * 100, new_scale * 100]
+	return {"success": true, "name": name, "restart_required": restart_required, "message": message}
 
 
 ## Reset layout to defaults.
@@ -220,6 +240,9 @@ func _reset_layout() -> Dictionary:
 
 
 ## Delete a saved editor layout from user://.
+## Uses remove_absolute() with OS path to avoid Windows file-locking issues
+## that can occur when DirAccess.open("user://") + remove() is followed by
+## a ConfigFile.save() to the same path (antivirus may hold DeleteFileW lock).
 func _delete_layout(params: Dictionary) -> Dictionary:
 	var name: String = params.get("name", "")
 	if name.is_empty():
@@ -227,10 +250,7 @@ func _delete_layout(params: Dictionary) -> Dictionary:
 	var layout_path: String = "user://editor_layout_%s.cfg" % name
 	if not FileAccess.file_exists(layout_path):
 		return {"success": false, "error": "Layout not found: %s" % name}
-	var dir: DirAccess = DirAccess.open("user://")
-	if dir == null:
-		return {"success": false, "error": "Cannot access user directory"}
-	var err: Error = dir.remove("editor_layout_%s.cfg" % name)
+	var err: Error = DirAccess.remove_absolute(ProjectSettings.globalize_path(layout_path))
 	if err != OK:
 		return {"success": false, "error": "Failed to delete layout: %s" % error_string(err)}
 	# Unregister layout from EditorSettings
@@ -239,6 +259,8 @@ func _delete_layout(params: Dictionary) -> Dictionary:
 
 
 ## Helper: get list of saved layouts from EditorSettings (avoid DirAccess race conditions).
+## Falls back to disk scanning if EditorSettings key is missing (fixes Defect 1:
+## saved_layouts appearing empty after reset when EditorSettings key is lost).
 func _get_saved_layouts() -> Array:
 	var es: EditorSettings = EditorInterface.get_editor_settings()
 	if es == null:
@@ -249,6 +271,13 @@ func _get_saved_layouts() -> Array:
 	for name in names:
 		if FileAccess.file_exists("user://editor_layout_%s.cfg" % name):
 			layouts.append(name)
+	# Fallback: if EditorSettings key was empty or names had no matching files,
+	# scan disk directly and re-register found layouts.
+	if layouts.is_empty():
+		var from_disk: Array = _scan_layout_files()
+		for layout_name in from_disk:
+			layouts.append(layout_name)
+			_register_layout_name(es, layout_name)
 	return layouts
 
 

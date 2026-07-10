@@ -74,9 +74,6 @@ func _set_configuration(params: Dictionary) -> Dictionary:
 			return {"success": false, "error": "Invalid config: %s (use: debug, release, development)" % config}
 	# Track configuration in custom key for reliable read-back
 	ProjectSettings.set_setting("godot_mcp/build_config/configuration", config)
-	var err: Error = ProjectSettings.save()
-	if err != OK:
-		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
 	return {"success": true, "configuration": config, "message": "Build config set to %s" % config}
 
 
@@ -109,9 +106,6 @@ func _set_export_filter(params: Dictionary) -> Dictionary:
 			return {"success": false, "error": "Invalid filter: %s" % filter}
 	# Track in custom key for reliable read-back
 	ProjectSettings.set_setting("godot_mcp/build_config/export_filter", filter)
-	var err: Error = ProjectSettings.save()
-	if err != OK:
-		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
 	return {"success": true, "filter": filter, "message": "Export filter set to %s" % filter}
 
 
@@ -124,9 +118,6 @@ func _set_custom_features(params: Dictionary) -> Dictionary:
 	ProjectSettings.set_setting("application/config/features", packed)
 	# Track in custom key for reliable read-back (engine mixes version/renderer features into application/config/features)
 	ProjectSettings.set_setting("godot_mcp/build_config/custom_features", features)
-	var err: Error = ProjectSettings.save()
-	if err != OK:
-		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
 	return {"success": true, "features": features, "message": "Custom features set"}
 
 
@@ -147,9 +138,6 @@ func _set_debug_options(params: Dictionary) -> Dictionary:
 		if params.has("optimize"):
 			debug_options["optimize"] = params["optimize"] as bool
 			ProjectSettings.set_setting("godot_mcp/build_config/optimize", debug_options["optimize"])
-		var err: Error = ProjectSettings.save()
-		if err != OK:
-			return {"success": false, "error": "Failed to save: %s" % error_string(err)}
 		return {"success": true, "debug_options": debug_options}
 	return {"success": false, "error": "No debug options provided"}
 

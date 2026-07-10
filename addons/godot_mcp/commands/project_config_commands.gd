@@ -97,15 +97,27 @@ func _set_setting(params: Dictionary) -> Dictionary:
 
 
 ## Get all project settings, optionally filtered by prefix.
+## Uses path-segment matching: "input/" matches "input/ui_accept" but NOT "input_devices/pointing/..."
 func _get_all_settings(params: Dictionary) -> Dictionary:
 	var filter_prefix: String = params.get("filter", "")
 	var settings: Dictionary = {}
 	var props: Array = ProjectSettings.get_property_list()
+	# Normalize filter to path-segment form: strip trailing "/" then require "/" after the bare name.
+	# E.g. filter "input/" → bare "input" → matches keys equal to "input" or starting with "input/"
+	# This prevents "input/" from matching "input_devices/" keys.
+	var bare_filter: String = filter_prefix.rstrip("/")
+	var filter_is_path: bool = filter_prefix.ends_with("/")
 	for p: Dictionary in props:
 		var name: String = p["name"] as String
 		if name.begins_with("_"):
 			continue
-		if filter_prefix != "" and not name.begins_with(filter_prefix):
+		if filter_prefix == "":
+			pass  # No filter — include all
+		elif filter_is_path:
+			# Path-segment matching: key must exactly equal bare_filter OR start with bare_filter + "/"
+			if name != bare_filter and not name.begins_with(bare_filter + "/"):
+				continue
+		elif not name.begins_with(filter_prefix):
 			continue
 		var value: Variant = ProjectSettings.get_setting(name)
 		if value != null:
@@ -163,16 +175,15 @@ func _get_input_map() -> Dictionary:
 
 
 ## Replace or merge the input map.
-## When merge=false (default), erases all non-default actions first.
+## When merge=false (default), erases ALL existing actions first (full replacement).
 ## When merge=true, only adds/updates the provided actions, preserving existing ones.
 func _set_input_map(params: Dictionary) -> Dictionary:
 	var actions: Dictionary = params.get("actions", {})
 	var merge: bool = params.get("merge", false)
-	# Only clear non-default actions when not merging
+	# Full replacement: erase all existing actions before adding new ones
 	if not merge:
 		for action_name: String in InputMap.get_actions():
-			if not action_name.begins_with("ui_"):
-				InputMap.erase_action(action_name)
+			InputMap.erase_action(action_name)
 	# Add/update actions — supports both flat [events] and nested {deadzone, events} formats
 	for action_name: String in actions:
 		var action_data: Variant = actions[action_name]
