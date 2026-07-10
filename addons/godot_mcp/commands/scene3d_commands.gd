@@ -99,7 +99,14 @@ func add_mesh_instance(params: Dictionary) -> Dictionary:
 
 	# Apply material
 	if properties.has("material_path"):
-		var mat: Material = ResourceLoader.load(properties["material_path"] as String) as Material
+		var res: Resource = ResourceLoader.load(properties["material_path"] as String)
+		var mat: Material = null
+		if res is Shader:
+			var sm: ShaderMaterial = ShaderMaterial.new()
+			sm.shader = res as Shader
+			mat = sm
+		elif res is Material:
+			mat = res as Material
 		if mat:
 			mi.material_override = mat
 
@@ -453,10 +460,13 @@ func add_gridmap(params: Dictionary) -> Dictionary:
 
 	if properties.has("cell_size"):
 		gridmap.cell_size = MCPVariantCodec._parse_vector3(properties["cell_size"])
-	if properties.has("mesh_library"):
-		var lib: MeshLibrary = ResourceLoader.load(properties["mesh_library"] as String) as MeshLibrary
+	if properties.has("mesh_library_path") or properties.has("mesh_library"):
+		var mesh_lib_path: String = properties.get("mesh_library_path", properties.get("mesh_library", "")) as String
+		var lib: MeshLibrary = ResourceLoader.load(mesh_lib_path) as MeshLibrary
 		if lib:
 			gridmap.mesh_library = lib
+		else:
+			return {"error": "MeshLibrary not found or invalid: %s" % mesh_lib_path}
 
 	if _undo_helper:
 		_undo_helper.add_node_with_undo(gridmap, parent)
@@ -504,9 +514,18 @@ func set_material_3d(params: Dictionary) -> Dictionary:
 	var mat: Material = null
 	var mat_path: String = properties.get("material_path", properties.get("shader_path", "")) as String
 	if mat_path != "":
-		mat = ResourceLoader.load(mat_path) as Material
-		if mat == null:
-			return {"error": "Material resource not found: %s" % mat_path}
+		var res: Resource = ResourceLoader.load(mat_path)
+		if res == null:
+			return {"error": "Resource not found: %s" % mat_path}
+		if res is Shader:
+			# .gdshader files load as Shader, not Material — wrap in ShaderMaterial
+			var sm: ShaderMaterial = ShaderMaterial.new()
+			sm.shader = res as Shader
+			mat = sm
+		elif res is Material:
+			mat = res as Material
+		else:
+			return {"error": "Resource is not a Material or Shader: %s (type: %s)" % [mat_path, res.get_class()]}
 	else:
 		var sm: StandardMaterial3D = StandardMaterial3D.new()
 		if properties.has("albedo_color"):

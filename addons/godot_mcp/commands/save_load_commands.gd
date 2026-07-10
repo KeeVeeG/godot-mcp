@@ -51,6 +51,51 @@ func _meta_path(slot: int) -> String:
 	return SAVE_DIR + "slot_%02d%s" % [slot, META_EXT]
 
 
+## Check if a real scene is open (not a null root or auto-created empty scene).
+## After close_scene(), Godot auto-creates a new unsaved scene with an empty
+## scene_file_path. We treat that as "no scene open" for save/load purposes.
+func _is_scene_open(root: Node) -> bool:
+	if root == null:
+		return false
+	if root.scene_file_path.is_empty():
+		# scene_file_path is empty for new unsaved scenes.
+		# Double-check: if there are non-empty paths in get_open_scenes(),
+		# this might be a new scene with an existing path somehow not synced.
+		# Still reject — no meaningful scene reference to store.
+		return false
+	return true
+
+
+## Resolve the authoritative scene path for the currently edited scene.
+## Uses get_open_scenes() (which reads EditedScene.path) as the primary source
+## because EditorData::get_scene_path() can mutate Node.scene_file_path with
+## stale data from a previously-edited tab (Godot engine side-effect).
+func _resolve_scene_path(root: Node) -> String:
+	var root_path: String = root.scene_file_path
+	var open_scenes: PackedStringArray = _plugin.get_editor_interface().get_open_scenes()
+
+	# Collect non-empty open scene paths
+	var valid_paths: Array = []
+	for path: String in open_scenes:
+		if not path.is_empty():
+			valid_paths.append(path)
+
+	# If root's path matches an open scene, it's authoritative
+	if not root_path.is_empty() and root_path in valid_paths:
+		return root_path
+
+	# Root path is empty or mismatched — use get_open_scenes() data
+	if valid_paths.size() > 0:
+		if not root_path.is_empty():
+			push_warning("save_load: root.scene_file_path '%s' differs from open_scenes %s. Using open_scenes path." % [root_path, str(valid_paths)])
+		return valid_paths[0]
+
+	# No open saved scenes — fall back to root path (may be empty/"unknown")
+	if not root_path.is_empty():
+		push_warning("save_load: root.scene_file_path '%s' not found in open_scenes (empty). Using anyway." % root_path)
+	return root_path
+
+
 ## Save the current game state to a numbered slot.
 ## Captures the scene tree structure, node properties, and optional metadata.
 func save_game_state(params: Dictionary) -> Dictionary:
@@ -62,15 +107,16 @@ func save_game_state(params: Dictionary) -> Dictionary:
 		return {"error": "Failed to create save directory '%s': %s (code %d)" % [SAVE_DIR, error_string(dir_err), dir_err]}
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
-	if root == null:
+	if not _is_scene_open(root):
 		return {"error": "No scene open to save"}
 
 	# Build the save data structure
+	var scene_path: String = _resolve_scene_path(root)
 	var save_data: Dictionary = {
 		"version": 1,
 		"timestamp": Time.get_unix_time_from_system(),
 		"timestamp_human": Time.get_datetime_string_from_system(),
-		"scene_path": root.scene_file_path if root.scene_file_path != "" else "unknown",
+		"scene_path": scene_path if not scene_path.is_empty() else "unknown",
 		"metadata": metadata,
 		"scene_tree": _serialize_node_tree(root),
 	}
@@ -143,7 +189,7 @@ func load_game_state(params: Dictionary) -> Dictionary:
 		return {"error": "Save file contains no scene tree data"}
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
-	if root == null:
+	if not _is_scene_open(root):
 		return {"error": "No scene open to load into"}
 
 	# Apply saved state to existing tree

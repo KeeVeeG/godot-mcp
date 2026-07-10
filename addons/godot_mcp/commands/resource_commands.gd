@@ -63,6 +63,8 @@ func edit_resource(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
+	if not MCPCommandHelpers.validate_path(path):
+		return {"success": false, "error": "Invalid path"}
 	if not FileAccess.file_exists(path):
 		return {"success": false, "error": "Resource not found: %s" % path}
 	var res: Resource = ResourceLoader.load(path)
@@ -70,6 +72,7 @@ func edit_resource(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Failed to load resource: %s" % path}
 
 	var not_found: Array = []
+	var invalid_values: Array = []
 	for prop: String in properties:
 		var val: Variant = properties[prop]
 		var found: bool = false
@@ -79,8 +82,17 @@ func edit_resource(params: Dictionary) -> Dictionary:
 					not_found.append(prop)
 					break
 				val = MCPVariantCodec.parse_for_property(val, p["type"] as int)
+				# Detect validation failures: parse_for_property returns null
+				# when the value cannot be converted to the expected type
+				# (e.g., invalid color string parsed as Color).
+				if val == null and not MCPCommandHelpers.is_null(properties[prop]):
+					invalid_values.append(prop)
+					found = true  # mark as found to avoid double-reporting
+					break
 				found = true
 				break
+		if invalid_values.has(prop):
+			continue
 		if not found and not not_found.has(prop):
 			not_found.append(prop)
 			continue
@@ -94,8 +106,18 @@ func edit_resource(params: Dictionary) -> Dictionary:
 	if err != OK:
 		return {"success": false, "error": "Failed to save resource: %s" % error_string(err)}
 	var result_msg: String = "Resource updated: %s" % path
+	var error_msgs: Array = []
+	if not invalid_values.is_empty():
+		error_msgs.append("Invalid values for properties: " + str(invalid_values))
 	if not not_found.is_empty():
-		return {"success": false, "error": "Unknown properties: " + str(not_found), "result": {"message": result_msg, "not_found_properties": not_found}}
+		error_msgs.append("Unknown properties: " + str(not_found))
+	if not error_msgs.is_empty():
+		var result_data: Dictionary = {"message": result_msg}
+		if not not_found.is_empty():
+			result_data["not_found_properties"] = not_found
+		if not invalid_values.is_empty():
+			result_data["invalid_properties"] = invalid_values
+		return {"success": false, "error": "; ".join(error_msgs), "result": result_data}
 	return {"result": result_msg}
 
 
@@ -140,6 +162,7 @@ func create_resource(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Unknown resource type: %s" % type_name}
 
 	var not_found: Array = []
+	var invalid_values: Array = []
 	for prop: String in properties:
 		var parsed: bool = false
 		for p: Dictionary in res.get_property_list():
@@ -147,6 +170,11 @@ func create_resource(params: Dictionary) -> Dictionary:
 				if not (p["usage"] as int) & PROPERTY_USAGE_STORAGE:
 					break
 				var val: Variant = MCPVariantCodec.parse_for_property(properties[prop], p["type"] as int)
+				# Detect validation failures (e.g., invalid color string)
+				if val == null and not MCPCommandHelpers.is_null(properties[prop]):
+					invalid_values.append(prop)
+					parsed = true
+					break
 				res.set(prop, val)
 				parsed = true
 				break
@@ -163,9 +191,15 @@ func create_resource(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Failed to save resource: %s" % error_string(err)}
 	_plugin.safe_scan_filesystem()
 	var result_data: Dictionary = {"path": path, "type": type_name}
+	var error_msgs: Array = []
+	if not invalid_values.is_empty():
+		error_msgs.append("Invalid values for properties: " + str(invalid_values))
+		result_data["invalid_properties"] = invalid_values
 	if not not_found.is_empty():
+		error_msgs.append("Unknown properties: " + str(not_found))
 		result_data["not_found_properties"] = not_found
-		return {"success": false, "error": "Unknown properties: " + str(not_found), "result": result_data}
+	if not error_msgs.is_empty():
+		return {"success": false, "error": "; ".join(error_msgs), "result": result_data}
 	return {"result": result_data}
 
 

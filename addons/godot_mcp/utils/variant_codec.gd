@@ -250,7 +250,9 @@ static func _parse_color(value: Variant) -> Color:
 		var s: String = value as String
 		# Hex format: #rrggbb or #rrggbbaa
 		if s.begins_with("#"):
-			return Color.html(s)
+			if Color.html_is_valid(s):
+				return Color.html(s)
+			return Color(-1, -1, -1, -1)  # sentinel: invalid hex
 		# Constructor format: Color(r, g, b) or Color(r, g, b, a)
 		if s.begins_with("Color("):
 			var nums: Array[float] = _extract_numbers(s)
@@ -265,8 +267,12 @@ static func _parse_color(value: Variant) -> Color:
 				return Color(nums[0], nums[1], nums[2], nums[3])
 			elif nums.size() >= 3:
 				return Color(nums[0], nums[1], nums[2])
-		# Named color
-		return Color.html(s)
+		# Named color — validate before parsing.
+		# ENGINE BUG (Godot 4.7): Color.html() silently returns Color.BLACK
+		# for any invalid string instead of reporting an error.
+		if is_valid_color_string(s):
+			return Color.from_string(s, Color.WHITE)
+		return Color(-1, -1, -1, -1)  # sentinel: validation failure
 	if value is Dictionary:
 		var d: Dictionary = value as Dictionary
 		return Color(d.get("r", 1.0) as float, d.get("g", 1.0) as float, d.get("b", 1.0) as float, d.get("a", 1.0) as float)
@@ -619,7 +625,10 @@ static func parse_for_property(value: Variant, expected_type: int) -> Variant:
 		TYPE_AABB:
 			return _parse_aabb(value)
 		TYPE_COLOR:
-			return _parse_color(value)
+			var col := _parse_color(value)
+			if col == Color(-1, -1, -1, -1):
+				return null  # Validation failed — invalid color string
+			return col
 		TYPE_NODE_PATH:
 			return NodePath(str(value))
 		TYPE_STRING_NAME:

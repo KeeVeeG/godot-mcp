@@ -99,10 +99,7 @@ func _serialize_node(node: Node, depth: int, max_depth: int) -> Dictionary:
 func _get_scene_file_content(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
-		var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
-		if root == null or root.scene_file_path.is_empty():
-			return {"error": "Path is required — no scene is currently open to read from"}
-		path = root.scene_file_path
+		return {"error": "Path is required — empty string is not a valid scene path"}
 	if not FileAccess.file_exists(path):
 		return {"error": "Scene file not found: %s" % path}
 	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
@@ -158,6 +155,15 @@ func _open_scene(params: Dictionary) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {"error": "Scene file not found: %s" % path}
 	_plugin.get_editor_interface().open_scene_from_path(path)
+	# Verify the scene actually loaded.
+	# open_scene_from_path silently drops the call if is_changing_scene() is true
+	# (e.g. if a previous scene change is still in progress). Return an explicit
+	# error so the client can retry instead of operating on a stale scene.
+	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
+	if root == null:
+		return {"error": "Failed to open scene: no scene root loaded"}
+	if root.scene_file_path != path:
+		return {"error": "Failed to open scene: editor is showing '%s' instead of '%s'. A scene change may be in progress — close the current scene first." % [root.scene_file_path, path]}
 	return {"result": {"message": "Scene opened: %s" % path}}
 
 

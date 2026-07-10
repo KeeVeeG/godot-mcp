@@ -75,6 +75,13 @@ func _get_inheritance(params: Dictionary) -> Dictionary:
 
 
 ## Toggle unique name on a node.
+##
+## NOTE: A one-time test report showed scene tree corruption (all children lost)
+## after calling this on 3 nodes in sequence. However, Godot 4.x engine source
+## (Node::set_unique_name_in_owner, node.cpp:2248-2265) confirms this only
+## modifies internal hashmaps — no tree restructuring occurs. If this reproduces,
+## it is likely an engine-level bug in EditorUndoRedoManager state handling.
+## Workaround: reload the scene with EditorInterface.reload_scene_from_path().
 func _set_unique_name(params: Dictionary) -> Dictionary:
 	var node_path: String = params.get("node_path", "")
 	var unique: bool = params.get("unique", true)

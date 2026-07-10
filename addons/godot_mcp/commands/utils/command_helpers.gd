@@ -55,6 +55,10 @@ static func resolve_node_path(plugin: EditorPlugin, path: String) -> Node:
 		var idx: int = path.find(root_path)
 		if idx != -1:
 			path = path.substr(idx + root_path.length() + 1)
+	# Prepend "./" to bare names (no path separators) so get_node_or_null resolves
+	# them as direct children instead of treating them as absolute scene-tree paths.
+	if not path.contains("/") and not path.contains("."):
+		path = "./" + path
 	return root.get_node_or_null(path)
 
 
