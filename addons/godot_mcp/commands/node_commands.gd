@@ -87,6 +87,11 @@ func _add_node(params: Dictionary) -> Dictionary:
 		var value: Variant = properties[prop]
 		if MCPCommandHelpers.has_property(node, prop):
 			var expected_type: int = MCPCommandHelpers.get_property_type(node, prop)
+			# Validate type compatibility (mirrors _update_property behavior)
+			var type_err: String = _check_type_mismatch(value, expected_type, prop)
+			if not type_err.is_empty():
+				node.queue_free()
+				return {"error": type_err}
 			value = MCPVariantCodec.parse_for_property(value, expected_type)
 			node.set(prop, value)
 
@@ -99,7 +104,47 @@ func _add_node(params: Dictionary) -> Dictionary:
 	# Mark scene as modified so editor tracks the unsaved change.
 	_plugin.get_editor_interface().mark_scene_as_unsaved()
 
-	return {"result": {"name": str(node.name), "path": MCPCommandHelpers.get_node_path(node, _plugin), "type": type_name}}
+	var result_data := {"name": str(node.name), "path": MCPCommandHelpers.get_node_path(node, _plugin), "type": type_name}
+	if node_name.is_empty():
+		result_data["warning"] = "Empty name provided; Godot auto-assigned '%s'" % str(node.name)
+
+	return {"result": result_data}
+
+
+## Validate a value against an expected property type.
+## Returns empty string if valid, or an error message if mismatch.
+## Mirrors the explicit type checks in _update_property for consistency.
+func _check_type_mismatch(value: Variant, expected_type: int, prop_name: String) -> String:
+	if not value is String:
+		return ""  # Non-string values are handled by parse_for_property
+	var s: String = value as String
+	match expected_type:
+		TYPE_INT:
+			if not s.is_valid_int():
+				return "Type mismatch for '%s': expected int, got string '%s'" % [prop_name, s]
+		TYPE_FLOAT:
+			if not s.is_valid_float() and not s.is_valid_int():
+				return "Type mismatch for '%s': expected float, got string '%s'" % [prop_name, s]
+		TYPE_BOOL:
+			if not s.to_lower() in ["true", "false", "1", "0"]:
+				return "Type mismatch for '%s': expected bool, got string '%s'" % [prop_name, s]
+		TYPE_VECTOR2:
+			if not s.begins_with("Vector2("):
+				return "Type mismatch for '%s': expected Vector2 (use 'Vector2(x,y)' format), got string '%s'" % [prop_name, s]
+		TYPE_VECTOR2I:
+			if not s.begins_with("Vector2i("):
+				return "Type mismatch for '%s': expected Vector2i (use 'Vector2i(x,y)' format), got string '%s'" % [prop_name, s]
+		TYPE_VECTOR3:
+			if not s.begins_with("Vector3("):
+				return "Type mismatch for '%s': expected Vector3 (use 'Vector3(x,y,z)' format), got string '%s'" % [prop_name, s]
+		TYPE_VECTOR3I:
+			if not s.begins_with("Vector3i("):
+				return "Type mismatch for '%s': expected Vector3i (use 'Vector3i(x,y,z)' format), got string '%s'" % [prop_name, s]
+		TYPE_COLOR:
+			if not (s.begins_with("#") or s.begins_with("Color(")):
+				if not MCPVariantCodec.is_valid_color_string(s):
+					return "Type mismatch for '%s': expected Color, got string '%s'" % [prop_name, s]
+	return ""
 
 
 ## Delete a node from the scene tree with UndoRedo support.
@@ -199,16 +244,9 @@ func _update_property(params: Dictionary) -> Dictionary:
 	# Get expected type and validate value compatibility
 	var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
 
-	# Reject type mismatches: string→number that can't parse
-	if value is String:
-		var s: String = value as String
-		match expected_type:
-			TYPE_INT:
-				if not s.is_valid_int():
-					return {"error": "Type mismatch for '%s': expected int, got string '%s'" % [property, s]}
-			TYPE_FLOAT:
-				if not s.is_valid_float() and not s.is_valid_int():
-					return {"error": "Type mismatch for '%s': expected float, got string '%s'" % [property, s]}
+	var type_err: String = _check_type_mismatch(value, expected_type, property)
+	if not type_err.is_empty():
+		return {"error": type_err}
 
 	value = MCPVariantCodec.parse_for_property(value, expected_type)
 
@@ -344,10 +382,19 @@ func _add_resource(params: Dictionary) -> Dictionary:
 			_undo_helper.set_property_with_undo(node, "material_override", res)
 		else:
 			(node as VisualInstance3D).material_override = res
+	elif node is CanvasItem and res is Material:
+		# CanvasItem (Sprite2D, TextureRect, etc.) has a `material` property.
+		# Ensure use_parent_material is off so the material actually applies.
+		if "use_parent_material" in node:
+			node.set("use_parent_material", false)
+		if _undo_helper:
+			_undo_helper.set_property_with_undo(node, "material", res)
+		else:
+			node.set("material", res)
 	else:
 		# Generic: try common property names
 		var assigned: bool = false
-		for try_prop: String in ["shape", "texture", "material", "material_override", "stream", "gradient", "curve"]:
+		for try_prop: String in ["shape", "material", "material_override", "texture", "stream", "gradient", "curve"]:
 			if MCPCommandHelpers.has_property(node, try_prop):
 				if _undo_helper:
 					_undo_helper.set_property_with_undo(node, try_prop, res)
@@ -414,7 +461,7 @@ func _remove_resource(params: Dictionary) -> Dictionary:
 	else:
 		# Generic: try common resource property names
 		var removed: bool = false
-		for try_prop: String in ["shape", "texture", "material", "material_override", "stream", "gradient", "curve"]:
+		for try_prop: String in ["shape", "material", "material_override", "texture", "stream", "gradient", "curve"]:
 			if MCPCommandHelpers.has_property(node, try_prop):
 				if node.get(try_prop) != null:
 					if _undo_helper:
@@ -662,7 +709,6 @@ func _select_nodes(params: Dictionary) -> Dictionary:
 	var result: Dictionary = {"result": {"message": "Selected %d of %d nodes" % [selected_count, unique_paths.size()], "selected": selected_count}}
 	if not_found.size() > 0:
 		result["result"]["not_found"] = not_found
-		result["result"]["warning"] = "%d path(s) not found: %s" % [not_found.size(), ", ".join(not_found)]
 	return result
 
 

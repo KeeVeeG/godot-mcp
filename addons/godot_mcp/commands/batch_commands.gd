@@ -47,7 +47,7 @@ func _find_by_type_recursive(node: Node, type_name: String, include_inactive: bo
 		for child: Node in node.get_children():
 			_find_by_type_recursive(child, type_name, include_inactive, results)
 		return
-	if node.is_class(type_name):
+	if _node_matches_type(node, type_name):
 		results.append({
 			"path": MCPCommandHelpers.get_node_path(node, _plugin),
 			"name": str(node.name),
@@ -58,33 +58,39 @@ func _find_by_type_recursive(node: Node, type_name: String, include_inactive: bo
 
 
 ## Find all signal connections in the scene tree.
-## Uses SceneState API to read connections from the scene state directly,
-## which is more reliable than runtime get_signal_connection_list() in editor context.
+## Combines two sources:
+## 1. Runtime scan via get_signal_connection_list() — catches ALL active connections
+##    (both persistent and non-persistent, including those created by godot_connect_signal).
+## 2. SceneState scan — catches persistent connections saved in the .tscn file,
+##    including those on nodes that may not be fully instantiated yet.
+## Results are deduplicated by (source, signal, target, method).
 func find_signal_connections(_params: Dictionary) -> Dictionary:
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
-	# Try SceneState first (reads connections from the .tscn file state directly).
-	# This is the same data the editor's ConnectionsDock uses.
+	var seen: Dictionary = {}
+	var connections: Array = []
+
+	# Source 1: Runtime scan — walks the instantiated scene tree and queries
+	# each node's signal connections. This catches ALL live connections.
+	_collect_runtime_connections(root, connections, seen)
+
+	# Source 2: SceneState scan — reads persistent connections from the .tscn
+	# file on disk. These may include connections on nodes not yet instantiated.
 	var scene_path: String = root.scene_file_path
 	if not scene_path.is_empty():
 		var packed: PackedScene = load(scene_path) as PackedScene
 		if packed != null:
 			var state: SceneState = packed.get_state()
-			return _collect_connections_from_state(state, root)
+			_collect_state_connections(state, root, connections, seen)
 
-	# Fallback: walk the runtime scene tree and query each node's signal connections.
-	# This may miss connections if the scene isn't fully instantiated yet.
-	var connections: Array = []
-	_find_connections_recursive(root, connections)
 	return {"result": {"count": connections.size(), "connections": connections}}
 
 
-## Collect signal connections from a SceneState and resolve them against
-## the instantiated scene root for user-friendly node paths.
-func _collect_connections_from_state(state: SceneState, root: Node) -> Dictionary:
-	var connections: Array = []
+## Collect signal connections from a SceneState and add to connections array.
+## Deduplicates by (source, signal, target, method) key against the seen dictionary.
+func _collect_state_connections(state: SceneState, root: Node, connections: Array, seen: Dictionary) -> void:
 	var count: int = state.get_connection_count()
 	for i: int in range(count):
 		var from_path: NodePath = state.get_connection_source(i)
@@ -102,17 +108,24 @@ func _collect_connections_from_state(state: SceneState, root: Node) -> Dictionar
 		var target_path: String = MCPCommandHelpers.get_node_path(target_node, _plugin) if target_node != null else str(to_path)
 
 		# Check if this connection will be saved (CONNECT_PERSIST flag).
-		# The editor's ConnectionsDock only shows persistent connections.
 		const CONNECT_PERSIST: int = 2
+		var sig_str: String = str(signal_name)
+		var method_str: String = str(method_name)
+
+		# Deduplicate by (source, signal, target, method)
+		var key: String = "%s|%s|%s|%s" % [source_path, sig_str, target_path, method_str]
+		if seen.has(key):
+			continue
+		seen[key] = true
+
 		connections.append({
 			"source": source_path,
-			"signal": str(signal_name),
+			"signal": sig_str,
 			"target": target_path,
-			"method": str(method_name),
+			"method": method_str,
 			"flags": flags,
 			"persistent": (flags & CONNECT_PERSIST) != 0,
 		})
-	return {"result": {"count": connections.size(), "connections": connections}}
 
 
 ## Limits for signal connection scanning to prevent excessive processing.
@@ -121,7 +134,10 @@ const MAX_SIGNALS_PER_NODE: int = 500
 const MAX_TOTAL_CONNECTIONS: int = 1000
 
 
-func _find_connections_recursive(node: Node, connections: Array) -> void:
+## Collect signal connections from the live scene tree via get_signal_connection_list().
+## Deduplicates by (source, signal, target, method) key against the seen dictionary.
+## This catches ALL active connections including non-persistent ones created by scripts.
+func _collect_runtime_connections(node: Node, connections: Array, seen: Dictionary) -> void:
 	if connections.size() >= MAX_TOTAL_CONNECTIONS:
 		return
 	var signal_list: Array = node.get_signal_list()
@@ -147,8 +163,16 @@ func _find_connections_recursive(node: Node, connections: Array) -> void:
 				# Skip connections to editor-internal nodes
 				if target_path.begins_with("/root/@"):
 					continue
+			var source_path: String = MCPCommandHelpers.get_node_path(node, _plugin)
+
+			# Deduplicate by (source, signal, target, method)
+			var key: String = "%s|%s|%s|%s" % [source_path, sig_name, target_path, target_method]
+			if seen.has(key):
+				continue
+			seen[key] = true
+
 			connections.append({
-				"source": MCPCommandHelpers.get_node_path(node, _plugin),
+				"source": source_path,
 				"signal": sig_name,
 				"target": target_path,
 				"method": target_method,
@@ -156,7 +180,7 @@ func _find_connections_recursive(node: Node, connections: Array) -> void:
 	for child: Node in node.get_children():
 		if connections.size() >= MAX_TOTAL_CONNECTIONS:
 			return
-		_find_connections_recursive(child, connections)
+		_collect_runtime_connections(child, connections, seen)
 
 
 ## Find all signal connections in the scene tree.
@@ -179,7 +203,7 @@ func batch_set_property(params: Dictionary) -> Dictionary:
 	# Pre-validate: check if any nodes of this type exist and the property is valid
 	var first_match: Node = _find_first_node_of_type(root, type_name)
 	if first_match == null:
-		return {"error": "No nodes of type '%s' found in scene" % type_name}
+		return {"result": {"type": type_name, "property": property, "nodes_modified": 0}}
 	if not MCPCommandHelpers.has_property(first_match, property):
 		return {"error": "Property '%s' does not exist on %s" % [property, type_name]}
 
@@ -192,7 +216,7 @@ func batch_set_property(params: Dictionary) -> Dictionary:
 
 
 func _batch_set_recursive(node: Node, type_name: String, property: String, value: Variant, count: int, ur: EditorUndoRedoManager) -> int:
-	if node.is_class(type_name):
+	if _node_matches_type(node, type_name):
 		# Property existence already pre-validated in batch_set_property
 		var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
 		var parsed: Variant = MCPVariantCodec.parse_for_property(value, expected_type)
@@ -232,7 +256,7 @@ func batch_get_property(params: Dictionary) -> Dictionary:
 
 
 func _batch_get_recursive(node: Node, type_name: String, property: String, results: Array) -> void:
-	if node.is_class(type_name):
+	if _node_matches_type(node, type_name):
 		var value: Variant = node.get(property)
 		results.append({
 			"path": MCPCommandHelpers.get_node_path(node, _plugin),
@@ -244,9 +268,26 @@ func _batch_get_recursive(node: Node, type_name: String, property: String, resul
 		_batch_get_recursive(child, type_name, property, results)
 
 
+## Helper: check if a node matches a given type name, case-insensitively.
+## Uses Godot's built-in is_class() for the fast path, then falls back
+## to walking the class hierarchy with lowercase comparison.
+## This handles inputs like "sprite2d" matching nodes of type "Sprite2D".
+func _node_matches_type(node: Node, type_name: String) -> bool:
+	if node.is_class(type_name):
+		return true
+	# Case-insensitive fallback: walk the class hierarchy
+	var lower: String = type_name.to_lower()
+	var cls: String = node.get_class()
+	while cls != "":
+		if cls.to_lower() == lower:
+			return true
+		cls = ClassDB.get_parent_class(cls)
+	return false
+
+
 ## Helper: find the first node of a given type in the scene tree.
 func _find_first_node_of_type(node: Node, type_name: String) -> Node:
-	if node.is_class(type_name):
+	if _node_matches_type(node, type_name):
 		return node
 	for child: Node in node.get_children():
 		var found: Node = _find_first_node_of_type(child, type_name)
