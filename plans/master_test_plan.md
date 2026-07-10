@@ -144,11 +144,11 @@ project_creation → project → scene → node → script → runtime → expor
 - [x] 10. `node_config_test_plan.md`
 - [x] 11. `resource_config_test_plan.md`
 - [x] 12. `platform_specific_test_plan.md`
-- [ ] 13. `scene_test_plan.md`
-- [ ] 14. `scene_config_test_plan.md`
-- [ ] 15. `scene3d_test_plan.md`
-- [ ] 16. `resource_test_plan.md`
-- [ ] 17. `save_load_test_plan.md`
+- [x] 13. `scene_test_plan.md`
+- [x] 14. `scene_config_test_plan.md`
+- [x] 15. `scene3d_test_plan.md`
+- [x] 16. `resource_test_plan.md`
+- [x] 17. `save_load_test_plan.md`
 - [ ] 18. `node_test_plan.md`
 - [ ] 19. `batch_test_plan.md`
 - [ ] 20. `script_test_plan.md`
