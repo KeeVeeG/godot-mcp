@@ -134,13 +134,13 @@ project_creation → project → scene → node → script → runtime → expor
 
 - [x] 01. `project_creation_test_plan.md`
 - [x] 02. `project_test_plan.md`
-- [ ] 03. `project_config_test_plan.md`
-- [ ] 04. `editor_config_test_plan.md`
-- [ ] 05. `build_config_test_plan.md`
-- [ ] 06. `debug_config_test_plan.md`
-- [ ] 07. `physics_config_test_plan.md`
-- [ ] 08. `audio_config_test_plan.md`
-- [ ] 09. `rendering_config_test_plan.md`
+- [x] 03. `project_config_test_plan.md`
+- [x] 04. `editor_config_test_plan.md`
+- [x] 05. `build_config_test_plan.md`
+- [x] 06. `debug_config_test_plan.md`
+- [x] 07. `physics_config_test_plan.md`
+- [x] 08. `audio_config_test_plan.md`
+- [x] 09. `rendering_config_test_plan.md`
 - [ ] 10. `node_config_test_plan.md`
 - [ ] 11. `resource_config_test_plan.md`
 - [ ] 12. `platform_specific_test_plan.md`

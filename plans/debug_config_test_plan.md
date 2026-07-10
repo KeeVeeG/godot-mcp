@@ -475,7 +475,7 @@ This module exposes 6 MCP tools for configuring Godot's debug, profiler, error-h
 | Tool | Required Params | Optional Params | Enum Constraints | Numeric Constraints |
 |------|----------------|-----------------|-----------------|-------------------|
 | `get_debug_settings` | — | — | — | — |
-| `set_remote_debug` | `enabled` (bool) | `host` (string), `port` (int) | — | port: no min/max in schema |
+| `set_remote_debug` | `enabled` (bool) | `host` (string), `port` (int) | — | port: min 1 (no max constraint) |
 | `set_profiler_settings` | — | `max_functions` (int), `max_timestamp_query_elements` (int) | — | No range validation in schema (docs say 16-512 for max_functions) |
 | `set_error_handling` | — | `break_on_error` (bool), `break_on_warning` (bool) | — | — |
 | `get_editor_log` | — | `filter` (enum), `limit` (int) | `filter`: error, warning, info | `limit`: min 1, max 500 |
@@ -483,6 +483,6 @@ This module exposes 6 MCP tools for configuring Godot's debug, profiler, error-h
 
 ### Known Schema Gaps
 
-1. **`set_remote_debug.port`**: No `.min(1).max(65535)` — negative and out-of-range ports are accepted.
+1. ~~**`set_remote_debug.port`**: No `.min(1).max(65535)` — negative and out-of-range ports are accepted.~~ **FIXED**: Schema has `.min(1)`. No `.max(65535)` constraint — out-of-range ports (e.g. 99999) are still accepted.
 2. **`set_profiler_settings.max_functions`**: Description says "range: 16-512" but schema has no `.min(16).max(512)` enforcement.
 3. **`set_profiler_settings.max_timestamp_query_elements`**: No range validation at all.

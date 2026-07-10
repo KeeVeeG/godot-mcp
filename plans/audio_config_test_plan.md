@@ -55,7 +55,9 @@
         "volume_db": 0.0,
         "solo": false,
         "mute": false,
-        "effects": []
+        "bypass_effects": false,
+        "effects": [],
+        "index": 0
       }
     ],
     "default_bus": "Master"
@@ -694,7 +696,7 @@ These scenarios test Zod input validation on the TypeScript side, before the req
 |-------|----------|
 | `{ "buses": "not-an-array" }` | Zod error: expected array |
 | `{ "buses": [{ "name": 123 }] }` | Zod error: expected string for name |
-| `{ "buses": [{ "volume": "loud" }] }` | Zod error: expected number for volume (name is still required in the object) |
+| `{ "buses": [{ "volume": "loud" }] }` | Zod error: expected number for `volume_db` (the internal name; `volume` is accepted as alias). `name` is also required in the object. |
 | `{ "buses": [{ "name": "X", "solo": "yes" }] }` | Zod error: expected boolean for solo |
 | `{ "buses": [{ "name": "X", "mute": 1 }] }` | Zod error: expected boolean for mute |
 | `{}` (missing buses) | Zod error: required |
@@ -705,7 +707,7 @@ These scenarios test Zod input validation on the TypeScript side, before the req
 |-------|----------|
 | `{}` | Zod error: `name` is required |
 | `{ "name": "X", "index": 1.5 }` | Zod error: expected integer for index |
-| `{ "name": "X", "index": -1 }` | Accepted by Zod (no min constraint on index). GDScript handles: `add_bus(-1)` may behave unexpectedly — test and document the actual Godot behavior. |
+| `{ "name": "X", "index": -1 }` | Zod error: min(0) constraint — schema enforces `z.number().int().min(0).optional()`. Negative indices are rejected before reaching GDScript. |
 
 ### `remove_audio_bus`
 

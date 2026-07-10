@@ -2,7 +2,7 @@
 
 > **Source**: `server/src/tools/physics_config.ts`
 > **Backend methods prefix**: `physics_config/`
-> **Godot bridge**: `callGodot(bridge, method, params)` — sends JSON-RPC to Godot editor plugin, returns `ToolResult` with `{ content: [{ type: 'text', text }] }` or error.
+> **Godot bridge**: `callGodot(bridge, method, params)` — sends JSON-RPC to Godot editor plugin. MCP tool surface returns structured JSON `{ success: true, ...fields }` or MCP error codes (e.g. `-32602`) for validation failures.
 >
 > **Prerequisites**: Godot editor must be running with `godot_mcp` plugin active and connected via WebSocket.
 > **No scene or node prerequisites** — these tools modify global project/physics settings, not scene-tree nodes.
@@ -56,12 +56,13 @@
 
 | Param | Type | Required | Default | Constraints |
 |-------|------|----------|---------|-------------|
+| `dimension` | string (enum) | **yes** | — | `"2d"` or `"3d"` — physics dimension |
 | `x` | number | **yes** | — | Gravity X component |
 | `y` | number | **yes** | — | Gravity Y component |
-| `z` | number | no | `0` | Gravity Z component (for 3D) |
+| `z` | number | no | `0` | Gravity Z component (for 3D, ignored in 2D) |
 
 - **Backend method**: `physics_config/set_gravity`
-- **Description**: Set the default gravity vector for the physics world
+- **Description**: Set the default gravity vector for the physics world (2D or 3D)
 
 ### Test Scenarios
 
@@ -310,10 +311,11 @@
 
 | Param | Type | Required | Default | Constraints |
 |-------|------|----------|---------|-------------|
+| `dimension` | string (enum) | **yes** | — | `"2d"` or `"3d"` — physics dimension |
 | `engine` | string (enum) | **yes** | — | One of: `'default'`, `'godot_physics'`, `'jolt'` |
 
 - **Backend method**: `physics_config/set_engine`
-- **Description**: Set which physics engine backend to use
+- **Description**: Set which physics engine backend to use for the specified dimension
 
 ### Test Scenarios
 
@@ -584,10 +586,11 @@
 
 | Param | Type | Required | Default | Constraints |
 |-------|------|----------|---------|-------------|
+| `dimension` | string (enum) | **yes** | — | `"2d"` or `"3d"` — physics dimension |
 | `value` | number | **yes** | — | Gravity value (980.0 for 2D, 9.8 for 3D) |
 
 - **Backend method**: `physics_config/set_default_gravity`
-- **Description**: Set the default gravity magnitude in project settings
+- **Description**: Set the default gravity magnitude in project settings for the specified dimension
 
 ### Test Scenarios
 
@@ -681,10 +684,11 @@
 
 | Param | Type | Required | Default | Constraints |
 |-------|------|----------|---------|-------------|
+| `dimension` | string (enum) | **yes** | — | `"2d"` or `"3d"` — physics dimension |
 | `value` | number | no | `0.1` | Min: 0 |
 
 - **Backend method**: `physics_config/set_default_linear_damp`
-- **Description**: Set the default linear damping for physics bodies
+- **Description**: Set the default linear damping for physics bodies in the specified dimension
 
 ### Test Scenarios
 
@@ -813,7 +817,7 @@
 
 ## Notes for Test Implementers
 
-1. **Response format**: All tools return `{ content: [{ type: 'text', text: string }], isError?: boolean }`. Success means `isError` is absent or `false`. Parse `text` as JSON when needed.
+1. **Response format**: MCP tool surface returns structured JSON: success responses have `{ success: true, ...tool-specific fields }`; validation errors return MCP error codes (e.g. `-32602`) with `{ code, message, path }`. The internal `ToolResult` wrapper (`{ content: [{ type: 'text', text }] }`) is transparent to MCP clients.
 
 2. **Validation layer**: Zod schemas validate parameters on the MCP server side BEFORE the request reaches Godot. Tests for invalid params (wrong type, out of range, missing required) verify this server-side validation, not Godot's behavior.
 
