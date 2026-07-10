@@ -14,11 +14,13 @@ const PING_INTERVAL: float = 5.0
 const REQUEST_TIMEOUT: float = 30.0
 const IDLE_TIMEOUT: float = 60.0
 
-## File IPC paths
+## File IPC paths — computed via ProjectSettings.globalize_path() to ensure
+## editor and game process resolve to the same absolute directory.
 const IPC_REQUEST_PATH: String = "user://mcp_request.json"
 const IPC_RESPONSE_PATH: String = "user://mcp_response.json"
-const IPC_RUNTIME_REQUEST_PATH: String = "user://mcp_runtime_request.json"
-const IPC_RUNTIME_RESPONSE_PATH: String = "user://mcp_runtime_response.json"
+const IPC_RUNTIME_REQUEST_FILE: String = "mcp_runtime_request.json"
+const IPC_RUNTIME_RESPONSE_FILE: String = "mcp_runtime_response.json"
+const IPC_RUNTIME_READY_FILE: String = "mcp_runtime_ready"
 
 ## Tool enable/disable map (all enabled by default)
 var enabled_tools: Dictionary = {}

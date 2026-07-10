@@ -88,9 +88,17 @@ func _get_game_screenshot(params: Dictionary) -> Dictionary:
 	if not _plugin.get_editor_interface().is_playing_scene():
 		return {"success": false, "error": "Game is not running"}
 
-	const REQUEST_PATH: String = "user://mcp_runtime_request.json"
-	const RESPONSE_PATH: String = "user://mcp_runtime_response.json"
-	const READY_PATH: String = "user://mcp_runtime_ready"
+	# Compute globalized user:// paths to ensure editor and game process agree
+	# on the same absolute directory for IPC files.
+	var user_base: String = ProjectSettings.globalize_path("user://")
+	if not user_base.ends_with("/"):
+		user_base += "/"
+	const REQUEST_FILENAME: String = "mcp_runtime_request.json"
+	const RESPONSE_FILENAME: String = "mcp_runtime_response.json"
+	const READY_FILENAME: String = "mcp_runtime_ready"
+	var REQUEST_PATH: String = user_base + REQUEST_FILENAME
+	var RESPONSE_PATH: String = user_base + RESPONSE_FILENAME
+	var READY_PATH: String = user_base + READY_FILENAME
 	const IPC_TIMEOUT: float = 30.0
 
 	# Wait for the runtime autoload to signal readiness.

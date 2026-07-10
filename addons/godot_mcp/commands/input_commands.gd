@@ -5,9 +5,16 @@ extends RefCounted
 
 var _plugin: EditorPlugin
 
+## Globalized runtime IPC request path (computed once in set_plugin).
+var _runtime_request_path: String = ""
+
 
 func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
+	var user_base: String = ProjectSettings.globalize_path("user://")
+	if not user_base.ends_with("/"):
+		user_base += "/"
+	_runtime_request_path = user_base + "mcp_runtime_request.json"
 
 
 func get_commands() -> Dictionary:
@@ -251,12 +258,12 @@ func remove_input_action(params: Dictionary) -> Dictionary:
 func _write_runtime_command(method: String, params: Dictionary) -> void:
 	var data: Dictionary = {"method": method, "params": params}
 	var json_text: String = JSON.stringify(data)
-	var tmp_path: String = "user://mcp_runtime_request.json.tmp"
+	var tmp_path: String = _runtime_request_path + ".tmp"
 	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if file:
 		file.store_string(json_text)
 		file.close()
-		DirAccess.rename_absolute(tmp_path, "user://mcp_runtime_request.json")
+		DirAccess.rename_absolute(tmp_path, _runtime_request_path)
 
 
 ## Parse a key name to a keycode.

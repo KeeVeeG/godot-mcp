@@ -5,10 +5,18 @@ extends RefCounted
 
 var _plugin: EditorPlugin
 
-const REQUEST_PATH: String = "user://mcp_runtime_request.json"
-const RESPONSE_PATH: String = "user://mcp_runtime_response.json"
-const READY_PATH: String = "user://mcp_runtime_ready"
+const REQUEST_FILENAME: String = "mcp_runtime_request.json"
+const RESPONSE_FILENAME: String = "mcp_runtime_response.json"
+const READY_FILENAME: String = "mcp_runtime_ready"
 const IPC_TIMEOUT: float = 30.0
+
+## Globalized user:// base path (computed once, shared by all IPC operations).
+## NOT using raw `user://` paths to ensure the editor and game process resolve
+## to the SAME absolute directory (avoids project-name divergence).
+var _user_base: String = ""
+var _REQUEST_PATH: String = ""
+var _RESPONSE_PATH: String = ""
+var _READY_PATH: String = ""
 var _next_request_id: int = 1
 
 ## Task queue for serialized IPC — prevents concurrent file overwrite
@@ -21,6 +29,16 @@ var _dead_tasks: Array[int] = []
 
 func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
+	# Compute globalized user:// paths once to ensure editor and game process
+	# agree on the same absolute directory for IPC files.
+	_user_base = ProjectSettings.globalize_path("user://")
+	if not _user_base.ends_with("/"):
+		_user_base += "/"
+	_REQUEST_PATH = _user_base + REQUEST_FILENAME
+	_RESPONSE_PATH = _user_base + RESPONSE_FILENAME
+	_READY_PATH = _user_base + READY_FILENAME
+	print("[MCP RuntimeCmd] IPC base dir: %s" % _user_base)
+	print("[MCP RuntimeCmd] Ready file: %s" % _READY_PATH)
 
 
 func get_commands() -> Dictionary:
@@ -116,13 +134,19 @@ func _process_ipc_queue() -> void:
 func _wait_for_runtime_ready(timeout: float = IPC_TIMEOUT) -> bool:
 	if not _ensure_game_running():
 		return false
+	print("[MCP RuntimeCmd] Waiting for runtime ready at: %s" % _READY_PATH)
 	var start: float = Time.get_unix_time_from_system()
+	var poll_count: int = 0
 	while Time.get_unix_time_from_system() - start < timeout:
-		if FileAccess.file_exists(READY_PATH):
+		if FileAccess.file_exists(_READY_PATH):
+			print("[MCP RuntimeCmd] Runtime ready confirmed after %d polls (%.1fs)" % [poll_count, Time.get_unix_time_from_system() - start])
 			return true
 		if not _ensure_game_running():
+			print("[MCP RuntimeCmd] Game stopped while waiting for runtime")
 			return false
+		poll_count += 1
 		await _plugin.get_tree().process_frame
+	print("[MCP RuntimeCmd] Runtime NOT ready after %.1fs — file not found at: %s" % [timeout, _READY_PATH])
 	return false
 
 
@@ -139,24 +163,24 @@ func _do_ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 		return {"error": "Runtime autoload not ready after %.1fs — game may still be initializing or has crashed" % IPC_TIMEOUT}
 
 	# Clean stale response files from previous requests
-	if FileAccess.file_exists(RESPONSE_PATH):
-		DirAccess.remove_absolute(RESPONSE_PATH)
-	if FileAccess.file_exists(RESPONSE_PATH + ".tmp"):
-		DirAccess.remove_absolute(RESPONSE_PATH + ".tmp")
+	if FileAccess.file_exists(_RESPONSE_PATH):
+		DirAccess.remove_absolute(_RESPONSE_PATH)
+	if FileAccess.file_exists(_RESPONSE_PATH + ".tmp"):
+		DirAccess.remove_absolute(_RESPONSE_PATH + ".tmp")
 
 	var request_id: String = "mcp_%d" % _next_request_id
 	_next_request_id += 1
 
 	var request: Dictionary = {"method": method, "params": params, "request_id": request_id}
 	var json_text: String = JSON.stringify(request)
-	var tmp_path: String = REQUEST_PATH + ".tmp"
+	var tmp_path: String = _REQUEST_PATH + ".tmp"
 	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if file == null:
 		var err_code: int = FileAccess.get_open_error()
 		return {"error": "Failed to write IPC request to '%s': %s (code %d)" % [tmp_path, error_string(err_code), err_code]}
 	file.store_string(json_text)
 	file.close()
-	var rename_err: Error = DirAccess.rename_absolute(tmp_path, REQUEST_PATH)
+	var rename_err: Error = DirAccess.rename_absolute(tmp_path, _REQUEST_PATH)
 	if rename_err != OK:
 		return {"error": "Failed to rename IPC request file: %s (code %d)" % [error_string(rename_err), rename_err]}
 
@@ -164,12 +188,12 @@ func _do_ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
 		if not _ensure_game_running():
 			return {"error": "Game stopped while waiting for runtime response"}
-		if FileAccess.file_exists(RESPONSE_PATH):
-			var resp_file := FileAccess.open(RESPONSE_PATH, FileAccess.READ)
+		if FileAccess.file_exists(_RESPONSE_PATH):
+			var resp_file := FileAccess.open(_RESPONSE_PATH, FileAccess.READ)
 			if resp_file:
 				var resp_text: String = resp_file.get_as_text()
 				resp_file.close()
-				DirAccess.remove_absolute(RESPONSE_PATH)
+				DirAccess.remove_absolute(_RESPONSE_PATH)
 				var json := JSON.new()
 				var err := json.parse(resp_text)
 				if err == OK and json.data is Dictionary:

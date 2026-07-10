@@ -10,15 +10,17 @@ const POLL_INTERVAL: float = 0.1
 ## Poll timer accumulator
 var _poll_timer: float = 0.0
 
-## Request/response file paths
-const REQUEST_PATH: String = "user://mcp_runtime_request.json"
-const RESPONSE_PATH: String = "user://mcp_runtime_response.json"
+## IPC file paths — computed from ProjectSettings.globalize_path("user://") at runtime.
+## NOT using raw `user://` constants to ensure the editor and game process resolve
+## to the SAME absolute path (avoids divergence when application/config/name differs).
+var _request_path: String = ""
+var _response_path: String = ""
 
 ## Ready handshake file — written in _ready(), deleted in _exit_tree().
 ## The editor waits for this file before sending IPC requests,
 ## solving the race condition where is_playing_scene() returns true
 ## before the game process has finished initializing autoloads.
-const READY_PATH: String = "user://mcp_runtime_ready"
+var _ready_path: String = ""
 
 ## Signal watchers: {node_path: {signal_name: [events]}}
 var _signal_watchers: Dictionary = {}
@@ -46,16 +48,29 @@ var _ipc_busy: bool = false
 
 
 func _ready() -> void:
+	# Resolve user:// to an absolute OS path so both editor and game process
+	# agree on the IPC file locations (avoids project-name divergence).
+	var base_dir: String = ProjectSettings.globalize_path("user://")
+	if not base_dir.is_empty() and not base_dir.ends_with("/"):
+		base_dir += "/"
+	_request_path = base_dir + "mcp_runtime_request.json"
+	_response_path = base_dir + "mcp_runtime_response.json"
+	_ready_path = base_dir + "mcp_runtime_ready"
+
 	print("[MCP Runtime] Loaded and ready for IPC")
+	print("[MCP Runtime] IPC base dir: %s" % base_dir)
+	print("[MCP Runtime] Ready file: %s" % _ready_path)
+
 	# Signal to the editor that the runtime is ready to receive requests.
 	# The editor waits for this file before sending IPC requests to avoid
 	# timing out while the game process is still initializing.
-	var ready_file := FileAccess.open(READY_PATH, FileAccess.WRITE)
+	var ready_file := FileAccess.open(_ready_path, FileAccess.WRITE)
 	if ready_file:
 		ready_file.store_string(str(Time.get_unix_time_from_system()))
 		ready_file.close()
+		print("[MCP Runtime] Handshake file written successfully")
 	else:
-		push_warning("[MCP Runtime] Failed to write ready handshake file")
+		push_warning("[MCP Runtime] Failed to write ready handshake file to: %s (error: %d)" % [_ready_path, FileAccess.get_open_error()])
 
 
 func _exit_tree() -> void:
@@ -73,8 +88,8 @@ func _exit_tree() -> void:
 	_signal_watcher_callables.clear()
 	_signal_watchers.clear()
 	# Clean up ready handshake file so the editor doesn't see a stale signal
-	if FileAccess.file_exists(READY_PATH):
-		DirAccess.remove_absolute(READY_PATH)
+	if FileAccess.file_exists(_ready_path):
+		DirAccess.remove_absolute(_ready_path)
 
 
 func _process(delta: float) -> void:
@@ -96,16 +111,16 @@ func _poll_ipc() -> void:
 	# Guard: prevent reentrant calls while awaiting a previous request
 	if _ipc_busy:
 		return
-	if not FileAccess.file_exists(REQUEST_PATH):
+	if not FileAccess.file_exists(_request_path):
 		return
-	var file := FileAccess.open(REQUEST_PATH, FileAccess.READ)
+	var file := FileAccess.open(_request_path, FileAccess.READ)
 	if file == null:
 		return
 	var json_text: String = file.get_as_text()
 	file.close()
 
 	# Delete the request file
-	DirAccess.remove_absolute(REQUEST_PATH)
+	DirAccess.remove_absolute(_request_path)
 
 	var json := JSON.new()
 	var err := json.parse(json_text)
@@ -125,13 +140,13 @@ func _poll_ipc() -> void:
 
 	# If busy processing another request, re-write this one for the next poll cycle
 	if _ipc_busy:
-		if FileAccess.open(REQUEST_PATH, FileAccess.WRITE):
+		if FileAccess.open(_request_path, FileAccess.WRITE):
 			# Already deleted above — re-write atomically
-			var tmp := FileAccess.open(REQUEST_PATH + ".tmp", FileAccess.WRITE)
+			var tmp := FileAccess.open(_request_path + ".tmp", FileAccess.WRITE)
 			if tmp:
 				tmp.store_string(json_text)
 				tmp.close()
-				DirAccess.rename_absolute(REQUEST_PATH + ".tmp", REQUEST_PATH)
+				DirAccess.rename_absolute(_request_path + ".tmp", _request_path)
 		return
 
 	_ipc_busy = true
@@ -205,7 +220,7 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 ## Returns true on success.
 func _write_response(data: Dictionary) -> bool:
 	var json_text: String = JSON.stringify(data)
-	var tmp_path: String = RESPONSE_PATH + ".tmp"
+	var tmp_path: String = _response_path + ".tmp"
 	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if file == null:
 		push_warning("[MCP Runtime] Failed to write response file")
@@ -213,7 +228,7 @@ func _write_response(data: Dictionary) -> bool:
 	file.store_string(json_text)
 	file.close()
 	# Atomic rename: the editor will only see complete files
-	DirAccess.rename_absolute(tmp_path, RESPONSE_PATH)
+	DirAccess.rename_absolute(tmp_path, _response_path)
 	return true
 
 
