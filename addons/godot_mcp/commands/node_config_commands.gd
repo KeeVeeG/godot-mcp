@@ -324,9 +324,29 @@ func _set_preset(params: Dictionary) -> Dictionary:
 	match preset:
 		"platformer_body":
 			if type == "CharacterBody2D":
-				preset_data = {"motion_mode": 0, "up_direction": {"x": 0, "y": -1}, "floor_max_angle": 0.785398}
+				preset_data = {
+					"motion_mode": 0,                    # GROUNDED
+					"up_direction": {"x": 0, "y": -1},
+					"floor_max_angle": 0.785398,         # 45 degrees
+					"floor_snap_length": 1.5,            # Higher snap (default: 1.0)
+					"floor_stop_on_slope": true,         # Don't slide down slopes
+					"floor_constant_speed": true,        # Constant speed on slopes (default: false)
+					"floor_block_on_wall": true,         # Walk on floors only
+					"slide_on_ceiling": true,            # Slide along ceilings
+					"wall_min_slide_angle": 0.261799,    # 15° wall-slide threshold
+				}
 			elif type == "CharacterBody3D":
-				preset_data = {"motion_mode": 0, "up_direction": {"x": 0, "y": 1, "z": 0}, "floor_max_angle": 0.785398}
+				preset_data = {
+					"motion_mode": 0,                    # GROUNDED
+					"up_direction": {"x": 0, "y": 1, "z": 0},
+					"floor_max_angle": 0.785398,         # 45 degrees
+					"floor_snap_length": 0.15,           # Higher snap (default: 0.1)
+					"floor_stop_on_slope": true,         # Don't slide down slopes
+					"floor_constant_speed": true,        # Constant speed on slopes (default: false)
+					"floor_block_on_wall": true,         # Walk on floors only
+					"slide_on_ceiling": true,            # Slide along ceilings
+					"wall_min_slide_angle": 0.261799,    # 15° wall-slide threshold
+				}
 		"top_down_camera":
 			if type == "Camera2D":
 				preset_data = {"position_smoothing_enabled": true, "position_smoothing_speed": 5.0, "drag_horizontal_enabled": true, "drag_vertical_enabled": true}

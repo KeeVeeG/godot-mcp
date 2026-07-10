@@ -188,6 +188,8 @@ func configure_ios(params: Dictionary) -> Dictionary:
 
 	if settings.has("bundle_id"):
 		var bundle_id: String = settings["bundle_id"] as String
+		if not _is_valid_bundle_id(bundle_id):
+			return {"error": "Invalid bundle ID: '%s'. Bundle IDs must follow reverse-DNS format (e.g. 'com.company.app') with only letters, digits, hyphens, and dots." % bundle_id}
 		ProjectSettings.set_setting("application/config/bundle_identifier", bundle_id)
 		applied.append({"setting": "bundle_id", "value": bundle_id})
 
@@ -198,9 +200,13 @@ func configure_ios(params: Dictionary) -> Dictionary:
 
 	if settings.has("signing"):
 		var signing: Dictionary = settings["signing"] as Dictionary
+		var signing_keys: Array = []
 		for key: String in signing:
 			ProjectSettings.set_setting("export/ios/%s" % key, signing[key])
+			signing_keys.append(key)
 			applied.append({"setting": "signing/%s" % key, "value": signing[key]})
+		# Track which sub-keys were written so get_platform_settings can discover them
+		ProjectSettings.set_setting("export/ios/_sub_keys", signing_keys)
 
 	ProjectSettings.save()
 
@@ -229,12 +235,24 @@ func configure_android(params: Dictionary) -> Dictionary:
 
 	if settings.has("keystore"):
 		var keystore: Dictionary = settings["keystore"] as Dictionary
+		var keystore_keys: Array = []
 		for key: String in keystore:
 			ProjectSettings.set_setting("export/android/%s" % key, keystore[key])
+			keystore_keys.append(key)
 			applied.append({"setting": "keystore/%s" % key, "value": keystore[key]})
+		# Track which sub-keys were written so get_platform_settings can discover them
+		ProjectSettings.set_setting("export/android/_sub_keys", keystore_keys)
 
 	if settings.has("permissions"):
 		var permissions: Array = settings["permissions"] as Array
+		var warnings: Array = []
+		for perm in permissions:
+			var perm_str: String = perm as String
+			# Warn about permissions that don't follow standard Android format
+			if not "." in perm_str:
+				warnings.append(perm_str)
+		if not warnings.is_empty():
+			applied.append({"setting": "warnings", "value": "Non-standard permission format detected: %s. Android permissions typically use 'android.permission.PERMISSION_NAME' or dotted custom format." % ", ".join(warnings)})
 		ProjectSettings.set_setting("export/android/permissions", permissions)
 		applied.append({"setting": "permissions", "value": permissions})
 
@@ -405,15 +423,26 @@ func validate_platform_build(params: Dictionary) -> Dictionary:
 
 
 ## Helper: Read nested settings from ProjectSettings with a common prefix.
-## Returns a dictionary of only the keys that have non-empty values.
-func _read_nested_settings(prefix: String, keys: Array) -> Dictionary:
+## Reads from known_keys (always checked) plus any dynamically-added keys
+## tracked via the prefix/_sub_keys meta-key (set by configure_ios/configure_android).
+## Returns all values, including empty strings (explicitly-set empty values are preserved).
+func _read_nested_settings(prefix: String, known_keys: Array) -> Dictionary:
 	var result: Dictionary = {}
-	for key: String in keys:
+	# Start with statically-known keys (backward compatible)
+	var all_keys: Array = known_keys.duplicate()
+	
+	# Also discover dynamically-added sub-keys from the meta-key
+	var meta_key: String = "%s/_sub_keys" % prefix
+	if ProjectSettings.has_setting(meta_key):
+		var saved_keys: Array = ProjectSettings.get_setting(meta_key) as Array
+		for k in saved_keys:
+			if not all_keys.has(k):
+				all_keys.append(k)
+	
+	for key: String in all_keys:
 		var full_key: String = "%s/%s" % [prefix, key]
 		if ProjectSettings.has_setting(full_key):
-			var val = ProjectSettings.get_setting(full_key)
-			if val != null and (typeof(val) != TYPE_STRING or not (val as String).is_empty()):
-				result[key] = val
+			result[key] = ProjectSettings.get_setting(full_key)
 	return result
 
 
@@ -433,4 +462,10 @@ func _has_platform_config(platform: String) -> bool:
 	return false
 
 
-
+## Helper: Validate iOS bundle ID format (reverse-DNS).
+func _is_valid_bundle_id(bundle_id: String) -> bool:
+	if bundle_id.is_empty():
+		return false
+	var regex := RegEx.new()
+	regex.compile("^[a-zA-Z][a-zA-Z0-9-]*(\\.[a-zA-Z][a-zA-Z0-9-]*)+$")
+	return regex.search(bundle_id) != null

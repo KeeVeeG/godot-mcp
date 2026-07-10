@@ -237,9 +237,11 @@ func _get_import_settings(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
 		return {"error": "Path cannot be empty"}
+	if not FileAccess.file_exists(path):
+		return {"error": "File not found: %s" % path}
 	var import_file: String = path + ".import"
 	if not FileAccess.file_exists(import_file):
-		return {"error": "No .import file found for: %s" % path}
+		return {"error": "File exists but is not importable (no .import file): %s" % path}
 	var config: ConfigFile = ConfigFile.new()
 	var err: Error = config.load(import_file)
 	if err != OK:
@@ -257,9 +259,11 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 	var settings: Dictionary = params.get("settings", {})
 	if path.is_empty():
 		return {"error": "Path cannot be empty"}
+	if not FileAccess.file_exists(path):
+		return {"error": "File not found: %s" % path}
 	var import_file: String = path + ".import"
 	if not FileAccess.file_exists(import_file):
-		return {"error": "No .import file found for: %s" % path}
+		return {"error": "File exists but is not importable (no .import file): %s" % path}
 	var config: ConfigFile = ConfigFile.new()
 	config.load(import_file)
 
