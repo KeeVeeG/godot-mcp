@@ -730,16 +730,6 @@ const TOOLS_CATALOG = [
     category: 'editor_config',
   },
   {
-    tool_id: 'set_editor_layout',
-    description: 'Switch the editor to a specific workspace layout',
-    godot_command: 'editor_config/set_layout',
-    gd_file: 'addons/godot_mcp/commands/editor_config_commands.gd',
-    gd_function: 'set_editor_layout',
-    ts_file: 'server/src/tools/editor_config.ts',
-    test_file: null,
-    category: 'editor_config',
-  },
-  {
     tool_id: 'set_font_size',
     description: 'Set the editor font size in pixels',
     godot_command: 'editor_config/set_font_size',

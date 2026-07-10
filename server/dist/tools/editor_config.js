@@ -1,5 +1,5 @@
 /**
- * Editor configuration tools - 9 tools for editor settings (+ 1 legacy alias)
+ * Editor configuration tools - 8 tools for editor settings
  */
 import { callGodot } from '../server.js';
 import { z, Name } from './shared-types.js';
@@ -16,20 +16,13 @@ export function registerEditorConfigTools(server, bridge) {
             theme: z.enum(['dark', 'light', 'amoled']).describe('Editor theme preset'),
         },
     }, async (args) => callGodot(bridge, 'editor_config/set_theme', args));
-    // 3a. set_main_screen_tab (preferred name — only switches editor tab, not full layout)
+    // 3. set_main_screen_tab (switches editor tab, not full layout)
     server.registerTool('set_main_screen_tab', {
         description: 'Switch the active editor tab (2D, 3D, Script, AssetLib). This only changes which main screen tab is visible, not the full panel layout.',
         inputSchema: {
             tab: z.enum(['default', '2d', '3d', 'script']).describe('Editor tab to activate: default/2d/3d/script'),
         },
     }, async (args) => callGodot(bridge, 'editor_config/set_layout', { layout: args.tab }));
-    // 3b. set_editor_layout (legacy alias — only switches editor tab, not full layout)
-    server.registerTool('set_editor_layout', {
-        description: '[DEPRECATED: use set_main_screen_tab instead] Switch the active editor tab (2D/3D/Script). This only changes the active tab, not the full window layout.',
-        inputSchema: {
-            layout: z.enum(['default', '2d', '3d', 'script']).describe('Editor tab to activate'),
-        },
-    }, async (args) => callGodot(bridge, 'editor_config/set_layout', args));
     // 4. set_font_size
     server.registerTool('set_font_size', {
         description: 'Set the editor font size in pixels',

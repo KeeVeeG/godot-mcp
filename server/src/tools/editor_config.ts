@@ -1,5 +1,5 @@
 /**
- * Editor configuration tools - 9 tools for editor settings (+ 1 legacy alias)
+ * Editor configuration tools - 8 tools for editor settings
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -30,7 +30,7 @@ export function registerEditorConfigTools(server: McpServer, bridge: GodotBridge
     async (args) => callGodot(bridge, 'editor_config/set_theme', args as Record<string, unknown>),
   );
 
-  // 3a. set_main_screen_tab (preferred name — only switches editor tab, not full layout)
+  // 3. set_main_screen_tab (switches editor tab, not full layout)
   server.registerTool(
     'set_main_screen_tab',
     {
@@ -40,18 +40,6 @@ export function registerEditorConfigTools(server: McpServer, bridge: GodotBridge
       },
     },
     async (args) => callGodot(bridge, 'editor_config/set_layout', { layout: (args as Record<string, unknown>).tab }),
-  );
-
-  // 3b. set_editor_layout (legacy alias — only switches editor tab, not full layout)
-  server.registerTool(
-    'set_editor_layout',
-    {
-      description: '[DEPRECATED: use set_main_screen_tab instead] Switch the active editor tab (2D/3D/Script). This only changes the active tab, not the full window layout.',
-      inputSchema: {
-        layout: z.enum(['default', '2d', '3d', 'script']).describe('Editor tab to activate'),
-      },
-    },
-    async (args) => callGodot(bridge, 'editor_config/set_layout', args as Record<string, unknown>),
   );
 
   // 4. set_font_size
