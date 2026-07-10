@@ -106,6 +106,7 @@ func _get_game_screenshot(params: Dictionary) -> Dictionary:
 	# race against the game process initialization.
 	var ready_timeout: float = IPC_TIMEOUT
 	var ready_start: float = Time.get_unix_time_from_system()
+	print("[MCP Editor] Waiting for runtime ready at: %s" % READY_PATH)
 	while Time.get_unix_time_from_system() - ready_start < ready_timeout:
 		if FileAccess.file_exists(READY_PATH):
 			break

@@ -46,6 +46,24 @@ var _next_monitor_id: int = 1
 ## IPC busy flag — prevents reentrant _poll_ipc calls during await
 var _ipc_busy: bool = false
 
+## Timestamp when _ipc_busy was last set to true (ms since engine start).
+## Used for safety timeout — force-reset if stuck for IP_BUSY_TIMEOUT seconds.
+var _ipc_busy_since: float = 0.0
+
+## Maximum time _ipc_busy can remain true before force-reset (seconds).
+const IPC_BUSY_TIMEOUT: float = 10.0
+
+## Runtime methods that require async (await) processing.
+## These methods must span multiple frames (timers, frame polling, etc.).
+## All other methods are synchronous and handled without await.
+const ASYNC_METHODS: Array[String] = [
+	"capture_frames",
+	"simulate_sequence",
+	"click_button_by_text",
+	"wait_for_node",
+	"replay_recording",
+]
+
 
 func _ready() -> void:
 	# Resolve user:// to an absolute OS path so both editor and game process
@@ -108,9 +126,17 @@ func _process(delta: float) -> void:
 
 ## Poll for IPC requests from the editor.
 func _poll_ipc() -> void:
-	# Guard: prevent reentrant calls while awaiting a previous request
+	# Safety: force-reset _ipc_busy if a previous async coroutine crashed
+	# and left the flag stuck true. Without this, _poll_ipc() becomes
+	# permanently blind — the game never processes another request.
 	if _ipc_busy:
-		return
+		var stuck_sec: float = (Time.get_ticks_msec() / 1000.0) - _ipc_busy_since
+		if stuck_sec > IPC_BUSY_TIMEOUT:
+			push_warning("[MCP Runtime] _ipc_busy stuck for %.1fs — force resetting" % stuck_sec)
+			_ipc_busy = false
+		else:
+			return
+
 	if not FileAccess.file_exists(_request_path):
 		return
 	var file := FileAccess.open(_request_path, FileAccess.READ)
@@ -138,20 +164,17 @@ func _poll_ipc() -> void:
 	var params: Dictionary = req_dict.get("params", {})
 	var request_id: String = req_dict.get("request_id", "")
 
-	# If busy processing another request, re-write this one for the next poll cycle
-	if _ipc_busy:
-		if FileAccess.open(_request_path, FileAccess.WRITE):
-			# Already deleted above — re-write atomically
-			var tmp := FileAccess.open(_request_path + ".tmp", FileAccess.WRITE)
-			if tmp:
-				tmp.store_string(json_text)
-				tmp.close()
-				DirAccess.rename_absolute(_request_path + ".tmp", _request_path)
-		return
-
-	_ipc_busy = true
-	var result: Dictionary = await _handle_request(method, params)
-	_ipc_busy = false
+	var result: Dictionary
+	if method in ASYNC_METHODS:
+		# Async methods: use await, protect with busy flag and safety timeout
+		_ipc_busy = true
+		_ipc_busy_since = Time.get_ticks_msec() / 1000.0
+		result = await _handle_request(method, params)
+		_ipc_busy = false
+	else:
+		# Sync methods (get_game_scene_tree, capture_screenshot, etc.):
+		# handle synchronously — no await, no coroutine, no busy-flag risk.
+		result = _handle_request(method, params)
 
 	# Echo request_id back for correlation
 	if not request_id.is_empty():
