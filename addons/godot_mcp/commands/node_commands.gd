@@ -631,6 +631,7 @@ func _get_editor_selection() -> Dictionary:
 
 
 ## Select specific nodes in the editor.
+## Duplicate paths are deduplicated so the reported count matches actual selection.
 func _select_nodes(params: Dictionary) -> Dictionary:
 	var paths: Array = params.get("paths", [])
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
@@ -639,17 +640,26 @@ func _select_nodes(params: Dictionary) -> Dictionary:
 
 	var selection: EditorSelection = _plugin.get_editor_interface().get_selection()
 	selection.clear()
-	var selected_count: int = 0
-	var not_found: Array = []
+
+	# Deduplicate paths to avoid inflated selected-count when duplicates are passed
+	var seen: Dictionary = {}
+	var unique_paths: Array = []
 	for p_variant: Variant in paths:
 		var p: String = p_variant as String
+		if not seen.has(p):
+			seen[p] = true
+			unique_paths.append(p)
+
+	var selected_count: int = 0
+	var not_found: Array = []
+	for p: String in unique_paths:
 		var node: Node = _resolve_node(p, root)
 		if node:
 			selection.add_node(node)
 			selected_count += 1
 		else:
 			not_found.append(p)
-	var result: Dictionary = {"result": {"message": "Selected %d of %d nodes" % [selected_count, paths.size()], "selected": selected_count}}
+	var result: Dictionary = {"result": {"message": "Selected %d of %d nodes" % [selected_count, unique_paths.size()], "selected": selected_count}}
 	if not_found.size() > 0:
 		result["result"]["not_found"] = not_found
 		result["result"]["warning"] = "%d path(s) not found: %s" % [not_found.size(), ", ".join(not_found)]

@@ -1,5 +1,5 @@
 /**
- * Node tools - 17 tools for node manipulation
+ * Node tools - 18 tools for node manipulation
  */
 import { callGodot } from '../server.js';
 import { z, NodePath, ParentPath, NodeType, PropertyName, PropertyValue, OptionalProperties } from './shared-types.js';
@@ -62,7 +62,15 @@ export function registerNodeTools(server, bridge) {
             properties: OptionalProperties,
         },
     }, async (args) => callGodot(bridge, 'node/add_resource', args));
-    // 8. set_anchor_preset
+    // 8. remove_resource
+    server.registerTool('remove_resource', {
+        description: 'Remove a resource from a node property (sets it to null)',
+        inputSchema: {
+            node_path: NodePath.describe("Node to remove resource from (e.g. 'Player' or 'Player/Cube')"),
+            property: z.string().optional().describe('Property to clear (auto-detects if omitted)'),
+        },
+    }, async (args) => callGodot(bridge, 'node/remove_resource', args));
+    // 9. set_anchor_preset
     server.registerTool('set_anchor_preset', {
         description: 'Set anchor preset on a Control node',
         inputSchema: {
@@ -70,7 +78,7 @@ export function registerNodeTools(server, bridge) {
             preset: z.string().describe("Anchor preset name (e.g. 'full_rect', 'center', 'top_left')"),
         },
     }, async (args) => callGodot(bridge, 'node/set_anchor_preset', args));
-    // 9. rename_node
+    // 10. rename_node
     server.registerTool('rename_node', {
         description: 'Rename a node in the scene tree',
         inputSchema: {
@@ -78,7 +86,7 @@ export function registerNodeTools(server, bridge) {
             new_name: z.string().describe('New name for the node'),
         },
     }, async (args) => callGodot(bridge, 'node/rename', args));
-    // 10. connect_signal
+    // 11. connect_signal
     server.registerTool('connect_signal', {
         description: "Connect a signal from one node to another node's method",
         inputSchema: {
@@ -88,7 +96,7 @@ export function registerNodeTools(server, bridge) {
             method: z.string().describe('Method to call on the target node'),
         },
     }, async (args) => callGodot(bridge, 'node/connect_signal', args));
-    // 11. disconnect_signal
+    // 12. disconnect_signal
     server.registerTool('disconnect_signal', {
         description: 'Disconnect a signal connection',
         inputSchema: {
@@ -98,14 +106,14 @@ export function registerNodeTools(server, bridge) {
             method: z.string().describe('Method that was connected'),
         },
     }, async (args) => callGodot(bridge, 'node/disconnect_signal', args));
-    // 12. get_node_groups
+    // 13. get_node_groups
     server.registerTool('get_node_groups', {
         description: 'Get all groups a node belongs to',
         inputSchema: {
             path: NodePath,
         },
     }, async (args) => callGodot(bridge, 'node/get_groups', args));
-    // 13. set_node_groups
+    // 14. set_node_groups
     server.registerTool('set_node_groups', {
         description: 'Set the groups a node belongs to (replaces existing groups)',
         inputSchema: {
@@ -113,26 +121,26 @@ export function registerNodeTools(server, bridge) {
             groups: z.array(z.string()).describe('List of group names'),
         },
     }, async (args) => callGodot(bridge, 'node/set_groups', args));
-    // 14. find_nodes_in_group
+    // 15. find_nodes_in_group
     server.registerTool('find_nodes_in_group', {
         description: 'Find all nodes belonging to a specific group',
         inputSchema: {
             group: z.string().describe('Group name to search for'),
         },
     }, async (args) => callGodot(bridge, 'node/find_in_group', args));
-    // 15. get_editor_selection
+    // 16. get_editor_selection
     server.registerTool('get_editor_selection', {
         description: 'Get the currently selected nodes in the editor',
         inputSchema: {},
     }, async () => callGodot(bridge, 'node/get_selection'));
-    // 16. select_nodes
+    // 17. select_nodes
     server.registerTool('select_nodes', {
         description: 'Select nodes in the editor',
         inputSchema: {
             paths: z.array(z.string()).describe('List of node paths to select'),
         },
     }, async (args) => callGodot(bridge, 'node/select', args));
-    // 17. clear_editor_selection
+    // 18. clear_editor_selection
     server.registerTool('clear_editor_selection', {
         description: 'Clear the current editor selection',
         inputSchema: {},

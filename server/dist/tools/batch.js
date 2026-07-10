@@ -1,5 +1,5 @@
 /**
- * Batch tools - 8 tools for batch operations and cross-scene analysis
+ * Batch tools - 10 tools for batch operations and cross-scene analysis
  */
 import { callGodot } from '../server.js';
 import { z, NodeType, ScriptPath, PropertyName } from './shared-types.js';
@@ -25,21 +25,29 @@ export function registerBatchTools(server, bridge) {
             value: z.unknown().refine((v) => v !== undefined, { message: 'Value is required' }),
         },
     }, async (args) => callGodot(bridge, 'batch/set_property', args));
-    // 4. find_node_references
+    // 4. batch_get_property
+    server.registerTool('batch_get_property', {
+        description: 'Get a property value from all nodes of a given type in the currently open scene',
+        inputSchema: {
+            type_name: NodeType,
+            property: PropertyName,
+        },
+    }, async (args) => callGodot(bridge, 'batch/get_property', args));
+    // 5. find_node_references
     server.registerTool('find_node_references', {
         description: 'Find all references to a node across scenes and scripts',
         inputSchema: {
             query: z.string().describe('Node path or name to search for'),
         },
     }, async (args) => callGodot(bridge, 'batch/find_references', args));
-    // 5. get_scene_dependencies
+    // 6. get_scene_dependencies
     server.registerTool('get_scene_dependencies', {
         description: 'Get all dependencies of a scene file (scripts, resources, sub-scenes)',
         inputSchema: {
             path: z.string().describe('Scene file path'),
         },
     }, async (args) => callGodot(bridge, 'batch/get_dependencies', args));
-    // 6. cross_scene_set_property
+    // 7. cross_scene_set_property
     server.registerTool('cross_scene_set_property', {
         description: 'Set a property on nodes of a given type across multiple scenes',
         inputSchema: {
@@ -49,14 +57,22 @@ export function registerBatchTools(server, bridge) {
             confirm_no_undo: z.boolean().optional().default(false).describe('Set to true to acknowledge this is destructive and cannot be undone'),
         },
     }, async (args) => callGodot(bridge, 'batch/cross_scene_set', args));
-    // 7. find_script_references
+    // 8. cross_scene_get_property
+    server.registerTool('cross_scene_get_property', {
+        description: 'Get a property value from nodes of a given type across all .tscn scenes on disk',
+        inputSchema: {
+            type_name: NodeType,
+            property: PropertyName,
+        },
+    }, async (args) => callGodot(bridge, 'batch/cross_scene_get', args));
+    // 9. find_script_references
     server.registerTool('find_script_references', {
         description: 'Find all scenes and nodes that use a specific script',
         inputSchema: {
             script_path: ScriptPath,
         },
     }, async (args) => callGodot(bridge, 'batch/find_script_refs', args));
-    // 8. detect_circular_dependencies
+    // 10. detect_circular_dependencies
     server.registerTool('detect_circular_dependencies', {
         description: 'Detect circular dependencies in the project (scripts, scenes, resources)',
         inputSchema: {},

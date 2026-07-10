@@ -57,15 +57,61 @@ func _find_by_type_recursive(node: Node, type_name: String, include_inactive: bo
 		_find_by_type_recursive(child, type_name, include_inactive, results)
 
 
-## Find all signal connections in the scene tree. Recursively walks all nodes
-## and reports their connected signals.
+## Find all signal connections in the scene tree.
+## Uses SceneState API to read connections from the scene state directly,
+## which is more reliable than runtime get_signal_connection_list() in editor context.
 func find_signal_connections(_params: Dictionary) -> Dictionary:
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
+	# Try SceneState first (reads connections from the .tscn file state directly).
+	# This is the same data the editor's ConnectionsDock uses.
+	var scene_path: String = root.scene_file_path
+	if not scene_path.is_empty():
+		var packed: PackedScene = load(scene_path) as PackedScene
+		if packed != null:
+			var state: SceneState = packed.get_state()
+			return _collect_connections_from_state(state, root)
+
+	# Fallback: walk the runtime scene tree and query each node's signal connections.
+	# This may miss connections if the scene isn't fully instantiated yet.
 	var connections: Array = []
 	_find_connections_recursive(root, connections)
+	return {"result": {"count": connections.size(), "connections": connections}}
+
+
+## Collect signal connections from a SceneState and resolve them against
+## the instantiated scene root for user-friendly node paths.
+func _collect_connections_from_state(state: SceneState, root: Node) -> Dictionary:
+	var connections: Array = []
+	var count: int = state.get_connection_count()
+	for i: int in range(count):
+		var from_path: NodePath = state.get_connection_source(i)
+		var signal_name: StringName = state.get_connection_signal(i)
+		var to_path: NodePath = state.get_connection_target(i)
+		var method_name: StringName = state.get_connection_method(i)
+		var flags: int = state.get_connection_flags(i)
+
+		# Resolve source node relative to the instantiated scene root for a user-friendly path
+		var source_node: Node = root.get_node_or_null(from_path)
+		var source_path: String = MCPCommandHelpers.get_node_path(source_node, _plugin) if source_node != null else str(from_path)
+
+		# Resolve target node
+		var target_node: Node = root.get_node_or_null(to_path)
+		var target_path: String = MCPCommandHelpers.get_node_path(target_node, _plugin) if target_node != null else str(to_path)
+
+		# Check if this connection will be saved (CONNECT_PERSIST flag).
+		# The editor's ConnectionsDock only shows persistent connections.
+		const CONNECT_PERSIST: int = 2
+		connections.append({
+			"source": source_path,
+			"signal": str(signal_name),
+			"target": target_path,
+			"method": str(method_name),
+			"flags": flags,
+			"persistent": (flags & CONNECT_PERSIST) != 0,
+		})
 	return {"result": {"count": connections.size(), "connections": connections}}
 
 
@@ -333,6 +379,13 @@ func find_script_references(params: Dictionary) -> Dictionary:
 	var script_path: String = params.get("script_path", "")
 	if script_path.is_empty():
 		return {"error": "Script path is required"}
+
+	# Normalize to res:// path for file existence check
+	var check_path: String = script_path
+	if not check_path.begins_with("res://"):
+		check_path = "res://" + script_path
+	if not FileAccess.file_exists(check_path):
+		return {"error": "Script not found: %s" % check_path, "isError": true}
 
 	var results: Array = []
 	_search_files_recursive(

@@ -1,5 +1,5 @@
 /**
- * Node tools - 17 tools for node manipulation
+ * Node tools - 18 tools for node manipulation
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -101,7 +101,20 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     async (args) => callGodot(bridge, 'node/add_resource', args as Record<string, unknown>),
   );
 
-  // 8. set_anchor_preset
+  // 8. remove_resource
+  server.registerTool(
+    'remove_resource',
+    {
+      description: 'Remove a resource from a node property (sets it to null)',
+      inputSchema: {
+        node_path: NodePath.describe("Node to remove resource from (e.g. 'Player' or 'Player/Cube')"),
+        property: z.string().optional().describe('Property to clear (auto-detects if omitted)'),
+      },
+    },
+    async (args) => callGodot(bridge, 'node/remove_resource', args as Record<string, unknown>),
+  );
+
+  // 9. set_anchor_preset
   server.registerTool(
     'set_anchor_preset',
     {
@@ -114,7 +127,7 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     async (args) => callGodot(bridge, 'node/set_anchor_preset', args as Record<string, unknown>),
   );
 
-  // 9. rename_node
+  // 10. rename_node
   server.registerTool(
     'rename_node',
     {
@@ -127,7 +140,7 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     async (args) => callGodot(bridge, 'node/rename', args as Record<string, unknown>),
   );
 
-  // 10. connect_signal
+  // 11. connect_signal
   server.registerTool(
     'connect_signal',
     {
@@ -142,7 +155,7 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     async (args) => callGodot(bridge, 'node/connect_signal', args as Record<string, unknown>),
   );
 
-  // 11. disconnect_signal
+  // 12. disconnect_signal
   server.registerTool(
     'disconnect_signal',
     {
@@ -157,7 +170,7 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     async (args) => callGodot(bridge, 'node/disconnect_signal', args as Record<string, unknown>),
   );
 
-  // 12. get_node_groups
+  // 13. get_node_groups
   server.registerTool(
     'get_node_groups',
     {
@@ -169,7 +182,7 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     async (args) => callGodot(bridge, 'node/get_groups', args as Record<string, unknown>),
   );
 
-  // 13. set_node_groups
+  // 14. set_node_groups
   server.registerTool(
     'set_node_groups',
     {
@@ -182,7 +195,7 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     async (args) => callGodot(bridge, 'node/set_groups', args as Record<string, unknown>),
   );
 
-  // 14. find_nodes_in_group
+  // 15. find_nodes_in_group
   server.registerTool(
     'find_nodes_in_group',
     {
@@ -194,7 +207,7 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     async (args) => callGodot(bridge, 'node/find_in_group', args as Record<string, unknown>),
   );
 
-  // 15. get_editor_selection
+  // 16. get_editor_selection
   server.registerTool(
     'get_editor_selection',
     {
@@ -204,7 +217,7 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     async () => callGodot(bridge, 'node/get_selection'),
   );
 
-  // 16. select_nodes
+  // 17. select_nodes
   server.registerTool(
     'select_nodes',
     {
@@ -216,7 +229,7 @@ export function registerNodeTools(server: McpServer, bridge: GodotBridge): void 
     async (args) => callGodot(bridge, 'node/select', args as Record<string, unknown>),
   );
 
-  // 17. clear_editor_selection
+  // 18. clear_editor_selection
   server.registerTool(
     'clear_editor_selection',
     {

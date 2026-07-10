@@ -1,5 +1,5 @@
 /**
- * Batch tools - 8 tools for batch operations and cross-scene analysis
+ * Batch tools - 10 tools for batch operations and cross-scene analysis
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -44,7 +44,20 @@ export function registerBatchTools(server: McpServer, bridge: GodotBridge): void
     async (args) => callGodot(bridge, 'batch/set_property', args as Record<string, unknown>),
   );
 
-  // 4. find_node_references
+  // 4. batch_get_property
+  server.registerTool(
+    'batch_get_property',
+    {
+      description: 'Get a property value from all nodes of a given type in the currently open scene',
+      inputSchema: {
+        type_name: NodeType,
+        property: PropertyName,
+      },
+    },
+    async (args) => callGodot(bridge, 'batch/get_property', args as Record<string, unknown>),
+  );
+
+  // 5. find_node_references
   server.registerTool(
     'find_node_references',
     {
@@ -56,7 +69,7 @@ export function registerBatchTools(server: McpServer, bridge: GodotBridge): void
     async (args) => callGodot(bridge, 'batch/find_references', args as Record<string, unknown>),
   );
 
-  // 5. get_scene_dependencies
+  // 6. get_scene_dependencies
   server.registerTool(
     'get_scene_dependencies',
     {
@@ -68,7 +81,7 @@ export function registerBatchTools(server: McpServer, bridge: GodotBridge): void
     async (args) => callGodot(bridge, 'batch/get_dependencies', args as Record<string, unknown>),
   );
 
-  // 6. cross_scene_set_property
+  // 7. cross_scene_set_property
   server.registerTool(
     'cross_scene_set_property',
     {
@@ -83,7 +96,20 @@ export function registerBatchTools(server: McpServer, bridge: GodotBridge): void
     async (args) => callGodot(bridge, 'batch/cross_scene_set', args as Record<string, unknown>),
   );
 
-  // 7. find_script_references
+  // 8. cross_scene_get_property
+  server.registerTool(
+    'cross_scene_get_property',
+    {
+      description: 'Get a property value from nodes of a given type across all .tscn scenes on disk',
+      inputSchema: {
+        type_name: NodeType,
+        property: PropertyName,
+      },
+    },
+    async (args) => callGodot(bridge, 'batch/cross_scene_get', args as Record<string, unknown>),
+  );
+
+  // 9. find_script_references
   server.registerTool(
     'find_script_references',
     {
@@ -95,7 +121,7 @@ export function registerBatchTools(server: McpServer, bridge: GodotBridge): void
     async (args) => callGodot(bridge, 'batch/find_script_refs', args as Record<string, unknown>),
   );
 
-  // 8. detect_circular_dependencies
+  // 10. detect_circular_dependencies
   server.registerTool(
     'detect_circular_dependencies',
     {
