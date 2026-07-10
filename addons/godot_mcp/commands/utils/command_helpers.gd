@@ -197,6 +197,19 @@ static func compare_values(actual: Variant, expected: Variant, operator: String)
 	return false
 
 
+## Normalize a scene path to always include res:// prefix.
+## Godot internally normalizes paths to res:// form, so comparisons
+## between user input and editor state must go through this first.
+static func normalize_scene_path(path: String) -> String:
+	if path.is_empty():
+		return path
+	if path.begins_with("res://"):
+		return path
+	if path.begins_with("/"):
+		return "res:/" + path  # handle /home/... style
+	return "res://" + path
+
+
 ## Validate resource path. Blocks traversal, allows res://
 static func validate_path(path: String) -> bool:
 	if path.is_empty():
@@ -208,6 +221,23 @@ static func validate_path(path: String) -> bool:
 	if check_path.contains("//") or check_path.contains(".."):
 		return false
 	return true
+
+
+## Normalize a resource path by prepending res:// if no protocol prefix is present.
+## Also strips any leading "./" or trailing slashes.
+static func normalize_resource_path(path: String) -> String:
+	if path.is_empty():
+		return path
+	var normalized: String = path.strip_edges()
+	# Remove leading "./"
+	while normalized.begins_with("./"):
+		normalized = normalized.substr(2)
+	# Remove trailing slash
+	normalized = normalized.rstrip("/")
+	# If no protocol prefix, prepend res://
+	if not (normalized.begins_with("res://") or normalized.begins_with("user://")):
+		normalized = "res://" + normalized
+	return normalized
 
 
 ## Recursively copy a directory.
@@ -259,3 +289,47 @@ static func escape_regex(text: String) -> String:
 ## JSON null arrives as TYPE_STRING "null", not TYPE_NIL, due to bridge serialization.
 static func is_null(value: Variant) -> bool:
 	return (value == null) or (value is String and (value as String) == "null")
+
+
+## Validate a value against a property's hint constraints (enum ranges, numeric ranges).
+## Returns an empty string if valid, or an error message string if invalid.
+static func validate_property_hint(value: Variant, prop_info: Dictionary) -> String:
+	var hint: int = prop_info.get("hint", PROPERTY_HINT_NONE) as int
+	var hint_string: String = prop_info.get("hint_string", "") as String
+	if hint_string.is_empty():
+		return ""
+
+	if hint == PROPERTY_HINT_ENUM:
+		var enum_values := hint_string.split(",")
+		var max_index: int = enum_values.size() - 1
+		if value is int:
+			var ival: int = value as int
+			if ival < 0 or ival > max_index:
+				return "Value %d out of range [0-%d] for enum '%s'" % [ival, max_index, hint_string]
+		elif value is float:
+			var fval: int = int(value)
+			if fval < 0 or fval > max_index:
+				return "Value %d out of range [0-%d] for enum '%s'" % [fval, max_index, hint_string]
+
+	elif hint == PROPERTY_HINT_RANGE:
+		# Format: "min,max" or "min,max,step" or "min,max,step,or_greater" etc.
+		# Flags (or_greater, or_less, etc.) may appear at parts[2] (no step) or parts[3] (with step).
+		var parts := hint_string.split(",")
+		if parts.size() >= 2:
+			var range_min: float = parts[0].to_float()
+			var range_max: float = parts[1].to_float()
+			var allow_greater: bool = false
+			var allow_less: bool = false
+			for i: int in range(2, parts.size()):
+				var token: String = parts[i].strip_edges()
+				if token == "or_greater":
+					allow_greater = true
+				elif token == "or_less":
+					allow_less = true
+			var fval: float = float(value)
+			if not allow_less and fval < range_min:
+				return "Value %s below minimum %s for range '%s'" % [str(fval), str(range_min), hint_string]
+			if not allow_greater and fval > range_max:
+				return "Value %s above maximum %s for range '%s'" % [str(fval), str(range_max), hint_string]
+
+	return ""

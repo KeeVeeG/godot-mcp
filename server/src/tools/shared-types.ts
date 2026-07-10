@@ -29,7 +29,12 @@ export const OptionalScenePath = z.string().optional().describe('Scene file path
 export const ScriptPath = z.string().describe("Script file path (e.g. 'res://scripts/player.gd')");
 
 /** Godot resource file path (e.g. 'res://assets/theme.tres', 'res://shaders/water.gdshader') */
-export const ResourcePath = z.string().describe("Godot resource file path (e.g. 'res://assets/theme.tres')");
+export const ResourcePath = z
+  .string()
+  .refine((s) => s.startsWith('res://') || s.startsWith('user://'), {
+    message: "Path must start with 'res://' or 'user://' (e.g. 'res://assets/theme.tres')",
+  })
+  .describe("Godot resource file path (e.g. 'res://assets/theme.tres')");
 
 /** Generic file path */
 export const FilePath = z.string().describe("File path (e.g. 'res://path/to/file')");

@@ -198,6 +198,22 @@ func _get_meta(params: Dictionary) -> Dictionary:
 	return {"success": true, "scene_path": scene_path, "meta": meta, "count": meta.size()}
 
 
+## Validate a metadata key matches Godot's ASCII identifier rules.
+## Godot rejects keys with spaces/special chars in set_meta() via ERR_FAIL_COND_MSG,
+## but silently (no error propagates to caller). We validate client-side to provide
+## clear errors. Valid: [a-zA-Z_][a-zA-Z0-9_]*
+static func _is_valid_meta_key(key: String) -> bool:
+	if key.is_empty():
+		return false
+	var first: String = key[0]
+	if not (first >= "a" and first <= "z") and not (first >= "A" and first <= "Z") and first != "_":
+		return false
+	for c: String in key:
+		if not (c >= "a" and c <= "z") and not (c >= "A" and c <= "Z") and not (c >= "0" and c <= "9") and c != "_":
+			return false
+	return true
+
+
 ## Set metadata on the current scene's root node.
 func _set_meta(params: Dictionary) -> Dictionary:
 	var scene_path: String = params.get("scene_path", "")
@@ -205,6 +221,8 @@ func _set_meta(params: Dictionary) -> Dictionary:
 	var value: Variant = params.get("value")
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
+	if not _is_valid_meta_key(key):
+		return {"success": false, "error": "Invalid metadata key: '%s'. Keys must start with a letter or underscore and contain only letters, digits, and underscores (no spaces or special characters)." % key}
 	if MCPCommandHelpers.is_null(value):
 		return {"success": false, "error": "Value cannot be null. Godot treats set_meta(key, null) as remove_meta(key). Use remove_scene_meta to delete a key, or provide a non-null value."}
 	var root: Node = null
@@ -237,6 +255,8 @@ func _remove_meta(params: Dictionary) -> Dictionary:
 	var key: String = params.get("key", "")
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
+	if not _is_valid_meta_key(key):
+		return {"success": false, "error": "Invalid metadata key: '%s'. Keys must start with a letter or underscore and contain only letters, digits, and underscores (no spaces or special characters)." % key}
 	if not scene_path.is_empty():
 		return {"success": false, "error": "Removing meta on non-current scenes is not supported (leave scene_path empty for current scene)"}
 	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()

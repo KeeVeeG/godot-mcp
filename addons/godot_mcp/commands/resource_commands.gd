@@ -30,7 +30,7 @@ func get_commands() -> Dictionary:
 
 ## Read a Godot resource's properties.
 func read_resource(params: Dictionary) -> Dictionary:
-	var path: String = params.get("path", "")
+	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("path", ""))
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
 	if not MCPCommandHelpers.validate_path(path):
@@ -59,7 +59,7 @@ func read_resource(params: Dictionary) -> Dictionary:
 
 ## Edit properties on a resource.
 func edit_resource(params: Dictionary) -> Dictionary:
-	var path: String = params.get("path", "")
+	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("path", ""))
 	var properties: Dictionary = params.get("properties", {})
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
@@ -73,6 +73,7 @@ func edit_resource(params: Dictionary) -> Dictionary:
 
 	var not_found: Array = []
 	var invalid_values: Array = []
+	var hint_invalid: Array = []
 	for prop: String in properties:
 		var val: Variant = properties[prop]
 		var found: bool = false
@@ -89,9 +90,22 @@ func edit_resource(params: Dictionary) -> Dictionary:
 					invalid_values.append(prop)
 					found = true  # mark as found to avoid double-reporting
 					break
+				# Validate against property hints (enum range, numeric range)
+				var hint_err: String = MCPCommandHelpers.validate_property_hint(val, p)
+				if not hint_err.is_empty():
+					hint_invalid.append("%s: %s" % [prop, hint_err])
+					found = true
+					break
 				found = true
 				break
 		if invalid_values.has(prop):
+			continue
+		var is_hint_invalid: bool = false
+		for hint_entry: String in hint_invalid:
+			if hint_entry.begins_with(prop + ":"):
+				is_hint_invalid = true
+				break
+		if is_hint_invalid:
 			continue
 		if not found and not not_found.has(prop):
 			not_found.append(prop)
@@ -109,6 +123,8 @@ func edit_resource(params: Dictionary) -> Dictionary:
 	var error_msgs: Array = []
 	if not invalid_values.is_empty():
 		error_msgs.append("Invalid values for properties: " + str(invalid_values))
+	if not hint_invalid.is_empty():
+		error_msgs.append("Properties out of valid range: " + str(hint_invalid))
 	if not not_found.is_empty():
 		error_msgs.append("Unknown properties: " + str(not_found))
 	if not error_msgs.is_empty():
@@ -117,6 +133,8 @@ func edit_resource(params: Dictionary) -> Dictionary:
 			result_data["not_found_properties"] = not_found
 		if not invalid_values.is_empty():
 			result_data["invalid_properties"] = invalid_values
+		if not hint_invalid.is_empty():
+			result_data["out_of_range_properties"] = hint_invalid
 		return {"success": false, "error": "; ".join(error_msgs), "result": result_data}
 	return {"result": result_msg}
 
@@ -124,7 +142,7 @@ func edit_resource(params: Dictionary) -> Dictionary:
 ## Create a new resource.
 func create_resource(params: Dictionary) -> Dictionary:
 	var type_name: String = params.get("resource_type", params.get("type", ""))
-	var path: String = params.get("path", "")
+	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("path", ""))
 	var properties: Dictionary = params.get("properties", {})
 	if type_name.is_empty() or path.is_empty():
 		return {"success": false, "error": "type and path are required"}
@@ -163,6 +181,7 @@ func create_resource(params: Dictionary) -> Dictionary:
 
 	var not_found: Array = []
 	var invalid_values: Array = []
+	var hint_invalid: Array = []
 	for prop: String in properties:
 		var parsed: bool = false
 		for p: Dictionary in res.get_property_list():
@@ -175,10 +194,23 @@ func create_resource(params: Dictionary) -> Dictionary:
 					invalid_values.append(prop)
 					parsed = true
 					break
+				# Validate against property hints (enum range, numeric range)
+				var hint_err: String = MCPCommandHelpers.validate_property_hint(val, p)
+				if not hint_err.is_empty():
+					hint_invalid.append("%s: %s" % [prop, hint_err])
+					parsed = true
+					break
 				res.set(prop, val)
 				parsed = true
 				break
 		if not parsed:
+			var is_hint_invalid: bool = false
+			for hint_entry: String in hint_invalid:
+				if hint_entry.begins_with(prop + ":"):
+					is_hint_invalid = true
+					break
+			if is_hint_invalid:
+				continue
 			not_found.append(prop)
 
 	if not path.get_extension():
@@ -195,6 +227,9 @@ func create_resource(params: Dictionary) -> Dictionary:
 	if not invalid_values.is_empty():
 		error_msgs.append("Invalid values for properties: " + str(invalid_values))
 		result_data["invalid_properties"] = invalid_values
+	if not hint_invalid.is_empty():
+		error_msgs.append("Properties out of valid range: " + str(hint_invalid))
+		result_data["out_of_range_properties"] = hint_invalid
 	if not not_found.is_empty():
 		error_msgs.append("Unknown properties: " + str(not_found))
 		result_data["not_found_properties"] = not_found
@@ -230,7 +265,7 @@ func _texture_to_base64(tex: Texture2D) -> String:
 
 ## Get a resource preview/thumbnail with base64 PNG image data.
 func get_resource_preview(params: Dictionary) -> Dictionary:
-	var path: String = params.get("path", "")
+	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("path", ""))
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
 
@@ -272,7 +307,7 @@ func get_resource_preview(params: Dictionary) -> Dictionary:
 ## Add an autoload to the project.
 func add_autoload(params: Dictionary) -> Dictionary:
 	var name_str: String = params.get("name", "")
-	var path: String = params.get("path", "")
+	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("path", ""))
 	if name_str.is_empty() or path.is_empty():
 		return {"success": false, "error": "name and path are required"}
 	# Strip existing * prefix before validation (users may pass editor-only paths)
@@ -313,8 +348,8 @@ func remove_autoload(params: Dictionary) -> Dictionary:
 
 ## Duplicate a resource file to a new path.
 func duplicate_resource(params: Dictionary) -> Dictionary:
-	var source_path: String = params.get("source_path", params.get("path", ""))
-	var new_path: String = params.get("dest_path", params.get("new_path", ""))
+	var source_path: String = MCPCommandHelpers.normalize_resource_path(params.get("source_path", params.get("path", "")))
+	var new_path: String = MCPCommandHelpers.normalize_resource_path(params.get("dest_path", params.get("new_path", "")))
 	if source_path.is_empty() or new_path.is_empty():
 		return {"success": false, "error": "source_path and new_path are required"}
 	if not MCPCommandHelpers.validate_path(source_path):
@@ -341,7 +376,7 @@ func duplicate_resource(params: Dictionary) -> Dictionary:
 
 ## Get dependencies of a resource file.
 func get_resource_dependencies(params: Dictionary) -> Dictionary:
-	var path: String = params.get("path", "")
+	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("path", ""))
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
 	if not FileAccess.file_exists(path):
@@ -362,7 +397,7 @@ func get_resource_dependencies(params: Dictionary) -> Dictionary:
 ## List resources of a specific type in the project.
 func list_resources(params: Dictionary) -> Dictionary:
 	var type_filter: String = params.get("type", "")
-	var path: String = params.get("directory", params.get("path", "res://"))
+	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("directory", params.get("path", "res://")))
 	# Common Godot resource extensions (avoids loading every file)
 	var resource_exts := PackedStringArray(["tres", "res", "gdshader", "gdshaderinc",
 		"material", "theme", "tileset", "shader", "tpf", "atlastex", "escn"])
@@ -390,7 +425,7 @@ func list_resources(params: Dictionary) -> Dictionary:
 
 ## Delete a resource file from the project.
 func delete_resource_file(params: Dictionary) -> Dictionary:
-	var path: String = params.get("path", "")
+	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("path", ""))
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
 	if not MCPCommandHelpers.validate_path(path):

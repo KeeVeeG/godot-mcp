@@ -144,6 +144,18 @@ func _create_scene(params: Dictionary) -> Dictionary:
 	if err != OK:
 		return {"error": "Failed to save scene: %s" % error_string(err)}
 
+	# Open the newly created scene in the editor so subsequent tools
+	# (get_scene_tree, add_node, etc.) operate on it immediately.
+	_plugin.get_editor_interface().open_scene_from_path(path)
+
+	# Verify the scene actually opened.
+	var opened_root: Node = _plugin.get_editor_interface().get_edited_scene_root()
+	if opened_root == null or opened_root.scene_file_path != path:
+		# Scene saved to disk but editor couldn't open it — likely
+		# because is_changing_scene() is true (another change in progress).
+		# Return soft warning so caller can retry.
+		return {"result": {"path": path, "root_type": root_type, "warning": "Scene saved but not opened — the editor may be busy. Call open_scene to switch to it."}}
+
 	return {"result": {"path": path, "root_type": root_type}}
 
 
@@ -154,6 +166,12 @@ func _open_scene(params: Dictionary) -> Dictionary:
 		return {"error": "Path is required"}
 	if not FileAccess.file_exists(path):
 		return {"error": "Scene file not found: %s" % path}
+
+	# Normalize the path so post-open verification works regardless of
+	# whether the caller passed a res://-prefixed path or a bare path.
+	# Godot internally stores scene_file_path as an absolute res:// path.
+	var normalized_path: String = MCPCommandHelpers.normalize_scene_path(path)
+
 	_plugin.get_editor_interface().open_scene_from_path(path)
 	# Verify the scene actually loaded.
 	# open_scene_from_path silently drops the call if is_changing_scene() is true
@@ -162,8 +180,8 @@ func _open_scene(params: Dictionary) -> Dictionary:
 	var root: Node = _plugin.get_editor_interface().get_edited_scene_root()
 	if root == null:
 		return {"error": "Failed to open scene: no scene root loaded"}
-	if root.scene_file_path != path:
-		return {"error": "Failed to open scene: editor is showing '%s' instead of '%s'. A scene change may be in progress — close the current scene first." % [root.scene_file_path, path]}
+	if root.scene_file_path != normalized_path:
+		return {"error": "Failed to open scene: editor is showing '%s' instead of '%s'. A scene change may be in progress — close the current scene first." % [root.scene_file_path, normalized_path]}
 	return {"result": {"message": "Scene opened: %s" % path}}
 
 
@@ -181,16 +199,20 @@ func _delete_scene(params: Dictionary) -> Dictionary:
 		return {"error": "Path is required"}
 	if not FileAccess.file_exists(path):
 		return {"error": "Scene file not found: %s" % path}
-	
+
+	# Normalize path for comparison against open_scenes (which uses res:// form).
+	var normalized_path: String = MCPCommandHelpers.normalize_scene_path(path)
+
 	# Check if scene is currently open and close it if force=true
 	var open_scenes: PackedStringArray = _plugin.get_editor_interface().get_open_scenes()
-	if path in open_scenes:
+	if normalized_path in open_scenes:
 		if not force:
 			return {"error": "Scene is currently open. Use force=true to close and delete: %s" % path}
-		# Close the scene by opening a different one
-		var root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
-		if root != null and root.scene_file_path == path:
-			_plugin.get_editor_interface().close_scene()
+		# Godot has no API to close a specific scene by path — only the
+		# currently-edited scene. Switch to the target scene first (in case
+		# it's open in a non-current tab), then close it.
+		_plugin.get_editor_interface().open_scene_from_path(normalized_path)
+		_plugin.get_editor_interface().close_scene()
 	
 	var err: Error = DirAccess.remove_absolute(path)
 	if err != OK:
@@ -302,6 +324,11 @@ func _get_loaded_scenes() -> Dictionary:
 	var open_scenes: PackedStringArray = _plugin.get_editor_interface().get_open_scenes()
 	for scene_path: String in open_scenes:
 		if scene_path.is_empty():
+			continue
+		# Filter out scenes whose files have been deleted from disk.
+		# Godot's get_open_scenes() does not auto-prune entries after
+		# external file deletion — a known engine limitation.
+		if not FileAccess.file_exists(scene_path):
 			continue
 		scenes.append({"path": scene_path})
 	# Also include the currently edited scene

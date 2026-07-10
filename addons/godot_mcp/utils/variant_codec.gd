@@ -579,6 +579,39 @@ static func serialize_value(value: Variant) -> Variant:
 		return value
 
 
+## Check if a value is numeric (int, float, or valid numeric string).
+static func _is_numeric_value(v: Variant) -> bool:
+	if v is float or v is int:
+		return true
+	if v is String:
+		return (v as String).is_valid_float()
+	return false
+
+
+## Check if a value looks structurally valid for parsing as a vector type.
+## Rejects dicts/arrays with non-numeric sub-values and unknown types.
+static func _could_be_vector(value: Variant, component_names: Array[String], component_count: int) -> bool:
+	if value is String:
+		return true
+	if value is Dictionary:
+		var d: Dictionary = value as Dictionary
+		for i: int in range(component_count):
+			if not d.has(component_names[i]):
+				return false
+			if not _is_numeric_value(d[component_names[i]]):
+				return false
+		return true
+	if value is Array:
+		var a: Array = value as Array
+		if a.size() < component_count:
+			return false
+		for i: int in range(component_count):
+			if not _is_numeric_value(a[i]):
+				return false
+		return true
+	return false
+
+
 ## Try to parse a value to match a property's expected type.
 static func parse_for_property(value: Variant, expected_type: int) -> Variant:
 	match expected_type:
@@ -587,32 +620,105 @@ static func parse_for_property(value: Variant, expected_type: int) -> Variant:
 		TYPE_BOOL:
 			if value is bool:
 				return value
+			if value is int:
+				return value != 0
+			if value is float:
+				return value != 0.0
 			if value is String:
-				return (value as String).to_lower() == "true"
-			return bool(value)
+				var bs: String = (value as String).to_lower()
+				if bs == "true" or bs == "1":
+					return true
+				if bs == "false" or bs == "0":
+					return false
+				return null
+			return null
 		TYPE_INT:
-			return int(value)
+			if value is int:
+				return value
+			if value is float:
+				return int(value)
+			if value is String:
+				var s: String = value as String
+				if s.is_valid_int():
+					return s.to_int()
+				return null
+			return null
 		TYPE_FLOAT:
-			return float(value)
+			if value is float or value is int:
+				return float(value)
+			if value is String:
+				var s: String = value as String
+				if s.is_valid_float():
+					return s.to_float()
+				return null
+			return null
 		TYPE_STRING:
 			return str(value)
 		TYPE_VECTOR2:
+			if value is Vector2:
+				return value
+			if value is Vector2i:
+				return Vector2(value)
+			if not (value is String or value is Dictionary or value is Array):
+				return null
+			if not _could_be_vector(value, ["x", "y"], 2):
+				return null
 			return _parse_vector2(value)
 		TYPE_VECTOR2I:
+			if value is Vector2i:
+				return value
+			if value is Vector2:
+				return Vector2i(value as Vector2)
+			if not (value is String or value is Dictionary or value is Array):
+				return null
+			if not _could_be_vector(value, ["x", "y"], 2):
+				return null
 			return _parse_vector2i(value)
 		TYPE_RECT2:
 			return _parse_rect2(value)
 		TYPE_RECT2I:
 			return _parse_rect2i(value)
 		TYPE_VECTOR3:
+			if value is Vector3:
+				return value
+			if value is Vector3i:
+				return Vector3(value)
+			if not (value is String or value is Dictionary or value is Array):
+				return null
+			if not _could_be_vector(value, ["x", "y", "z"], 3):
+				return null
 			return _parse_vector3(value)
 		TYPE_VECTOR3I:
+			if value is Vector3i:
+				return value
+			if value is Vector3:
+				return Vector3i(value as Vector3)
+			if not (value is String or value is Dictionary or value is Array):
+				return null
+			if not _could_be_vector(value, ["x", "y", "z"], 3):
+				return null
 			return _parse_vector3i(value)
 		TYPE_TRANSFORM2D:
 			return _parse_transform2d(value)
 		TYPE_VECTOR4:
+			if value is Vector4:
+				return value
+			if value is Vector4i:
+				return Vector4(value)
+			if not (value is String or value is Dictionary or value is Array):
+				return null
+			if not _could_be_vector(value, ["x", "y", "z", "w"], 4):
+				return null
 			return _parse_vector4(value)
 		TYPE_VECTOR4I:
+			if value is Vector4i:
+				return value
+			if value is Vector4:
+				return Vector4i(value as Vector4)
+			if not (value is String or value is Dictionary or value is Array):
+				return null
+			if not _could_be_vector(value, ["x", "y", "z", "w"], 4):
+				return null
 			return _parse_vector4i(value)
 		TYPE_BASIS:
 			return _parse_basis(value)
@@ -625,6 +731,10 @@ static func parse_for_property(value: Variant, expected_type: int) -> Variant:
 		TYPE_AABB:
 			return _parse_aabb(value)
 		TYPE_COLOR:
+			if value is Color:
+				return value
+			if not (value is String or value is Dictionary or value is Array):
+				return null
 			var col := _parse_color(value)
 			if col == Color(-1, -1, -1, -1):
 				return null  # Validation failed — invalid color string

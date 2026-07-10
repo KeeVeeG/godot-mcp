@@ -52,16 +52,25 @@ func _meta_path(slot: int) -> String:
 
 
 ## Check if a real scene is open (not a null root or auto-created empty scene).
-## After close_scene(), Godot auto-creates a new unsaved scene with an empty
-## scene_file_path. We treat that as "no scene open" for save/load purposes.
+## D4 fix: after close_scene(), Godot auto-creates a new empty scene tab
+## with root=null and path="".  get_edited_scene_root() may still return
+## the old (stale) root due to reference-counting lag, and scene_file_path
+## on that stale root still holds the old path.
+## The reliable check: get_open_scenes() returns [""] after close_scene
+## (one entry with empty string), so we check for at least one non-empty path.
 func _is_scene_open(root: Node) -> bool:
 	if root == null:
 		return false
-	if root.scene_file_path.is_empty():
-		# scene_file_path is empty for new unsaved scenes.
-		# Double-check: if there are non-empty paths in get_open_scenes(),
-		# this might be a new scene with an existing path somehow not synced.
-		# Still reject — no meaningful scene reference to store.
+	# Primary guard: get_open_scenes() is authoritative.
+	# After close_scene() it returns [""] (one empty-string entry).
+	# Only treat a scene as open when at least one entry has a non-empty path.
+	var open_scenes: PackedStringArray = _plugin.get_editor_interface().get_open_scenes()
+	var has_valid_scene: bool = false
+	for path in open_scenes:
+		if not path.is_empty():
+			has_valid_scene = true
+			break
+	if not has_valid_scene:
 		return false
 	return true
 
@@ -144,6 +153,11 @@ func save_game_state(params: Dictionary) -> Dictionary:
 		meta_file.store_string(JSON.stringify(meta_data, "\t"))
 		meta_file.close()
 
+	# NOTE: node_count relies on get_edited_scene_root().get_children().
+	# In rare edge cases (engine timing after scene switches), the root may
+	# temporarily retain children from a previous scene, inflating the count.
+	# This does not affect save-file integrity — the serialized tree reflects
+	# whatever nodes are present at save time.
 	return {"result": {
 		"success": true,
 		"slot": slot,
