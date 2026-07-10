@@ -50,6 +50,10 @@ var _ipc_busy: bool = false
 ## Used for safety timeout — force-reset if stuck for IP_BUSY_TIMEOUT seconds.
 var _ipc_busy_since: float = 0.0
 
+## Diagnostic counter — logs the first N _poll_ipc() calls to confirm
+## the game process is actually polling for IPC requests.
+var _poll_log_remaining: int = 20
+
 ## Maximum time _ipc_busy can remain true before force-reset (seconds).
 const IPC_BUSY_TIMEOUT: float = 10.0
 
@@ -61,7 +65,6 @@ const ASYNC_METHODS: Array[String] = [
 	"simulate_sequence",
 	"click_button_by_text",
 	"wait_for_node",
-	"replay_recording",
 ]
 
 
@@ -77,6 +80,8 @@ func _ready() -> void:
 
 	print("[MCP Runtime] Loaded and ready for IPC")
 	print("[MCP Runtime] IPC base dir: %s" % base_dir)
+	print("[MCP Runtime] Request path: %s" % _request_path)
+	print("[MCP Runtime] Response path: %s" % _response_path)
 	print("[MCP Runtime] Ready file: %s" % _ready_path)
 
 	# Signal to the editor that the runtime is ready to receive requests.
@@ -137,10 +142,20 @@ func _poll_ipc() -> void:
 		else:
 			return
 
+	# Diagnostic: log the first N polls to confirm the game is polling.
+	if _poll_log_remaining > 0:
+		_poll_log_remaining -= 1
+		print("[MCP Runtime] _poll_ipc() — path: %s, exists: %s" % [_request_path, FileAccess.file_exists(_request_path)])
+
+	if _request_path.is_empty():
+		return
+
 	if not FileAccess.file_exists(_request_path):
 		return
+
 	var file := FileAccess.open(_request_path, FileAccess.READ)
 	if file == null:
+		push_warning("[MCP Runtime] _poll_ipc: exists()=true but open()=null for: %s" % _request_path)
 		return
 	var json_text: String = file.get_as_text()
 	file.close()
@@ -151,6 +166,7 @@ func _poll_ipc() -> void:
 	var json := JSON.new()
 	var err := json.parse(json_text)
 	if err != OK:
+		push_warning("[MCP Runtime] _poll_ipc: JSON parse failed (text: %s)" % json_text.substr(0, 200))
 		_write_response({"error": "Failed to parse request JSON"})
 		return
 
@@ -164,28 +180,37 @@ func _poll_ipc() -> void:
 	var params: Dictionary = req_dict.get("params", {})
 	var request_id: String = req_dict.get("request_id", "")
 
+	print("[MCP Runtime] _poll_ipc: dispatching '%s' (id: %s)" % [method, request_id])
+
 	var result: Dictionary
 	if method in ASYNC_METHODS:
-		# Async methods: use await, protect with busy flag and safety timeout
+		# Async methods: use await, protect with busy flag and safety timeout.
 		_ipc_busy = true
 		_ipc_busy_since = Time.get_ticks_msec() / 1000.0
-		result = await _handle_request(method, params)
+		result = await _handle_async_request(method, params)
 		_ipc_busy = false
 	else:
-		# Sync methods (get_game_scene_tree, capture_screenshot, etc.):
-		# handle synchronously — no await, no coroutine, no busy-flag risk.
-		result = _handle_request(method, params)
+		# Sync methods: call a handler that has ZERO `await` in its body.
+		# In GDScript, any function with `await` in its source becomes a
+		# coroutine.  Calling a coroutine without `await` returns a
+		# GDScriptFunctionState, NOT the Dictionary — silently breaking IPC.
+		result = _handle_sync_request(method, params)
 
 	# Echo request_id back for correlation
 	if not request_id.is_empty():
 		result["request_id"] = request_id
 
 	if not _write_response(result):
-		push_warning("[MCP Runtime] Failed to write response for method: %s" % method)
+		push_warning("[MCP Runtime] _poll_ipc: _write_response FAILED for '%s'" % method)
 
 
-## Handle a runtime request.
-func _handle_request(method: String, params: Dictionary) -> Dictionary:
+## Handle a synchronous runtime request.
+## CRITICAL: This function MUST NOT contain `await` anywhere — not even in
+## unreachable branches.  In GDScript, the mere presence of `await` in the
+## function body makes it a coroutine.  Calling a coroutine without `await`
+## returns GDScriptFunctionState instead of the actual Dictionary, which
+## causes the IPC response to never be written → 30 s timeout on the editor.
+func _handle_sync_request(method: String, params: Dictionary) -> Dictionary:
 	match method:
 		"get_game_scene_tree":
 			return _get_game_scene_tree()
@@ -195,8 +220,6 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 			return _set_game_node_property(params.get("path", ""), params.get("property", ""), params.get("value"))
 		"execute_game_script":
 			return _execute_game_script(params.get("code", ""))
-		"capture_frames":
-			return await _capture_frames(params.get("count", 1), params.get("interval", 0.1))
 		"monitor_properties":
 			return _monitor_properties(params.get("path", ""), params.get("properties", []), params.get("duration", 5.0))
 		"start_recording":
@@ -213,10 +236,6 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 			return _batch_get_properties(params.get("paths", []), params.get("properties", []))
 		"find_ui_elements":
 			return _find_ui_elements(params.get("filter", {}))
-		"click_button_by_text":
-			return await _click_button_by_text(params.get("text", ""), params.get("timeout", 5.0))
-		"wait_for_node":
-			return await _wait_for_node(params.get("path", ""), params.get("timeout", 5.0))
 		"find_nearby_nodes":
 			return _find_nearby_nodes(params.get("position", {}), params.get("radius", 100.0))
 		"navigate_to":
@@ -227,8 +246,6 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 			return _watch_signals(params.get("path", ""), params.get("signals", []), params.get("duration", 5.0))
 		"simulate_input":
 			return _simulate_input(params)
-		"simulate_sequence":
-			return await _simulate_sequence(params)
 		"get_monitor_results":
 			return _get_monitor_results(params.get("monitor_id", 0))
 		"capture_screenshot":
@@ -239,6 +256,21 @@ func _handle_request(method: String, params: Dictionary) -> Dictionary:
 			return {"error": "Unknown runtime method: %s" % method}
 
 
+## Handle an async runtime request.  May use await for multi-frame operations.
+func _handle_async_request(method: String, params: Dictionary) -> Dictionary:
+	match method:
+		"capture_frames":
+			return await _capture_frames(params.get("count", 1), params.get("interval", 0.1))
+		"click_button_by_text":
+			return await _click_button_by_text(params.get("text", ""), params.get("timeout", 5.0))
+		"wait_for_node":
+			return await _wait_for_node(params.get("path", ""), params.get("timeout", 5.0))
+		"simulate_sequence":
+			return await _simulate_sequence(params)
+		_:
+			return {"error": "Unknown async runtime method: %s" % method}
+
+
 ## Write a response to the IPC file using atomic write-then-rename.
 ## Returns true on success.
 func _write_response(data: Dictionary) -> bool:
@@ -246,12 +278,15 @@ func _write_response(data: Dictionary) -> bool:
 	var tmp_path: String = _response_path + ".tmp"
 	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if file == null:
-		push_warning("[MCP Runtime] Failed to write response file")
+		push_warning("[MCP Runtime] Failed to write response to: %s (error: %d)" % [tmp_path, FileAccess.get_open_error()])
 		return false
 	file.store_string(json_text)
 	file.close()
-	# Atomic rename: the editor will only see complete files
-	DirAccess.rename_absolute(tmp_path, _response_path)
+	# Atomic rename: the editor will only see complete files.
+	var rename_err: Error = DirAccess.rename_absolute(tmp_path, _response_path)
+	if rename_err != OK:
+		push_warning("[MCP Runtime] Response rename failed: %s -> %s (%s)" % [tmp_path, _response_path, error_string(rename_err)])
+		return false
 	return true
 
 

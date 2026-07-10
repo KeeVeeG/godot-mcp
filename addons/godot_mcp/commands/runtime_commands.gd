@@ -188,8 +188,14 @@ func _do_ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	if rename_err != OK:
 		return {"error": "Failed to rename IPC request file: %s (code %d)" % [error_string(rename_err), rename_err]}
 
+	print("[MCP RuntimeCmd] Request written — method: %s, id: %s, req: %s, resp: %s" % [method, request_id, _get_request_path(), _get_response_path()])
 	var start: float = Time.get_unix_time_from_system()
+	var last_log_elapsed: float = 0.0
 	while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
+		var elapsed: float = Time.get_unix_time_from_system() - start
+		if elapsed - last_log_elapsed >= 5.0:
+			last_log_elapsed = elapsed
+			print("[MCP RuntimeCmd] Waiting for response... (%.1fs, resp: %s, exists: %s, running: %s)" % [elapsed, _get_response_path(), FileAccess.file_exists(_get_response_path()), _ensure_game_running()])
 		if not _ensure_game_running():
 			return {"error": "Game stopped while waiting for runtime response"}
 		if FileAccess.file_exists(_get_response_path()):

@@ -139,8 +139,14 @@ func _get_game_screenshot(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Failed to rename IPC request file: %s (code %d)" % [error_string(rename_err), rename_err]}
 
 	# Poll for response with async yields (no blocking delay)
+	print("[MCP Editor] Screenshot request written — req: %s, resp: %s" % [REQUEST_PATH, RESPONSE_PATH])
 	var start: float = Time.get_unix_time_from_system()
+	var last_log_elapsed: float = 0.0
 	while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
+		var elapsed: float = Time.get_unix_time_from_system() - start
+		if elapsed - last_log_elapsed >= 5.0:
+			last_log_elapsed = elapsed
+			print("[MCP Editor] Waiting for screenshot response... (%.1fs, path: %s, exists: %s)" % [elapsed, RESPONSE_PATH, FileAccess.file_exists(RESPONSE_PATH)])
 		if not _plugin.get_editor_interface().is_playing_scene():
 			return {"success": false, "error": "Game stopped while waiting for screenshot"}
 		if FileAccess.file_exists(RESPONSE_PATH):
