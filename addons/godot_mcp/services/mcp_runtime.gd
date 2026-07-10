@@ -1,7 +1,10 @@
 ## Runtime autoload for game-side IPC.
 ## This script is auto-injected as an autoload when the game starts.
 ## Handles file-based IPC requests from the editor plugin.
-class_name MCPRuntime
+##
+## NOTE: Do NOT add `class_name MCPRuntime` here — Godot forbids a class_name
+## that matches an autoload singleton name in the same project.  The script
+## is registered as an autoload via plugin.gd's _ensure_runtime_autoload().
 extends Node
 
 ## Polling interval in seconds

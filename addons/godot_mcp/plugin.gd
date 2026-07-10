@@ -168,9 +168,26 @@ func _ensure_runtime_autoload() -> void:
 	# Normalize line endings (handle Windows CRLF)
 	content = content.replace("\r\n", "\n")
 
-	# Check if MCPRuntime is already registered
-	if "MCPRuntime=" in content:
-		return  # Already registered
+	# Check if MCPRuntime is already registered.
+	# A leading `*` prefix means the autoload is DISABLED (e.g.
+	# `MCPRuntime="*res://..."`).  Godot's add_autoload_singleton()
+	# defaults to disabled, so the `*` can sneak in if the autoload
+	# was previously removed and re-added via the EditorPlugin API.
+	# We auto-correct it to ensure runtime tools work.
+	var disabled_line: String = "MCPRuntime=\"*" + autoload_line.substr(12)  # "MCPRuntime=\"*res://..."
+	if disabled_line in content:
+		print("[MCP] Detected disabled autoload (* prefix) — auto-correcting to enabled")
+		content = content.replace(disabled_line, autoload_line)
+		var fix_file := FileAccess.open(config_path, FileAccess.WRITE)
+		if fix_file:
+			fix_file.store_string(content)
+			fix_file.close()
+			print("[MCP] Corrected autoload line: %s" % autoload_line)
+		else:
+			push_warning("[MCP] Failed to write corrected autoload to project.godot")
+		return  # Corrected — do not insert a duplicate below
+	elif "MCPRuntime=" in content:
+		return  # Already registered (enabled)
 
 	# Find the [autoload] section and insert MCPRuntime
 	var autoload_idx: int = content.find("[autoload]")
