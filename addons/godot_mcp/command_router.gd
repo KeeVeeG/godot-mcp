@@ -72,7 +72,8 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 		"gameplay/simulate",      # simulate_gameplay_scenario
 		"gameplay/replay",         # replay_gameplay
 		"visual_testing/",         # record_visual_regression (frame captures)
-		"resource/get_preview",     # async preview generation via EditorResourcePreview
+		"resource/get_preview",    # async preview generation via EditorResourcePreview
+		"editor/get_game_screenshot",  # delegates to runtime via async file IPC
 	]
 	var is_async: bool = false
 	for p in _async_prefixes:

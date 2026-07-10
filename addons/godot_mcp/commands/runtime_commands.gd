@@ -7,6 +7,7 @@ var _plugin: EditorPlugin
 
 const REQUEST_PATH: String = "user://mcp_runtime_request.json"
 const RESPONSE_PATH: String = "user://mcp_runtime_response.json"
+const READY_PATH: String = "user://mcp_runtime_ready"
 const IPC_TIMEOUT: float = 30.0
 var _next_request_id: int = 1
 
@@ -108,10 +109,34 @@ func _process_ipc_queue() -> void:
 	_ipc_processing = false
 
 
+## Wait for the runtime autoload to signal readiness via the handshake file.
+## Returns true if ready within the timeout, false otherwise.
+## This prevents the race condition where is_playing_scene() returns true
+## before the game process has finished initializing (autoloads not yet loaded).
+func _wait_for_runtime_ready(timeout: float = IPC_TIMEOUT) -> bool:
+	if not _ensure_game_running():
+		return false
+	var start: float = Time.get_unix_time_from_system()
+	while Time.get_unix_time_from_system() - start < timeout:
+		if FileAccess.file_exists(READY_PATH):
+			return true
+		if not _ensure_game_running():
+			return false
+		await _plugin.get_tree().process_frame
+	return false
+
+
 ## Perform a single IPC request (write file, poll for response).
 func _do_ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	if not _ensure_game_running():
 		return {"error": "Game is not running. Start the scene before using runtime commands."}
+
+	# Wait for the runtime autoload to be ready before writing the request.
+	# Without this, requests sent immediately after play_scene() would poll
+	# for responses while the game process is still initializing, causing
+	# 30-second timeouts on slow project loads.
+	if not await _wait_for_runtime_ready():
+		return {"error": "Runtime autoload not ready after %.1fs — game may still be initializing or has crashed" % IPC_TIMEOUT}
 
 	# Clean stale response files from previous requests
 	if FileAccess.file_exists(RESPONSE_PATH):

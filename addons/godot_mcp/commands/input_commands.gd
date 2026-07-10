@@ -246,14 +246,17 @@ func remove_input_action(params: Dictionary) -> Dictionary:
 	return {"result": "Input action '%s' removed" % action}
 
 
-## Write a command to the runtime IPC file.
+## Write a command to the runtime IPC file using atomic write-then-rename
+## to avoid partial-reads by the runtime autoload.
 func _write_runtime_command(method: String, params: Dictionary) -> void:
 	var data: Dictionary = {"method": method, "params": params}
 	var json_text: String = JSON.stringify(data)
-	var file := FileAccess.open("user://mcp_runtime_request.json", FileAccess.WRITE)
+	var tmp_path: String = "user://mcp_runtime_request.json.tmp"
+	var file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if file:
 		file.store_string(json_text)
 		file.close()
+		DirAccess.rename_absolute(tmp_path, "user://mcp_runtime_request.json")
 
 
 ## Parse a key name to a keycode.

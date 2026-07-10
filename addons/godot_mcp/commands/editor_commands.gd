@@ -82,36 +82,78 @@ func _get_editor_screenshot(params: Dictionary) -> Dictionary:
 
 
 ## Capture a screenshot of the running game viewport.
+## Game runs in a separate process — delegates to mcp_runtime.gd via file IPC.
+## Uses async polling (await process_frame) instead of blocking OS.delay_msec.
 func _get_game_screenshot(params: Dictionary) -> Dictionary:
 	var save_path: String = params.get("path", "user://mcp_game_screenshot.png")
 	if not _plugin.get_editor_interface().is_playing_scene():
 		return {"success": false, "error": "Game is not running"}
-	# Game runs in a separate process — delegate to mcp_runtime.gd via file IPC
-	var request: Dictionary = {"method": "capture_screenshot", "params": {"path": save_path}}
-	var req_file := FileAccess.open("user://mcp_runtime_request.json", FileAccess.WRITE)
+
+	const REQUEST_PATH: String = "user://mcp_runtime_request.json"
+	const RESPONSE_PATH: String = "user://mcp_runtime_response.json"
+	const READY_PATH: String = "user://mcp_runtime_ready"
+	const IPC_TIMEOUT: float = 30.0
+
+	# Wait for the runtime autoload to signal readiness.
+	# Without this, requests sent immediately after play_scene() would
+	# race against the game process initialization.
+	var ready_timeout: float = IPC_TIMEOUT
+	var ready_start: float = Time.get_unix_time_from_system()
+	while Time.get_unix_time_from_system() - ready_start < ready_timeout:
+		if FileAccess.file_exists(READY_PATH):
+			break
+		if not _plugin.get_editor_interface().is_playing_scene():
+			return {"success": false, "error": "Game stopped while waiting for runtime to initialize"}
+		await _plugin.get_tree().process_frame
+	if not FileAccess.file_exists(READY_PATH):
+		return {"success": false, "error": "Runtime autoload not ready after %.1fs — game may still be initializing" % ready_timeout}
+
+	# Clean stale response files from previous requests
+	if FileAccess.file_exists(RESPONSE_PATH):
+		DirAccess.remove_absolute(RESPONSE_PATH)
+	if FileAccess.file_exists(RESPONSE_PATH + ".tmp"):
+		DirAccess.remove_absolute(RESPONSE_PATH + ".tmp")
+
+	# Build request with correlation id
+	var request_id: String = "mcp_screenshot_%d" % Time.get_unix_time_from_system()
+	var request: Dictionary = {"method": "capture_screenshot", "params": {"path": save_path}, "request_id": request_id}
+	var json_text: String = JSON.stringify(request)
+
+	# Atomic write: .tmp first, then rename — prevents partial reads by runtime
+	var tmp_path: String = REQUEST_PATH + ".tmp"
+	var req_file := FileAccess.open(tmp_path, FileAccess.WRITE)
 	if req_file == null:
-		return {"success": false, "error": "Failed to write runtime request"}
-	req_file.store_string(JSON.stringify(request))
+		return {"success": false, "error": "Failed to write runtime request to '%s'" % tmp_path}
+	req_file.store_string(json_text)
 	req_file.close()
-	# Wait for response
+	var rename_err: Error = DirAccess.rename_absolute(tmp_path, REQUEST_PATH)
+	if rename_err != OK:
+		return {"success": false, "error": "Failed to rename IPC request file: %s (code %d)" % [error_string(rename_err), rename_err]}
+
+	# Poll for response with async yields (no blocking delay)
 	var start: float = Time.get_unix_time_from_system()
-	const TIMEOUT: float = 3.0
-	while Time.get_unix_time_from_system() - start < TIMEOUT:
-		if FileAccess.file_exists("user://mcp_runtime_response.json"):
-			var resp_file := FileAccess.open("user://mcp_runtime_response.json", FileAccess.READ)
+	while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
+		if not _plugin.get_editor_interface().is_playing_scene():
+			return {"success": false, "error": "Game stopped while waiting for screenshot"}
+		if FileAccess.file_exists(RESPONSE_PATH):
+			var resp_file := FileAccess.open(RESPONSE_PATH, FileAccess.READ)
 			if resp_file:
 				var resp_text: String = resp_file.get_as_text()
 				resp_file.close()
-				DirAccess.remove_absolute("user://mcp_runtime_response.json")
+				DirAccess.remove_absolute(RESPONSE_PATH)
 				var json := JSON.new()
 				var err := json.parse(resp_text)
 				if err == OK and json.data is Dictionary:
 					var resp: Dictionary = json.data as Dictionary
+					var resp_id: String = resp.get("request_id", "")
+					if not resp_id.is_empty() and resp_id != request_id:
+						push_warning("[MCP Editor] Ignoring stale screenshot response (expected %s, got %s)" % [request_id, resp_id])
+						continue
 					if resp.has("result"):
 						return resp["result"]
 					return {"success": false, "error": str(resp.get("error", "Runtime error"))}
-		OS.delay_msec(10)
-	return {"success": false, "error": "Runtime screenshot timed out"}
+		await _plugin.get_tree().process_frame
+	return {"success": false, "error": "Runtime screenshot timed out after %.1fs" % IPC_TIMEOUT}
 
 
 ## Execute arbitrary GDScript code in the editor context via EditorScript.

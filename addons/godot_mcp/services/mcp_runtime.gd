@@ -14,6 +14,12 @@ var _poll_timer: float = 0.0
 const REQUEST_PATH: String = "user://mcp_runtime_request.json"
 const RESPONSE_PATH: String = "user://mcp_runtime_response.json"
 
+## Ready handshake file — written in _ready(), deleted in _exit_tree().
+## The editor waits for this file before sending IPC requests,
+## solving the race condition where is_playing_scene() returns true
+## before the game process has finished initializing autoloads.
+const READY_PATH: String = "user://mcp_runtime_ready"
+
 ## Signal watchers: {node_path: {signal_name: [events]}}
 var _signal_watchers: Dictionary = {}
 
@@ -41,6 +47,15 @@ var _ipc_busy: bool = false
 
 func _ready() -> void:
 	print("[MCP Runtime] Loaded and ready for IPC")
+	# Signal to the editor that the runtime is ready to receive requests.
+	# The editor waits for this file before sending IPC requests to avoid
+	# timing out while the game process is still initializing.
+	var ready_file := FileAccess.open(READY_PATH, FileAccess.WRITE)
+	if ready_file:
+		ready_file.store_string(str(Time.get_unix_time_from_system()))
+		ready_file.close()
+	else:
+		push_warning("[MCP Runtime] Failed to write ready handshake file")
 
 
 func _exit_tree() -> void:
@@ -57,6 +72,9 @@ func _exit_tree() -> void:
 					n.disconnect(sig_name, c)
 	_signal_watcher_callables.clear()
 	_signal_watchers.clear()
+	# Clean up ready handshake file so the editor doesn't see a stale signal
+	if FileAccess.file_exists(READY_PATH):
+		DirAccess.remove_absolute(READY_PATH)
 
 
 func _process(delta: float) -> void:
