@@ -157,7 +157,7 @@ func get_platform_settings(params: Dictionary) -> Dictionary:
 				"min_sdk": ProjectSettings.get_setting("export/android/min_sdk", defaults.get("min_sdk", 21)),
 				"target_sdk": ProjectSettings.get_setting("export/android/target_sdk", defaults.get("target_sdk", 34)),
 				"permissions": ProjectSettings.get_setting("export/android/permissions", defaults.get("permissions", [])),
-				"keystore": _read_nested_settings("export/android", ["path", "password", "alias"]),
+				"keystore": _read_keystore_settings(),
 			}
 		"web":
 			current_settings = {
@@ -205,7 +205,14 @@ func configure_ios(params: Dictionary) -> Dictionary:
 			ProjectSettings.set_setting("export/ios/%s" % key, signing[key])
 			signing_keys.append(key)
 			applied.append({"setting": "signing/%s" % key, "value": signing[key]})
-		# Track which sub-keys were written so get_platform_settings can discover them
+		# Track which sub-keys were written so get_platform_settings can discover them.
+		# Merge with existing sub-keys to preserve previously set arbitrary keys.
+		var signing_existing: Array = []
+		if ProjectSettings.has_setting("export/ios/_sub_keys"):
+			signing_existing = ProjectSettings.get_setting("export/ios/_sub_keys") as Array
+		for signing_existing_key in signing_existing:
+			if not signing_keys.has(signing_existing_key):
+				signing_keys.append(signing_existing_key)
 		ProjectSettings.set_setting("export/ios/_sub_keys", signing_keys)
 
 	ProjectSettings.save()
@@ -230,6 +237,8 @@ func configure_android(params: Dictionary) -> Dictionary:
 
 	if settings.has("package_name"):
 		var package_name: String = settings["package_name"] as String
+		if not _is_valid_package_name(package_name):
+			return {"error": "Invalid package name: '%s'. Package names must follow reverse-DNS format (e.g. 'com.company.app') with only letters, digits, underscores, and dots." % package_name}
 		ProjectSettings.set_setting("export/android/package_name", package_name)
 		applied.append({"setting": "package_name", "value": package_name})
 
@@ -237,11 +246,20 @@ func configure_android(params: Dictionary) -> Dictionary:
 		var keystore: Dictionary = settings["keystore"] as Dictionary
 		var keystore_keys: Array = []
 		for key: String in keystore:
-			ProjectSettings.set_setting("export/android/%s" % key, keystore[key])
+			# Isolate keystore keys under export/android/keystore/ to prevent
+			# collisions with top-level settings (package_name, permissions).
+			ProjectSettings.set_setting("export/android/keystore/%s" % key, keystore[key])
 			keystore_keys.append(key)
 			applied.append({"setting": "keystore/%s" % key, "value": keystore[key]})
-		# Track which sub-keys were written so get_platform_settings can discover them
-		ProjectSettings.set_setting("export/android/_sub_keys", keystore_keys)
+		# Track which sub-keys were written so get_platform_settings can discover them.
+		# Merge with existing sub-keys to preserve previously set arbitrary keys.
+		var keystore_existing: Array = []
+		if ProjectSettings.has_setting("export/android/keystore/_sub_keys"):
+			keystore_existing = ProjectSettings.get_setting("export/android/keystore/_sub_keys") as Array
+		for keystore_existing_key in keystore_existing:
+			if not keystore_keys.has(keystore_existing_key):
+				keystore_keys.append(keystore_existing_key)
+		ProjectSettings.set_setting("export/android/keystore/_sub_keys", keystore_keys)
 
 	if settings.has("permissions"):
 		var permissions: Array = settings["permissions"] as Array
@@ -446,6 +464,33 @@ func _read_nested_settings(prefix: String, known_keys: Array) -> Dictionary:
 	return result
 
 
+## Helper: Read keystore settings from the new isolated prefix
+## (export/android/keystore/), falling back to the old flat prefix
+## (export/android/) for backward compatibility.
+func _read_keystore_settings() -> Dictionary:
+	const KNOWN_KEYS: Array = ["path", "password", "alias"]
+	var prefix_new: String = "export/android/keystore"
+	# Try the new isolated prefix first
+	var result: Dictionary = _read_nested_settings(prefix_new, KNOWN_KEYS)
+	# If no settings at new location, migrate from old flat format
+	if result.is_empty():
+		var old_result: Dictionary = _read_nested_settings("export/android", KNOWN_KEYS)
+		if not old_result.is_empty():
+			# Migrate old settings to new prefix to prevent future collisions
+			for key: String in old_result:
+				var full_key_new: String = "%s/%s" % [prefix_new, key]
+				ProjectSettings.set_setting(full_key_new, old_result[key])
+				# Clear old setting to avoid stale data
+				var full_key_old: String = "export/android/%s" % key
+				if ProjectSettings.has_setting(full_key_old):
+					ProjectSettings.set_setting(full_key_old, null)
+			var migrated_keys: Array = old_result.keys()
+			ProjectSettings.set_setting("%s/_sub_keys" % prefix_new, migrated_keys)
+			return old_result
+		return {}
+	return result
+
+
 ## Helper: Check if a platform has custom configuration.
 func _has_platform_config(platform: String) -> bool:
 	match platform:
@@ -469,3 +514,14 @@ func _is_valid_bundle_id(bundle_id: String) -> bool:
 	var regex := RegEx.new()
 	regex.compile("^[a-zA-Z][a-zA-Z0-9-]*(\\.[a-zA-Z][a-zA-Z0-9-]*)+$")
 	return regex.search(bundle_id) != null
+
+
+## Helper: Validate Android package name format (reverse-DNS).
+## Same rules as iOS bundle IDs: must contain at least one dot,
+## start with a letter, and use only letters, digits, underscores, and dots.
+func _is_valid_package_name(package_name: String) -> bool:
+	if package_name.is_empty():
+		return false
+	var regex := RegEx.new()
+	regex.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$")
+	return regex.search(package_name) != null

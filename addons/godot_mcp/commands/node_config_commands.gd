@@ -288,6 +288,8 @@ func _get_defaults(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Type cannot be empty"}
 	if not ClassDB.class_exists(type):
 		return {"success": false, "error": "Unknown type: %s" % type}
+	if not ClassDB.is_parent_class(type, "Node"):
+		return {"success": false, "error": "Not a Node type: %s" % type}
 	var instance: Object = ClassDB.instantiate(type)
 	if instance == null:
 		return {"success": false, "error": "Cannot instantiate: %s" % type}
@@ -427,9 +429,9 @@ func _get_types(params: Dictionary) -> Dictionary:
 ## Get signals defined on a node type.
 func _get_signals(params: Dictionary) -> Dictionary:
 	var type: String = params.get("type", "")
+	var node_path: String = params.get("path", "")
 	if type.is_empty():
 		# Fallback: resolve from node instance path
-		var node_path: String = params.get("path", "")
 		if node_path.is_empty():
 			return {"success": false, "error": "Either 'type' or 'path' is required"}
 		var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, node_path)
@@ -444,6 +446,15 @@ func _get_signals(params: Dictionary) -> Dictionary:
 				type = String(cls)
 	if not ClassDB.class_exists(type):
 		return {"success": false, "error": "Unknown type: %s" % type}
+	# When both type and path are provided, detect mismatches (path takes priority).
+	var warning: String = ""
+	if not node_path.is_empty() and not type.is_empty():
+		var path_node: Node = MCPCommandHelpers.resolve_node_path(_plugin, node_path)
+		if path_node != null:
+			var resolved_type: String = path_node.get_class()
+			if resolved_type != type:
+				warning = "type/class-mismatch: '%s' != '%s'. Using the type resolved from the node at '%s'." % [type, resolved_type, node_path]
+				type = resolved_type
 	var signals_list: Array = ClassDB.class_get_signal_list(type, false)
 	var result: Array = []
 	for sig: Dictionary in signals_list:
@@ -457,7 +468,7 @@ func _get_signals(params: Dictionary) -> Dictionary:
 			"name": sig["name"],
 			"args": args,
 		})
-	return {"success": true, "type": type, "signals": result, "count": result.size()}
+	return {"success": true, "type": type, "signals": result, "count": result.size(), "warning": warning}
 
 
 ## Get methods defined on a node type.
@@ -492,6 +503,10 @@ func _get_enums(params: Dictionary) -> Dictionary:
 	var type: String = params.get("type", "")
 	if type.is_empty():
 		return {"success": false, "error": "Type cannot be empty"}
+	# Global enums (Key, Error, MouseButton, etc.) are not ClassDB classes —
+	# they are integer-constant tables with no ClassDB-registered enums.
+	if GLOBAL_ENUMS.has(type):
+		return {"success": true, "type": type, "enums": [], "count": 0}
 	if not ClassDB.class_exists(type):
 		return {"success": false, "error": "Unknown type: %s" % type}
 	var enum_names: PackedStringArray = ClassDB.class_get_enum_list(type, false)

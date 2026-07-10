@@ -39,7 +39,7 @@ func _get_types() -> Dictionary:
 	var types: Array = []
 	var all_classes: PackedStringArray = ClassDB.get_class_list()
 	for cls: String in all_classes:
-		if ClassDB.is_parent_class(cls, "Resource"):
+		if ClassDB.is_parent_class(cls, "Resource") and ClassDB.can_instantiate(cls):
 			types.append(cls)
 	types.sort()
 	return {"result": {"types": types, "count": types.size()}}
@@ -66,11 +66,11 @@ func _get_properties(params: Dictionary) -> Dictionary:
 		var usage: int = p["usage"] as int
 		if usage & PROPERTY_USAGE_STORAGE == 0:
 			continue
-		if pname.begins_with("resource_") or pname.begins_with("script"):
+		if pname.begins_with("resource_") or pname == "script":
 			continue
 		properties.append({
 			"name": pname,
-			"type": type_string(p["type"] as Variant.Type),
+			"type": _property_type_name(p["type"] as Variant.Type),
 			"hint": p.get("hint", 0),
 			"hint_string": p.get("hint_string", ""),
 		})
@@ -79,13 +79,29 @@ func _get_properties(params: Dictionary) -> Dictionary:
 	return {"result": {"type": type, "properties": properties, "count": properties.size()}}
 
 
+## Convert a Variant.Type to a human-readable property type name.
+## TYPE_NIL (0) is mapped to "Variant" since it means "any type" in property context.
+static func _property_type_name(t: Variant.Type) -> String:
+	if t == TYPE_NIL:
+		return "Variant"
+	return type_string(t)
+
+
 ## Extract Theme override data (colors, constants, fonts, font sizes,
 ## styleboxes, icons per control type). Theme stores overrides in private
 ## HashMaps that get_property_list() does not expose.
 func _get_theme_properties() -> Dictionary:
 	var theme: Theme = Theme.new()
+	# Build standard properties (the 3 defaults also exposed via get_property_list())
+	var properties: Array = [
+		{"name": "default_base_scale", "type": "float", "hint": PROPERTY_HINT_RANGE, "hint_string": "0.0,2.0,0.01"},
+		{"name": "default_font", "type": _property_type_name(TYPE_OBJECT), "hint": PROPERTY_HINT_RESOURCE_TYPE, "hint_string": "Font"},
+		{"name": "default_font_size", "type": "int", "hint": PROPERTY_HINT_RANGE, "hint_string": "0,256,1"},
+	]
 	var result: Dictionary = {
 		"type": "Theme",
+		"properties": properties,
+		"count": properties.size(),
 		"defaults": {
 			"default_base_scale": theme.default_base_scale,
 			"default_font": theme.default_font.resource_path if theme.default_font else null,
@@ -187,13 +203,23 @@ func _create_from_template(params: Dictionary) -> Dictionary:
 		return {"error": "Path cannot be empty"}
 	if not path.begins_with("res://") and not path.begins_with("user://"):
 		return {"error": "Path must start with 'res://' or 'user://', got: %s" % path}
+	if path.ends_with("/"):
+		return {"error": "Path cannot be a directory (ends with '/'): %s" % path}
+	if path.get_extension().is_empty():
+		return {"error": "Path must include a file extension (e.g. .tres, .res): %s" % path}
+	if path.length() > 200:
+		return {"error": "Path too long (%d chars, max 200): %s" % [path.length(), path]}
 	if not ClassDB.class_exists(type):
 		return {"error": "Unknown type: %s" % type}
 	var res: Resource = null
-	if template != "" and FileAccess.file_exists(template):
+	if template != "":
+		if not FileAccess.file_exists(template):
+			return {"error": "Template not found: %s" % template}
 		var template_res: Resource = ResourceLoader.load(template)
 		if template_res:
 			res = template_res.duplicate()
+		else:
+			return {"error": "Failed to load template: %s" % template}
 	if res == null:
 		res = ClassDB.instantiate(type) as Resource
 	if res == null:
@@ -213,9 +239,19 @@ func _import(params: Dictionary) -> Dictionary:
 		return {"error": "Path cannot be empty"}
 	if not FileAccess.file_exists(path):
 		return {"error": "File not found: %s" % path}
-	# Apply settings to .import file if provided
+	# Check if file is importable (has or will get a .import file).
+	# Non-importable files (.gd, .tres, .tscn) never get .import files.
+	var import_file: String = path + ".import"
+	var ext: String = path.get_extension().to_lower()
+	var non_importable: Array[String] = ["gd", "tres", "res", "tscn", "gdshader", "gdshaderinc"]
+	if ext in non_importable:
+		return {"error": "File is not importable (no .import pipeline for .%s): %s" % [ext, path]}
+	# Trigger reimport first (generates/updates .import with defaults)
+	var fs: EditorFileSystem = _plugin.get_editor_interface().get_resource_filesystem()
+	if fs:
+		fs.reimport_files(PackedStringArray([path]))
+	# Apply settings on top of defaults after reimport
 	if not settings.is_empty():
-		var import_file: String = path + ".import"
 		if FileAccess.file_exists(import_file):
 			var config: ConfigFile = ConfigFile.new()
 			config.load(import_file)
@@ -225,10 +261,6 @@ func _import(params: Dictionary) -> Dictionary:
 					option_key = key.substr(7)  # strip params/ prefix
 				config.set_value("params", option_key, settings[key])
 			config.save(import_file)
-	# Trigger reimport via EditorFileSystem
-	var fs: EditorFileSystem = _plugin.get_editor_interface().get_resource_filesystem()
-	if fs:
-		fs.reimport_files(PackedStringArray([path]))
 	return {"result": {"path": path, "message": "Resource import triggered"}}
 
 
@@ -259,6 +291,8 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 	var settings: Dictionary = params.get("settings", {})
 	if path.is_empty():
 		return {"error": "Path cannot be empty"}
+	if settings.is_empty():
+		return {"error": "Settings cannot be empty — no changes applied"}
 	if not FileAccess.file_exists(path):
 		return {"error": "File not found: %s" % path}
 	var import_file: String = path + ".import"
@@ -289,6 +323,13 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 			errors.append("Unknown import option '%s' — not found in existing import settings" % option_key)
 	if not errors.is_empty():
 		return {"error": "Invalid import settings: %s" % ", ".join(errors)}
+
+	# Semantic validation: detect contradictory combinations
+	# compress/lossy_quality has no effect when compress/mode=0 (Lossless)
+	if settings.has("compress/mode") or settings.has("params/compress/mode"):
+		var mode_key: String = "compress/mode" if settings.has("compress/mode") else "params/compress/mode"
+		if settings[mode_key] == 0 and (settings.has("compress/lossy_quality") or settings.has("params/compress/lossy_quality")):
+			return {"error": "Contradictory settings: compress/mode=0 (Lossless) is incompatible with compress/lossy_quality"}
 
 	# All keys validated — write to [params] section
 	for key: String in settings:

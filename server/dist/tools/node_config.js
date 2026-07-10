@@ -23,9 +23,18 @@ export function registerNodeConfigTools(server, bridge) {
     server.registerTool('get_available_node_types', {
         description: 'Get all available node types, optionally filtered by category',
         inputSchema: {
-            category: z.enum(['2d', '3d', 'ui', 'audio', 'physics', 'navigation']).optional().describe('Filter by category'),
+            category: z
+                .union([z.enum(['2d', '3d', 'ui', 'audio', 'physics', 'navigation']), z.literal('')])
+                .optional()
+                .describe('Filter by category. Omit or pass "" for all types.'),
         },
-    }, async (args) => callGodot(bridge, 'node_config/get_types', args));
+    }, async (args) => {
+        const params = { ...args };
+        if (params.category === '') {
+            delete params.category;
+        }
+        return callGodot(bridge, 'node_config/get_types', params);
+    });
     // 4. get_node_signals
     server.registerTool('get_node_signals', {
         description: 'Get all signals defined on a node type with their argument signatures. Provide either "type" (a class name like "CharacterBody3D") or "path" (a node instance path like "Player" - the class will be resolved automatically).',

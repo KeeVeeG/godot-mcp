@@ -39,10 +39,19 @@ export function registerNodeConfigTools(server: McpServer, bridge: GodotBridge):
     {
       description: 'Get all available node types, optionally filtered by category',
       inputSchema: {
-        category: z.enum(['2d', '3d', 'ui', 'audio', 'physics', 'navigation']).optional().describe('Filter by category'),
+        category: z
+          .union([z.enum(['2d', '3d', 'ui', 'audio', 'physics', 'navigation']), z.literal('')])
+          .optional()
+          .describe('Filter by category. Omit or pass "" for all types.'),
       },
     },
-    async (args) => callGodot(bridge, 'node_config/get_types', args as Record<string, unknown>),
+    async (args) => {
+      const params: Record<string, unknown> = { ...args };
+      if (params.category === '') {
+        delete params.category;
+      }
+      return callGodot(bridge, 'node_config/get_types', params);
+    },
   );
 
   // 4. get_node_signals
