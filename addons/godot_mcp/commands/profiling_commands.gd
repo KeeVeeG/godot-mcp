@@ -1,5 +1,6 @@
 ## Profiling commands module - 2 tools.
 ## Provides performance monitor data and editor performance summaries.
+@tool
 class_name MCPProfilingCommands
 extends RefCounted
 

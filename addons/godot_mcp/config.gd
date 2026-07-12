@@ -1,6 +1,7 @@
 ## Configuration class for Godot MCP plugin.
 ## Reads settings from godot_mcp_config.json if it exists,
 ## otherwise uses defaults.
+@tool
 class_name MCPConfig
 extends RefCounted
 

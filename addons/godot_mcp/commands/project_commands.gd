@@ -1,5 +1,6 @@
-## Project commands module - 7 tools.
+## Project commands module - 8 tools.
 ## Handles project info, filesystem, settings, and UID operations.
+@tool
 class_name MCPProjectCommands
 extends RefCounted
 
@@ -81,6 +82,8 @@ func _get_filesystem_tree(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "res://")
 	if not path.begins_with("res://") and not path.begins_with("user://"):
 		return {"success": false, "error": "Path must start with 'res://' or 'user://', got: " + path}
+	if not DirAccess.dir_exists_absolute(path):
+		return {"success": false, "error": "Directory not found: " + path}
 	var filters: Array = params.get("filters", [])
 	var max_depth: int = params.get("max_depth", 10)
 	var tree: Dictionary = _build_file_tree(path, filters, 0, max_depth)
@@ -117,7 +120,8 @@ func _build_file_tree(path: String, filters: Array, depth: int, max_depth: int) 
 			if filters.size() > 0:
 				passes_filter = false
 				for f: Variant in filters:
-					if ext == (f as String).to_lower():
+					var filter_ext: String = (f as String).to_lower().lstrip(".")
+					if ext == filter_ext:
 						passes_filter = true
 						break
 			if passes_filter:
@@ -171,7 +175,7 @@ func _search_recursive(path: String, query: String, regex: RegEx, results: Array
 				_search_recursive(full_path, query, regex, results, depth + 1, max_depth, search_content, max_results)
 			else:
 				if file_name.to_lower().find(query) != -1:
-					results.append({"path": full_path, "type": "directory"})
+					results.append({"path": full_path, "type": "directory", "match_type": "name"})
 				_search_recursive(full_path, query, regex, results, depth + 1, max_depth, search_content, max_results)
 		else:
 			var name_match: bool = false
@@ -183,9 +187,7 @@ func _search_recursive(path: String, query: String, regex: RegEx, results: Array
 			if search_content and not name_match:
 				content_match = _file_content_matches(full_path, query)
 			if name_match or content_match:
-				var entry: Dictionary = {"path": full_path, "type": "file", "name": file_name}
-				if content_match and not name_match:
-					entry["match_type"] = "content"
+				var entry: Dictionary = {"path": full_path, "type": "file", "name": file_name, "match_type": "name" if name_match else "content"}
 				results.append(entry)
 		file_name = dir.get_next()
 	dir.list_dir_end()
@@ -209,7 +211,9 @@ func _file_content_matches(file_path: String, query: String) -> bool:
 ## When no filter is provided, limits results to prevent oversized payloads.
 func _get_project_settings(params: Dictionary) -> Dictionary:
 	var filter_prefix: String = params.get("filter", "")
-	var max_results: int = params.get("max_results", 200)
+	if filter_prefix.contains("*") or filter_prefix.contains("?"):
+		return {"success": false, "error": "Wildcards (*, ?) are not supported in filter. Use an exact prefix (e.g. 'application/')."}
+	var max_results: int = params.get("max_results", 0)
 	var settings: Dictionary = {}
 	var count: int = 0
 	var truncated: bool = false
@@ -224,7 +228,7 @@ func _get_project_settings(params: Dictionary) -> Dictionary:
 		if value != null:
 			settings[name] = MCPVariantCodec.serialize_value(value)
 			count += 1
-			if filter_prefix.is_empty() and count >= max_results:
+			if max_results > 0 and count >= max_results:
 				truncated = true
 				break
 	var result: Dictionary = {"success": true, "settings": settings}
@@ -236,6 +240,8 @@ func _get_project_settings(params: Dictionary) -> Dictionary:
 
 ## Set a project setting and save.
 ## Null values are rejected — use remove_project_setting to delete a setting.
+## For registered settings, validates value type against the expected Godot type.
+## Custom settings (not in property_list) are allowed with any type.
 func _set_project_setting(params: Dictionary) -> Dictionary:
 	var key: String = params.get("key", "")
 	if key.is_empty():
@@ -245,6 +251,45 @@ func _set_project_setting(params: Dictionary) -> Dictionary:
 	var value: Variant = params.get("value", null)
 	if MCPCommandHelpers.is_null(value):
 		return {"success": false, "error": "value cannot be null. Use remove_project_setting to delete a setting."}
+
+	# Validate type for registered settings — prevents silent string-to-number mismatches
+	var expected_type: int = TYPE_NIL
+	for p: Dictionary in ProjectSettings.get_property_list():
+		if p["name"] == key:
+			expected_type = p["type"] as int
+			break
+	if expected_type != TYPE_NIL:
+		# Coerce String values (from JSON bridge serialization) to expected type
+		if typeof(value) == TYPE_STRING:
+			var str_val: String = value as String
+			match expected_type:
+				TYPE_INT:
+					if str_val.is_valid_int():
+						value = str_val.to_int()
+				TYPE_FLOAT:
+					if str_val.is_valid_float():
+						value = str_val.to_float()
+				TYPE_BOOL:
+					var lower: String = str_val.to_lower()
+					if lower == "true" or lower == "1":
+						value = true
+					elif lower == "false" or lower == "0":
+						value = false
+
+		# Coerce JSON float to int when setting expects int (JSON has no integer type)
+		if expected_type == TYPE_INT and typeof(value) == TYPE_FLOAT:
+			var f: float = value as float
+			if f == floor(f):
+				value = int(f)
+			else:
+				return {"success": false, "error": "Type mismatch for '%s': expected int, but got float %s (has fractional part). Use integer values for this setting." % [key, str(f)]}
+		# Validate type matches
+		elif expected_type == TYPE_BOOL and (typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT):
+			# Allow 0/1 as boolean
+			value = bool(value)
+		elif typeof(value) != expected_type:
+			return {"success": false, "error": "Type mismatch for '%s': expected %s, got %s" % [key, _type_name(expected_type), _type_name(typeof(value))]}
+
 	ProjectSettings.set_setting(key, value)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
@@ -258,9 +303,27 @@ func _remove_project_setting(params: Dictionary) -> Dictionary:
 	var key: String = params.get("key", "")
 	if key.is_empty():
 		return {"success": false, "error": "key is required"}
-	ProjectSettings.clear(key)
-	ProjectSettings.save()
-	return {"success": true, "message": "Setting '%s' removed" % key}
+	if not ProjectSettings.has_setting(key):
+		return {"success": false, "error": "Setting not found: %s" % key}
+	
+	# Distinguish built-in vs custom by whether there's a default to revert to.
+	# property_can_revert() is unreliable — it returns true for custom settings too.
+	# property_get_revert() returns null for custom settings, non-null for built-in.
+	var default_value: Variant = ProjectSettings.property_get_revert(key)
+	if default_value != null:
+		# Built-in setting: revert to engine default
+		ProjectSettings.set_setting(key, default_value)
+		var err: Error = ProjectSettings.save()
+		if err != OK:
+			return {"success": false, "error": "Failed to save: %s" % error_string(err)}
+		return {"success": true, "key": key, "message": "Setting '%s' reverted to default" % key}
+	
+	# Custom/user-added setting: fully delete the override
+	ProjectSettings.set_setting(key, null)
+	var err2: Error = ProjectSettings.save()
+	if err2 != OK:
+		return {"success": false, "error": "Failed to save: %s" % error_string(err2)}
+	return {"success": true, "key": key, "message": "Setting '%s' removed" % key}
 
 
 ## Convert uid:// to res:// path.
@@ -269,7 +332,7 @@ func _uid_to_project_path(params: Dictionary) -> Dictionary:
 	var uid_str: String = params.get("uid", "")
 	if uid_str.is_empty():
 		return {"success": false, "error": "UID cannot be empty"}
-	if not uid_str.begins_with("uid://"):
+	if not uid_str.to_lower().begins_with("uid://"):
 		return {"success": false, "error": "Malformed UID: %s. UID must start with 'uid://' prefix." % uid_str}
 	var path: String = ResourceUID.uid_to_path(uid_str)
 	if path.is_empty() or path == uid_str:
@@ -293,3 +356,20 @@ func _project_path_to_uid(params: Dictionary) -> Dictionary:
 		# path_to_uid returns the original path when no UID is found
 		return {"success": false, "error": "No UID for path: %s. The file may not be indexed — ensure it exists in the project and the editor has scanned it." % path}
 	return {"success": true, "path": path, "uid": uid_str}
+
+
+## Helper: convert Variant.Type int to human-readable name.
+func _type_name(t: int) -> String:
+	match t:
+		TYPE_NIL: return "null"
+		TYPE_BOOL: return "bool"
+		TYPE_INT: return "int"
+		TYPE_FLOAT: return "float"
+		TYPE_STRING: return "String"
+		TYPE_VECTOR2: return "Vector2"
+		TYPE_VECTOR3: return "Vector3"
+		TYPE_COLOR: return "Color"
+		TYPE_OBJECT: return "Object"
+		TYPE_DICTIONARY: return "Dictionary"
+		TYPE_ARRAY: return "Array"
+	return "type_%d" % t

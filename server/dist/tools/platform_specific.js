@@ -21,6 +21,7 @@ export function registerPlatformSpecificTools(server, bridge) {
                 team_id: z.string().optional().describe('Apple Developer Team ID'),
                 signing: OptionalProperties.describe('Code signing configuration'),
             })
+                .strict()
                 .describe('iOS settings to configure'),
         },
     }, async (args) => callGodot(bridge, 'configure_ios', args));
@@ -34,6 +35,7 @@ export function registerPlatformSpecificTools(server, bridge) {
                 keystore: OptionalProperties.describe('Keystore configuration for signing'),
                 permissions: z.array(z.string()).optional().describe('Android permissions to declare'),
             })
+                .strict()
                 .describe('Android settings to configure'),
         },
     }, async (args) => callGodot(bridge, 'configure_android', args));
@@ -47,6 +49,7 @@ export function registerPlatformSpecificTools(server, bridge) {
                 threading: z.boolean().optional().describe('Enable SharedArrayBuffer threading support'),
                 pwa: z.boolean().optional().describe('Enable Progressive Web App support'),
             })
+                .strict()
                 .describe('Web platform settings to configure'),
         },
     }, async (args) => callGodot(bridge, 'configure_web', args));

@@ -1,5 +1,6 @@
 ## Project configuration commands module - 12 tools.
 ## Handles project settings, input map, and autoload management.
+@tool
 class_name MCPProjectConfigCommands
 extends RefCounted
 
@@ -60,25 +61,40 @@ func _get_setting(params: Dictionary) -> Dictionary:
 
 
 ## Set a project setting and save.
-## Validates key existence and type before saving.
+## For registered settings, validates value type against the expected Godot type.
+## Custom settings (not in property_list) are allowed with any type.
 func _set_setting(params: Dictionary) -> Dictionary:
 	var key: String = params.get("key", "")
 	var value: Variant = params.get("value")
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
-	# Defect 2: Validate key exists in ProjectSettings registry
-	if not ProjectSettings.has_setting(key):
-		return {"success": false, "error": "Setting '%s' does not exist. Check the key spelling or list valid keys with get_all_project_settings." % key}
-	# Defect 4/13: Reject null — use remove_project_setting to delete a setting instead.
+	# Reject null — use remove_project_setting to delete a setting instead.
 	var is_null: bool = MCPCommandHelpers.is_null(value)
 	if is_null:
-		return {"success": false, "error": "value cannot be null. Use remove_project_setting to delete a setting."}
+		return {"success": false, "error": "value cannot be null. Use remove_project_config_setting to delete a setting."}
 	# Resolve expected type for this setting
 	var expected_type: int = TYPE_NIL
 	for p: Dictionary in ProjectSettings.get_property_list():
 		if p["name"] == key:
 			expected_type = p["type"] as int
 			break
+	# Coerce String values (from JSON bridge serialization) to expected type
+	if typeof(value) == TYPE_STRING:
+		var str_val: String = value as String
+		match expected_type:
+			TYPE_INT:
+				if str_val.is_valid_int():
+					value = str_val.to_int()
+			TYPE_FLOAT:
+				if str_val.is_valid_float():
+					value = str_val.to_float()
+			TYPE_BOOL:
+				var lower: String = str_val.to_lower()
+				if lower == "true" or lower == "1":
+					value = true
+				elif lower == "false" or lower == "0":
+					value = false
+
 	# Defect 14: Coerce JSON float to int when setting expects int (JSON has no integer type)
 	if expected_type == TYPE_INT and typeof(value) == TYPE_FLOAT:
 		var f: float = value as float
@@ -98,9 +114,13 @@ func _set_setting(params: Dictionary) -> Dictionary:
 
 ## Get all project settings, optionally filtered by prefix.
 ## Uses path-segment matching: "input/" matches "input/ui_accept" but NOT "input_devices/pointing/..."
+## When max_results > 0, limits results and sets truncated=true.
 func _get_all_settings(params: Dictionary) -> Dictionary:
 	var filter_prefix: String = params.get("filter", "")
+	var max_results: int = params.get("max_results", 0)
 	var settings: Dictionary = {}
+	var count: int = 0
+	var truncated: bool = false
 	var props: Array = ProjectSettings.get_property_list()
 	# Normalize filter to path-segment form: strip trailing "/" then require "/" after the bare name.
 	# E.g. filter "input/" → bare "input" → matches keys equal to "input" or starting with "input/"
@@ -122,7 +142,15 @@ func _get_all_settings(params: Dictionary) -> Dictionary:
 		var value: Variant = ProjectSettings.get_setting(name)
 		if value != null:
 			settings[name] = MCPVariantCodec.serialize_value(value)
-	return {"success": true, "settings": settings, "count": settings.size()}
+			count += 1
+			if max_results > 0 and count >= max_results:
+				truncated = true
+				break
+	var result: Dictionary = {"success": true, "settings": settings, "count": settings.size()}
+	if truncated:
+		result["truncated"] = true
+		result["message"] = "Results limited to %d entries. Use 'max_results' param to increase, or 'filter' to narrow results." % max_results
+	return result
 
 
 ## Reset a project setting to its built-in default value.
@@ -146,18 +174,29 @@ func _reset_setting(params: Dictionary) -> Dictionary:
 
 
 ## Remove a project setting from project.godot.
-## This is the dedicated tool for deleting settings — separate from set_project_setting.
+## For built-in settings (those with defaults), reverts to default instead of destroying.
+## For custom/user-added settings, fully deletes the override.
 func _remove_setting(params: Dictionary) -> Dictionary:
 	var key: String = params.get("key", "")
 	if key.is_empty():
 		return {"success": false, "error": "Key cannot be empty"}
 	if not ProjectSettings.has_setting(key):
 		return {"success": false, "error": "Setting not found: %s" % key}
-	ProjectSettings.set_setting(key, null)
+	# Determine if built-in: property_get_revert returns non-nil for built-in, nil for custom
+	# property_can_revert() returns true for both, and property_list includes both — neither reliable alone
+	var revert_val: Variant = ProjectSettings.property_get_revert(key)
+	var is_builtin: bool = typeof(revert_val) != TYPE_NIL
+	if is_builtin:
+		# Built-in setting: revert to default to avoid permanently destroying the property
+		var default_value: Variant = ProjectSettings.property_get_revert(key)
+		ProjectSettings.set_setting(key, default_value)
+	else:
+		# Custom/user-added setting: safe to fully delete the override
+		ProjectSettings.set_setting(key, null)
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-	return {"success": true, "key": key, "message": "Setting '%s' removed" % key}
+	return {"success": true, "key": key, "message": ("Setting '%s' reverted to default" if is_builtin else "Setting '%s' removed") % key}
 
 
 ## Get all input actions with their mapped events.
@@ -179,20 +218,28 @@ func _get_input_map() -> Dictionary:
 ## When merge=true, only adds/updates the provided actions, preserving existing ones.
 func _set_input_map(params: Dictionary) -> Dictionary:
 	var actions: Dictionary = params.get("actions", {})
-	var merge: bool = params.get("merge", false)
+	# merge can arrive as bool or string through JSON bridge; coerce robustly
+	var merge_raw = params.get("merge", false)
+	var merge: bool
+	match typeof(merge_raw):
+		TYPE_BOOL: merge = merge_raw
+		TYPE_STRING: merge = (merge_raw as String).to_lower() == "true"
+		TYPE_INT: merge = (merge_raw as int) != 0
+		_: merge = false
 	# Full replacement: erase all existing actions before adding new ones
 	if not merge:
 		for action_name: String in InputMap.get_actions():
 			InputMap.erase_action(action_name)
 	# Add/update actions — supports both flat [events] and nested {deadzone, events} formats
+	var total_skipped: int = 0
 	for action_name: String in actions:
 		var action_data: Variant = actions[action_name]
 		var event_list: Array
-		var deadzone: float = 0.2
+		var deadzone: float = 0.5
 		if action_data is Dictionary and action_data.has("events"):
 			# Nested format: {deadzone, events} — from get_input_map roundtrip
 			event_list = action_data["events"]
-			deadzone = float(action_data.get("deadzone", 0.2))
+			deadzone = float(action_data.get("deadzone", 0.5))
 		elif action_data is Array:
 			# Flat format: [events]
 			event_list = action_data
@@ -203,16 +250,26 @@ func _set_input_map(params: Dictionary) -> Dictionary:
 		else:
 			InputMap.action_erase_events(action_name)
 			InputMap.action_set_deadzone(action_name, deadzone)
+		var skipped: int = 0
 		for event_data: Dictionary in event_list:
 			var event: InputEvent = MCPVariantCodec.create_input_event(event_data)
 			if event:
 				InputMap.action_add_event(action_name, event)
-	return {"success": true, "message": "Input map %s" % ("merged" if merge else "replaced")}
+			else:
+				skipped += 1
+				push_warning("MCP set_input_map: skipped invalid event for action '%s': %s" % [action_name, str(event_data)])
+		if skipped > 0:
+			push_warning("MCP set_input_map: %d event(s) skipped for action '%s' — check event type ('key', 'mouse_button', 'joypad_button', 'joypad_motion') and required fields" % [skipped, action_name])
+		total_skipped += skipped
+	var result: Dictionary = {"success": true, "message": "Input map %s" % ("merged" if merge else "replaced")}
+	if total_skipped > 0:
+		result["warnings"] = "%d event(s) skipped across all actions. Valid types: key, mouse_button, joypad_button, joypad_motion." % total_skipped
+	return result
 
 
 ## Add a new input action with events.
 func _add_input_action(params: Dictionary) -> Dictionary:
-	var action: String = params.get("action", "")
+	var action: String = params.get("action", "").strip_edges()
 	var deadzone: float = params.get("deadzone", 0.5)
 	var events: Array = params.get("events", [])
 	if action.is_empty():
@@ -220,11 +277,19 @@ func _add_input_action(params: Dictionary) -> Dictionary:
 	if InputMap.has_action(action):
 		return {"success": false, "error": "Action already exists: %s" % action}
 	InputMap.add_action(action, deadzone)
+	var skipped: int = 0
 	for event_data: Dictionary in events:
 		var event: InputEvent = MCPVariantCodec.create_input_event(event_data)
 		if event:
 			InputMap.action_add_event(action, event)
-	return {"success": true, "action": action, "event_count": events.size()}
+		else:
+			skipped += 1
+			push_warning("MCP add_input_action: skipped invalid event for action '%s': %s" % [action, str(event_data)])
+	var result: Dictionary = {"success": true, "action": action, "event_count": events.size() - skipped}
+	if skipped > 0:
+		push_warning("MCP add_input_action: %d event(s) skipped for action '%s' — check event type ('key', 'mouse_button', 'joypad_button', 'joypad_motion') and required fields" % [skipped, action])
+		result["warnings"] = "%d event(s) skipped. Valid types: key, mouse_button, joypad_button, joypad_motion." % skipped
+	return result
 
 
 ## Remove an input action.

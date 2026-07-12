@@ -2,13 +2,13 @@
  * Script tools - 10 tools for script management
  */
 import { callGodot } from '../server.js';
-import { z, ScriptPath, NodePath, GDScriptCode, SearchQuery } from './shared-types.js';
+import { z, ScriptPath, NodePath, SearchQuery } from './shared-types.js';
 export function registerScriptTools(server, bridge) {
     // 1. list_scripts
     server.registerTool('list_scripts', {
         description: 'List all GDScript files in the project with class info',
         inputSchema: {
-            max_depth: z.number().int().positive().optional().default(10).describe('Maximum directory depth to scan (default: 10)'),
+            max_depth: z.number().int().min(0).optional().default(10).describe('Maximum directory depth to scan (default: 10)'),
         },
     }, async (args) => callGodot(bridge, 'script/list', args));
     // 2. read_script
@@ -23,7 +23,7 @@ export function registerScriptTools(server, bridge) {
         description: 'Create a new GDScript file',
         inputSchema: {
             path: ScriptPath.describe("Path for the new script (e.g. 'res://scripts/player.gd')"),
-            content: GDScriptCode.describe('GDScript source code'),
+            content: z.string().optional().describe('GDScript source code (auto-generated template when empty + base_class is set)'),
             base_class: z.string().optional().describe("Base class (e.g. 'CharacterBody2D')"),
         },
     }, async (args) => callGodot(bridge, 'script/create', args));
@@ -40,7 +40,7 @@ export function registerScriptTools(server, bridge) {
         description: 'Edit an existing GDScript file by replacing a text segment',
         inputSchema: {
             path: ScriptPath,
-            old_text: z.string().describe('Exact text to find and replace'),
+            old_text: z.string().min(1, 'Search text cannot be empty').describe('Exact text to find and replace'),
             new_text: z.string().describe('Replacement text'),
         },
     }, async (args) => callGodot(bridge, 'script/edit', args));

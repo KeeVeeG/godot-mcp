@@ -2,13 +2,13 @@
  * Scene tools - 13 tools for scene management
  */
 import { callGodot } from '../server.js';
-import { z, ScenePath } from './shared-types.js';
+import { z, ScenePath, OptionalScenePath } from './shared-types.js';
 export function registerSceneTools(server, bridge) {
     // 1. get_scene_tree
     server.registerTool('get_scene_tree', {
         description: 'Get the node tree of the specified or currently open scene',
         inputSchema: {
-            max_depth: z.number().int().positive().optional().default(15).describe('Maximum tree depth to serialize (default: 15)'),
+            max_depth: z.coerce.number().int().min(0).optional().default(15).describe('Maximum tree depth to serialize (default: 15)'),
         },
     }, async (args) => callGodot(bridge, 'scene/get_tree', args));
     // 2. get_scene_file_content
@@ -55,7 +55,7 @@ export function registerSceneTools(server, bridge) {
         description: 'Start playing the current or specified scene. Required before using any runtime tools (get_game_*, capture_frames, etc.)',
         inputSchema: {
             mode: z.enum(['main', 'current', 'custom']).optional().describe("Play mode: 'main' (main scene), 'current' (open scene), or 'custom' (specified by scene_path)"),
-            scene_path: z.string().optional().describe("Scene to play when mode is 'custom'"),
+            scene_path: ScenePath.optional().describe("Scene to play when mode is 'custom'"),
         },
     }, async (args) => callGodot(bridge, 'scene/play', args));
     // 8. stop_scene
@@ -67,7 +67,7 @@ export function registerSceneTools(server, bridge) {
     server.registerTool('save_scene', {
         description: 'Save the current scene or save it to a new path',
         inputSchema: {
-            path: z.string().optional().describe('Path of the scene to save (defaults to current)'),
+            path: OptionalScenePath.describe("Path to save the scene to (defaults to current scene's existing path)"),
             save_as: z.boolean().optional().describe('Allow saving to a different path (save as copy)'),
         },
     }, async (args) => callGodot(bridge, 'scene/save', args));

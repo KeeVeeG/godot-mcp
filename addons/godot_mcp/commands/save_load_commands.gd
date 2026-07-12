@@ -1,6 +1,7 @@
-﻿## Save/Load commands module - 5 tools.
+## Save/Load commands module - 5 tools.
 ## Provides game state save/load testing, save file management,
 ## and save state comparison for verifying save system integrity.
+@tool
 class_name MCPSaveLoadCommands
 extends RefCounted
 
@@ -94,13 +95,13 @@ func _resolve_scene_path(root: Node) -> String:
 	if not root_path.is_empty() and root_path in valid_paths:
 		return root_path
 
-	# Root path is empty or mismatched — use get_open_scenes() data
+	# Root path is empty or mismatched � use get_open_scenes() data
 	if valid_paths.size() > 0:
 		if not root_path.is_empty():
 			push_warning("save_load: root.scene_file_path '%s' differs from open_scenes %s. Using open_scenes path." % [root_path, str(valid_paths)])
 		return valid_paths[0]
 
-	# No open saved scenes — fall back to root path (may be empty/"unknown")
+	# No open saved scenes � fall back to root path (may be empty/"unknown")
 	if not root_path.is_empty():
 		push_warning("save_load: root.scene_file_path '%s' not found in open_scenes (empty). Using anyway." % root_path)
 	return root_path
@@ -157,7 +158,7 @@ func save_game_state(params: Dictionary) -> Dictionary:
 	# NOTE: node_count relies on get_edited_scene_root().get_children().
 	# In rare edge cases (engine timing after scene switches), the root may
 	# temporarily retain children from a previous scene, inflating the count.
-	# This does not affect save-file integrity — the serialized tree reflects
+	# This does not affect save-file integrity � the serialized tree reflects
 	# whatever nodes are present at save time.
 	return {"result": {
 		"success": true,

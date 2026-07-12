@@ -12,13 +12,46 @@ import { z } from 'zod';
 /** Node path in the scene tree (e.g. "Player/Sprite2D"). Use just the node name for root-level children (e.g. "Player"), or "" for the scene root itself. Paths are relative to the currently open scene — do NOT use full editor paths like "/root/@EditorNode@...". */
 export const NodePath = z
     .string()
+    .refine((s) => !s.includes('..'), {
+    message: 'Node path must not contain path traversal (..)',
+})
     .describe("Node path in the scene tree (e.g. 'Player/Sprite2D'). Use just the node name for root-level children (e.g. 'Player'), or empty string '' for the scene root itself. Paths are relative to the currently open scene.");
-/** Scene file path (e.g. "res://scenes/main.tscn") */
-export const ScenePath = z.string().describe("Scene file path (e.g. 'res://scenes/main.tscn')");
-/** Optional scene file path — defaults to current scene */
-export const OptionalScenePath = z.string().optional().describe('Scene file path (defaults to current scene)');
+/** Scene file path (e.g. "res://scenes/main.tscn"). Must start with res://, end with .tscn/.scn, and not contain path traversal. */
+export const ScenePath = z
+    .string()
+    .min(1, 'Scene path is required')
+    .refine((s) => s.startsWith('res://'), {
+    message: "Scene path must start with 'res://' (e.g. 'res://scenes/main.tscn')",
+})
+    .refine((s) => !s.includes('..'), {
+    message: 'Scene path must not contain path traversal (..)',
+})
+    .refine((s) => s.endsWith('.tscn') || s.endsWith('.scn'), {
+    message: "Scene path must end with '.tscn' or '.scn'",
+})
+    .describe("Scene file path (e.g. 'res://scenes/main.tscn')");
+/** Optional scene file path — defaults to current scene. When provided, validates res:// prefix and no path traversal. */
+export const OptionalScenePath = z
+    .string()
+    .refine((s) => s.startsWith('res://'), {
+    message: "Scene path must start with 'res://' (e.g. 'res://scenes/main.tscn')",
+})
+    .refine((s) => !s.includes('..'), {
+    message: 'Scene path must not contain path traversal (..)',
+})
+    .optional()
+    .describe('Scene file path (defaults to current scene)');
 /** Script file path (e.g. "res://scripts/player.gd") */
-export const ScriptPath = z.string().describe("Script file path (e.g. 'res://scripts/player.gd')");
+export const ScriptPath = z
+    .string()
+    .min(1, 'Script path is required')
+    .refine((s) => s.startsWith('res://'), {
+    message: "Script path must start with 'res://' (e.g. 'res://scripts/player.gd')",
+})
+    .refine((s) => !s.includes('..'), {
+    message: 'Script path must not contain path traversal (..)',
+})
+    .describe("Script file path (e.g. 'res://scripts/player.gd')");
 /** Godot resource file path (e.g. 'res://assets/theme.tres', 'res://shaders/water.gdshader') */
 export const ResourcePath = z
     .string()
@@ -27,19 +60,57 @@ export const ResourcePath = z
 })
     .describe("Godot resource file path (e.g. 'res://assets/theme.tres')");
 /** Generic file path */
-export const FilePath = z.string().describe("File path (e.g. 'res://path/to/file')");
+export const FilePath = z
+    .string()
+    .min(1, 'File path is required')
+    .refine((s) => s.startsWith('res://') || s.startsWith('user://'), {
+    message: "File path must start with 'res://' or 'user://'",
+})
+    .describe("File path (e.g. 'res://path/to/file')");
+/** Baseline name or path — accepts bare names (resolved against baselines directory) or full res:///user:// paths */
+export const BaselinePath = z
+    .string()
+    .min(1, 'Baseline is required')
+    .refine((s) => !s.includes('..'), {
+    message: 'Baseline path must not contain path traversal (..)',
+})
+    .describe('Baseline name or path (bare name resolves to baselines directory, or use res:///user:// path)');
+/** Absolute filesystem path for project creation/management tools.
+ *  These tools create or manage projects at arbitrary locations
+ *  outside the current Godot project, so they need raw filesystem paths.
+ *  Security: blocks path traversal (..) and double-slash bypass attempts. */
+export const AbsoluteFilePath = z
+    .string()
+    .min(1, 'Path is required')
+    .refine((s) => !s.includes('..'), {
+    message: 'Path must not contain path traversal (..)',
+})
+    .refine((s) => !s.includes('//'), {
+    message: 'Path must not contain double slashes (//)',
+})
+    .describe("Absolute filesystem path (e.g. 'C:/Users/me/my_project')");
 /** Optional file path */
 export const OptionalFilePath = z.string().optional().describe('File path (omit for default)');
 /** Property or field name */
 export const PropertyName = z.string().describe("Property name (e.g. 'position', 'visible')");
 /** Any property value */
 export const PropertyValue = z.unknown().describe('Property value');
-/** Generic name identifier */
-export const Name = z.string().describe('Name identifier');
+/** Maximum safe filename length for filesystem operations.
+ *  Windows MAX_PATH is 260 chars; user:// expands to ~80-100 chars.
+ *  Leaving 200 for the name portion is safe across all platforms. */
+export const MAX_NAME_LENGTH = 200;
+/** Generic name identifier — trimmed, non-empty, safe for filenames, length-capped */
+export const Name = z
+    .string()
+    .trim()
+    .min(1, 'Name is required')
+    .max(MAX_NAME_LENGTH, `Name must be at most ${MAX_NAME_LENGTH} characters`)
+    .regex(/^[^:\\/\\?*"|%<>]+$/, 'Name contains invalid characters: : / \\ ? * " | % < >')
+    .describe('Name identifier');
 /** GDScript code string */
-export const GDScriptCode = z.string().describe('GDScript code to execute');
+export const GDScriptCode = z.string().describe('GDScript code to execute (non-empty string required)');
 /** Search query string */
-export const SearchQuery = z.string().describe('Search query');
+export const SearchQuery = z.string().min(1, 'Search query cannot be empty').describe('Search query');
 /** Node type name (e.g. "Sprite2D", "CharacterBody3D") */
 export const NodeType = z.string().min(1, 'Type name is required').describe("Node type name (e.g. 'Sprite2D', 'CharacterBody3D')");
 /** Parent node path — use '' (empty string) for scene root, or node name (e.g. "Player") for direct root children */
@@ -55,8 +126,10 @@ export const NonNegativeInt = z.number().int().min(0);
 export const PositiveInt = z.number().int().positive();
 /** Optional positive number */
 export const OptionalPositiveNumber = z.number().positive().optional();
-/** Optional timeout in seconds */
-export const Timeout = z.number().optional().describe('Timeout in seconds');
+/** Optional timeout in seconds (must be >= 0) */
+export const Timeout = z.number().min(0).optional().describe('Timeout in seconds');
+/** Optional non-negative float */
+export const NonNegativeNumber = z.number().min(0);
 // ────────────────────────────────────────────────────────────
 // Boolean schemas
 // ────────────────────────────────────────────────────────────
@@ -68,9 +141,21 @@ export const Pressed = z.boolean().optional().default(true).describe('Whether pr
 // Position / coordinate schemas
 // ────────────────────────────────────────────────────────────
 /** 2D position as [x, y] */
-export const Position2D = z.array(z.number()).length(2).describe('Position as [x, y]');
+export const Position2D = z
+    .array(z.number().refine((v) => Number.isFinite(v), 'Coordinate must be a finite number'))
+    .length(2)
+    .describe('Position as [x, y]');
 /** 3D position as [x, y, z] */
-export const Position3D = z.array(z.number()).length(3).describe('Position as [x, y, z]');
+export const Position3D = z
+    .array(z.number().refine((v) => Number.isFinite(v), 'Coordinate must be a finite number'))
+    .length(3)
+    .describe('Position as [x, y, z]');
+/** Flexible position: [x, y] (2D) or [x, y, z] (3D) — accepts 2 or 3 elements */
+export const FlexiblePosition = z
+    .array(z.number().refine((v) => Number.isFinite(v), 'Coordinate must be a finite number'))
+    .min(2)
+    .max(3)
+    .describe('World position [x, y] (2D) or [x, y, z] (3D)');
 /** 2D integer coordinates [x, y] (e.g. tilemap cells). Accepts arrays of 2+ elements (extra elements are ignored). */
 export const Coord2D = z
     .array(z.number().int())
@@ -84,7 +169,7 @@ export const Coord3D = z
     .transform((a) => [a[0], a[1], a[2]])
     .describe('Integer coordinates [x, y, z]');
 /** 2D size as [width, height] */
-export const Size2D = z.array(z.number().int()).length(2).describe('Size as [width, height]');
+export const Size2D = z.array(z.number().int().positive()).length(2).describe('Size as [width, height]');
 // ────────────────────────────────────────────────────────────
 // Record / properties schemas
 // ────────────────────────────────────────────────────────────

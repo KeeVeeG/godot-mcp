@@ -51,13 +51,14 @@ export function registerNodeTools(server, bridge) {
         description: 'Get all properties of a node',
         inputSchema: {
             path: NodePath,
+            properties: z.array(z.string()).optional().describe('Specific property names to return (returns all properties when omitted)'),
         },
     }, async (args) => callGodot(bridge, 'node/get_properties', args));
     // 7. add_resource
     server.registerTool('add_resource', {
         description: 'Add a resource (material, texture, etc.) to a node property',
         inputSchema: {
-            path: NodePath.describe("Node to add resource to (e.g. 'Player' or 'Player/Cube')"),
+            node_path: NodePath.describe("Node to add resource to (e.g. 'Player' or 'Player/Cube')"),
             resource_type: z.string().describe("Resource type (e.g. 'Material', 'Texture2D')"),
             properties: OptionalProperties,
         },
@@ -66,7 +67,7 @@ export function registerNodeTools(server, bridge) {
     server.registerTool('remove_resource', {
         description: 'Remove a resource from a node property (sets it to null)',
         inputSchema: {
-            path: NodePath.describe("Node to remove resource from (e.g. 'Player' or 'Player/Cube')"),
+            node_path: NodePath.describe("Node to remove resource from (e.g. 'Player' or 'Player/Cube')"),
             property: z.string().optional().describe('Property to clear (auto-detects if omitted)'),
         },
     }, async (args) => callGodot(bridge, 'node/remove_resource', args));
@@ -75,7 +76,7 @@ export function registerNodeTools(server, bridge) {
         description: 'Set anchor preset on a Control node',
         inputSchema: {
             path: NodePath.describe('Control node path'),
-            preset: z.string().describe("Anchor preset name (e.g. 'full_rect', 'center', 'top_left')"),
+            preset: z.union([z.string(), z.number()]).describe("Anchor preset name (e.g. 'full_rect', 'center', 'top_left') or number (0-15)"),
         },
     }, async (args) => callGodot(bridge, 'node/set_anchor_preset', args));
     // 10. rename_node

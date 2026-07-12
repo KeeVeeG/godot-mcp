@@ -26,7 +26,7 @@ export function registerProjectTools(server: McpServer, bridge: GodotBridge): vo
       inputSchema: {
         path: ResourcePath.describe("Root path to list from (e.g. 'res://')"),
         filters: z.array(z.string()).optional().describe("Array of file extensions to filter (e.g. ['gd', 'tscn'])"),
-        max_depth: z.number().int().positive().optional().default(10).describe('Maximum recursion depth (default: 10)'),
+        max_depth: z.number().int().min(0).optional().default(10).describe('Maximum recursion depth (default: 10)'),
       },
     },
     async (args) => callGodot(bridge, 'project/get_filesystem_tree', args as Record<string, unknown>),
@@ -53,6 +53,7 @@ export function registerProjectTools(server: McpServer, bridge: GodotBridge): vo
       description: 'Get all project settings (project.godot values)',
       inputSchema: {
         filter: z.string().optional().describe("Prefix filter for settings (e.g. 'application/')"),
+        max_results: z.number().int().min(0).optional().default(0).describe('Maximum number of settings to return (default: 0 = no limit). Increase to get more, or use filter to narrow results.'),
       },
     },
     async (args) => callGodot(bridge, 'project/get_settings', args as Record<string, unknown>),

@@ -1,5 +1,6 @@
 ## Audio configuration commands module - 9 tools.
 ## Handles audio bus layout, effects, driver, and render settings.
+@tool
 class_name MCPAudioConfigCommands
 extends RefCounted
 
@@ -59,20 +60,39 @@ func _set_bus_layout(params: Dictionary) -> Dictionary:
 	var buses: Array = params.get("buses", [])
 	if buses.is_empty():
 		return {"success": false, "error": "Buses list cannot be empty"}
+	# Validate first entry is Master (Godot silently rejects set_bus_name(0, non-"Master"): audio_server.cpp:961)
+	var first_entry: Dictionary = buses[0] as Dictionary
+	var first_name: String = first_entry.get("name", "")
+	if first_name != "" and first_name != "Master":
+		return {"success": false, "error": "First bus entry must be 'Master' (index 0 is always Master). Got: '%s'" % first_name}
+	# Validate no duplicate bus names (Godot auto-renames silently, which deceives the caller).
+	# Pre-seed "Master" — index 0 is always effectively "Master" regardless of first entry name.
+	var seen: Dictionary = {}
+	for b in buses:
+		var bn: String = (b as Dictionary).get("name", "")
+		if bn == "":
+			continue
+		if bn in seen:
+			return {"success": false, "error": "Duplicate bus name: '%s'" % bn}
+		seen[bn] = true
 	# Remove all buses except Master
 	while AudioServer.bus_count > 1:
 		AudioServer.remove_bus(AudioServer.bus_count - 1)
-	# Configure Master from first entry
+	# Clear all effects from Master bus to ensure full replacement
+	while AudioServer.get_bus_effect_count(0) > 0:
+		AudioServer.remove_bus_effect(0, 0)
+	# Configure Master from first entry.
+	# Master bus name is immutable — Godot silently ignores set_bus_name(0, ...) (audio_server.cpp).
 	if buses.size() > 0:
 		var master: Dictionary = buses[0] as Dictionary
-		AudioServer.set_bus_name(0, master.get("name", "Master"))
-		if master.has("volume_db") or master.has("volume"):
-			var vol: float = master.get("volume_db", master.get("volume", 0.0)) as float
-			AudioServer.set_bus_volume_db(0, vol)
-		if master.has("solo"):
-			AudioServer.set_bus_solo(0, master["solo"] as bool)
-		if master.has("mute"):
-			AudioServer.set_bus_mute(0, master["mute"] as bool)
+		AudioServer.set_bus_volume_db(0, master.get("volume_db", master.get("volume", 0.0)) as float)
+		AudioServer.set_bus_solo(0, master.get("solo", false) as bool)
+		AudioServer.set_bus_mute(0, master.get("mute", false) as bool)
+	# Handle Master send target
+	if buses.size() > 0:
+		var master: Dictionary = buses[0] as Dictionary
+		if master.has("send"):
+			AudioServer.set_bus_send(0, master["send"] as String)
 	# Add remaining buses
 	for i: int in range(1, buses.size()):
 		var bus_data: Dictionary = buses[i] as Dictionary
@@ -86,6 +106,9 @@ func _set_bus_layout(params: Dictionary) -> Dictionary:
 			AudioServer.set_bus_solo(idx, bus_data["solo"] as bool)
 		if bus_data.has("mute"):
 			AudioServer.set_bus_mute(idx, bus_data["mute"] as bool)
+		if bus_data.has("send"):
+			var send_target: String = bus_data["send"] as String
+			AudioServer.set_bus_send(idx, send_target)
 	return {"success": true, "bus_count": AudioServer.bus_count, "message": "Bus layout replaced"}
 
 
@@ -97,10 +120,16 @@ func _add_bus(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Bus name is required"}
 	if at_index < -1:
 		return {"success": false, "error": "Index must be -1 (append) or >= 0"}
+	# Godot silently rejects set_bus_name(0, ...) for anything but "Master" (audio_server.cpp:961).
+	# Prevent index=0 to avoid fabricating success data.
+	if at_index == 0:
+		return {"success": false, "error": "Cannot insert bus at index 0 — Master bus is at index 0. Use index >= 1."}
 	for i: int in range(AudioServer.bus_count):
 		if AudioServer.get_bus_name(i) == bus_name:
 			return {"success": false, "error": "Bus already exists: %s" % bus_name}
-	if at_index >= 0 and at_index < AudioServer.bus_count:
+	if at_index > AudioServer.bus_count:
+		return {"success": false, "error": "Index out of range: %d (bus count: %d)" % [at_index, AudioServer.bus_count]}
+	if at_index > 0 and at_index < AudioServer.bus_count:
 		AudioServer.add_bus(at_index)
 		AudioServer.set_bus_name(at_index, bus_name)
 		return {"success": true, "name": bus_name, "index": at_index, "total": AudioServer.bus_count}
@@ -128,6 +157,7 @@ func _set_bus_volume(params: Dictionary) -> Dictionary:
 	var volume_db: float = params.get("volume_db", 0.0)
 	if bus_name.is_empty():
 		return {"success": false, "error": "Bus name is required"}
+	# Godot clamps to -80..+24 internally; no explicit range check needed
 	var bus_idx: int = MCPCommandHelpers.find_bus_index(bus_name)
 	if bus_idx == -1:
 		return {"success": false, "error": "Bus not found: %s" % bus_name}

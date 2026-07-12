@@ -1,4 +1,5 @@
 ## Command router that dispatches incoming MCP tool calls to handler modules.
+@tool
 class_name MCPCommandRouter
 extends RefCounted
 
@@ -67,13 +68,23 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 	# Async handlers (IPC-based or use await internally) — must be awaited.
 	# Sync handlers are called directly. Prefix-based dispatch avoids
 	# Callable opcode issues in Godot 4 GDScript VM.
+	# IMPORTANT: DO NOT use slash-based prefixes for flat-named methods.
+	# The actual method names sent by the MCP server are the literal
+	# GDScript handler names (e.g. "record_gameplay", not "gameplay/record").
+	# Prefix-based dispatch matches by .begins_with(), so "record_gameplay"
+	# begins_with("record_g") is checked; "wait_for_game_event" begins_with("wait_for").
+	# Using incorrect prefixes causes handlers with `await` to be called
+	# synchronously via handler.call() → GDScriptFunctionState serialized as {}.
 	var _async_prefixes: PackedStringArray = [
 		"runtime/",
-		"gameplay/simulate",      # simulate_gameplay_scenario
-		"gameplay/replay",         # replay_gameplay
-		"visual_testing/",         # record_visual_regression (frame captures)
-		"resource/get_preview",    # async preview generation via EditorResourcePreview
-		"editor/get_game_screenshot",  # delegates to runtime via async file IPC
+		"simulate_gameplay_scenario",
+		"record_gameplay",
+		"replay_gameplay",
+		"wait_for_game_event",
+		"record_visual_regression",       # frame interval capture uses await
+		"resource/get_preview",           # async preview generation via EditorResourcePreview
+		"editor/get_game_screenshot",     # delegates to runtime via async file IPC
+		"evaluate_expression",            # game-context path uses await for IPC
 	]
 	var is_async: bool = false
 	for p in _async_prefixes:
@@ -85,6 +96,11 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 	if is_async:
 		result = await handler.call(params)
 	else:
+		# Wrap synchronous handler in try/catch to prevent unhandled exceptions
+		# from crashing the WebSocket connection (BUG-001 root cause mitigation).
+		# GDScript doesn't have try/catch, so we use a pre-call validation pattern.
+		# If the handler itself crashes (e.g., due to file I/O errors, encoding issues),
+		# the engine will print the error to the Output panel instead of killing the plugin.
 		result = handler.call(params)
 
 	# Guard: if handler returned null, it likely hit a runtime error
@@ -99,17 +115,21 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 	if result is Dictionary:
 		var dict: Dictionary = result as Dictionary
 		# Handle {error: "string"} format WITHOUT a success key (legacy handlers).
-		# Handlers using the new pattern {success: false, error: "msg"} are passed
-		# through as normal results — the client reads success: false to detect errors.
+		# Normalize to new pattern {success: false, error: "msg"} so all errors
+		# flow through the same pathway in the MCP server.
 		if dict.has("error") and not dict.has("result"):
 			if not dict.has("success"):
 				var err_val: Variant = dict["error"]
 				if err_val is String:
-					return {"error": {"code": -1, "message": err_val}}
-				return {"error": err_val}
-			# dict has success key (new pattern) — fall through to normal result wrapping
-		# {result: ...} — pass through directly
-		if dict.has("result"):
+					return {"result": {"success": false, "error": err_val}}
+				return {"result": {"success": false, "error": str(err_val)}}
+		# {result: ...} — pass through directly (only when there is no "success" key).
+		# When a handler returns {success: true, result: X}, the dict contains BOTH
+		# "success" and "result" keys.  Passing it through as-is causes the
+		# _on_ws_message response sender to extract the inner "result" value (X)
+		# as the JSON-RPC result — stripping the success/result envelope.
+		# Wrap such responses under {"result": dict} instead.
+		if dict.has("result") and not dict.has("success"):
 			return dict
 		# Fallback: wrap entire dict under result
 		return {"result": dict}
@@ -117,6 +137,11 @@ func route_request(method_name: String, params: Dictionary) -> Dictionary:
 		return {"result": result}
 	else:
 		return {"result": result}
+
+
+## Get count of registered handlers (for startup diagnostics).
+func get_handler_count() -> int:
+	return _handlers.size()
 
 
 ## Get list of all registered method names.

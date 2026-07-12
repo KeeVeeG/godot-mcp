@@ -1,5 +1,6 @@
 ## Editor configuration commands module - 9 tools.
 ## Handles editor theme, layout, font, scale, and workspace management.
+@tool
 class_name MCPEditorConfigCommands
 extends RefCounted
 
@@ -11,6 +12,10 @@ var _current_tab: String = "2D"
 ## Uses EditorSettings (not DirAccess scanning) to avoid race conditions
 ## when theme changes trigger cascading NOTIFICATION_EDITOR_SETTINGS_CHANGED updates.
 const SAVED_LAYOUTS_KEY: String = "mcp/editor/saved_layouts"
+
+## Maximum layout name length. Longer names will overflow filesystem
+## limits (MAX_PATH on Windows is 260 chars; user:// prefix takes ~80-100).
+const MAX_LAYOUT_NAME_LENGTH: int = 200
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
@@ -153,9 +158,13 @@ func _set_scale(params: Dictionary) -> Dictionary:
 ## when a layout with the same name was recently deleted (antivirus may hold
 ## a lock on the deleted path, causing ConfigFile.save() to fail).
 func _save_layout(params: Dictionary) -> Dictionary:
-	var name: String = params.get("name", "")
+	var name: String = params.get("name", "").strip_edges()
 	if name.is_empty():
 		return {"success": false, "error": "Layout name cannot be empty"}
+	if not name.is_valid_filename():
+		return {"success": false, "error": "Layout name contains invalid characters: : / \\ ? * \" | %% < >"}
+	if name.length() > MAX_LAYOUT_NAME_LENGTH:
+		return {"success": false, "error": "Layout name is too long (%d characters, max %d)" % [name.length(), MAX_LAYOUT_NAME_LENGTH]}
 	var es: EditorSettings = EditorInterface.get_editor_settings()
 	if es == null:
 		return {"success": false, "error": "Cannot access editor settings"}
@@ -191,9 +200,11 @@ func _save_layout(params: Dictionary) -> Dictionary:
 ## and not changeable at runtime. The response includes a `restart_required`
 ## flag so MCP clients can prompt or auto-restart via EditorInterface.restart_editor().
 func _load_layout(params: Dictionary) -> Dictionary:
-	var name: String = params.get("name", "")
+	var name: String = params.get("name", "").strip_edges()
 	if name.is_empty():
 		return {"success": false, "error": "Layout name cannot be empty"}
+	if name.length() > MAX_LAYOUT_NAME_LENGTH:
+		return {"success": false, "error": "Layout name is too long (%d characters, max %d)" % [name.length(), MAX_LAYOUT_NAME_LENGTH]}
 	var layout_path: String = "user://editor_layout_%s.cfg" % name
 	if not FileAccess.file_exists(layout_path):
 		return {"success": false, "error": "Layout not found: %s" % name}
@@ -244,9 +255,11 @@ func _reset_layout() -> Dictionary:
 ## that can occur when DirAccess.open("user://") + remove() is followed by
 ## a ConfigFile.save() to the same path (antivirus may hold DeleteFileW lock).
 func _delete_layout(params: Dictionary) -> Dictionary:
-	var name: String = params.get("name", "")
+	var name: String = params.get("name", "").strip_edges()
 	if name.is_empty():
 		return {"success": false, "error": "Layout name cannot be empty"}
+	if name.length() > MAX_LAYOUT_NAME_LENGTH:
+		return {"success": false, "error": "Layout name is too long (%d characters, max %d)" % [name.length(), MAX_LAYOUT_NAME_LENGTH]}
 	var layout_path: String = "user://editor_layout_%s.cfg" % name
 	if not FileAccess.file_exists(layout_path):
 		return {"success": false, "error": "Layout not found: %s" % name}

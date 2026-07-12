@@ -6,7 +6,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/addon_management_commands.gd',
     gd_function: 'list_addons',
     ts_file: 'server/src/tools/addon_management.ts',
-    test_file: null,
     category: 'addon_management',
   },
   {
@@ -16,7 +15,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/addon_management_commands.gd',
     gd_function: 'install_addon',
     ts_file: 'server/src/tools/addon_management.ts',
-    test_file: null,
     category: 'addon_management',
   },
   {
@@ -26,7 +24,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/addon_management_commands.gd',
     gd_function: 'uninstall_addon',
     ts_file: 'server/src/tools/addon_management.ts',
-    test_file: null,
     category: 'addon_management',
   },
   {
@@ -36,7 +33,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/addon_management_commands.gd',
     gd_function: 'update_addon',
     ts_file: 'server/src/tools/addon_management.ts',
-    test_file: null,
     category: 'addon_management',
   },
   {
@@ -46,7 +42,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/addon_management_commands.gd',
     gd_function: 'configure_addon',
     ts_file: 'server/src/tools/addon_management.ts',
-    test_file: null,
+    category: 'addon_management',
+  },
+  {
+    tool_id: 'get_addon_config',
+    description: 'Read the current configuration of an installed addon. Returns config.json contents, project settings, and plugin.cfg metadata.',
+    godot_command: 'get_addon_config',
+    gd_file: 'addons/godot_mcp/commands/addon_management_commands.gd',
+    gd_function: 'get_addon_config',
+    ts_file: 'server/src/tools/addon_management.ts',
     category: 'addon_management',
   },
   {
@@ -56,7 +60,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/analysis_commands.gd',
     gd_function: 'analyze_scene_complexity',
     ts_file: 'server/src/tools/analysis.ts',
-    test_file: null,
     category: 'analysis',
   },
   {
@@ -66,7 +69,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/analysis_commands.gd',
     gd_function: 'analyze_signal_flow',
     ts_file: 'server/src/tools/analysis.ts',
-    test_file: null,
     category: 'analysis',
   },
   {
@@ -76,7 +78,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/analysis_commands.gd',
     gd_function: 'find_unused_resources',
     ts_file: 'server/src/tools/analysis.ts',
-    test_file: null,
     category: 'analysis',
   },
   {
@@ -86,7 +87,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/analysis_commands.gd',
     gd_function: 'get_project_statistics',
     ts_file: 'server/src/tools/analysis.ts',
-    test_file: null,
     category: 'analysis',
   },
   {
@@ -96,7 +96,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
     gd_function: 'list_animations',
     ts_file: 'server/src/tools/animation.ts',
-    test_file: null,
     category: 'animation',
   },
   {
@@ -106,17 +105,16 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
     gd_function: 'create_animation',
     ts_file: 'server/src/tools/animation.ts',
-    test_file: null,
     category: 'animation',
   },
   {
     tool_id: 'add_animation_track',
-    description: 'Add a track to an animation',
+    description:
+      'Add a track to an animation. property is REQUIRED for value/bezier/blend_shape track types — specifies NodePath to target node (+ sub-property). Optional for position/rotation/scale/method/audio/animation.',
     godot_command: 'animation/add_track',
     gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
     gd_function: 'add_animation_track',
     ts_file: 'server/src/tools/animation.ts',
-    test_file: null,
     category: 'animation',
   },
   {
@@ -126,7 +124,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
     gd_function: 'set_animation_keyframe',
     ts_file: 'server/src/tools/animation.ts',
-    test_file: null,
     category: 'animation',
   },
   {
@@ -136,7 +133,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
     gd_function: 'get_animation_info',
     ts_file: 'server/src/tools/animation.ts',
-    test_file: null,
     category: 'animation',
   },
   {
@@ -146,7 +142,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
     gd_function: 'remove_animation',
     ts_file: 'server/src/tools/animation.ts',
-    test_file: null,
     category: 'animation',
   },
   {
@@ -156,7 +151,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
     gd_function: 'create_animation_tree',
     ts_file: 'server/src/tools/animation.ts',
-    test_file: null,
     category: 'animation',
   },
   {
@@ -166,7 +160,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
     gd_function: 'get_animation_tree_structure',
     ts_file: 'server/src/tools/animation.ts',
-    test_file: null,
     category: 'animation',
   },
   {
@@ -176,7 +169,16 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
     gd_function: 'set_tree_parameter',
     ts_file: 'server/src/tools/animation.ts',
-    test_file: null,
+    category: 'animation',
+  },
+  {
+    tool_id: 'reset_tree_parameter',
+    description:
+      'Reset an AnimationTree parameter to its type-based default (0.0, false, 0, "", Vector2.ZERO). NOTE: Godot does not expose per-parameter defaults to GDScript — this uses pragmatic type inference.',
+    godot_command: 'animation/reset_tree_parameter',
+    gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
+    gd_function: 'reset_tree_parameter',
+    ts_file: 'server/src/tools/animation.ts',
     category: 'animation',
   },
   {
@@ -186,7 +188,69 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
     gd_function: 'add_state_machine_state',
     ts_file: 'server/src/tools/animation.ts',
-    test_file: null,
+    category: 'animation',
+  },
+  {
+    tool_id: 'remove_state_machine_state',
+    description: 'Remove a state (and all its transitions) from an AnimationNodeStateMachine',
+    godot_command: 'animation/remove_state',
+    gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
+    gd_function: 'remove_state_machine_state',
+    ts_file: 'server/src/tools/animation.ts',
+    category: 'animation',
+  },
+  {
+    tool_id: 'add_state_machine_transition',
+    description: 'Add a transition between two states in an AnimationNodeStateMachine',
+    godot_command: 'animation/add_transition',
+    gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
+    gd_function: 'add_state_machine_transition',
+    ts_file: 'server/src/tools/animation.ts',
+    category: 'animation',
+  },
+  {
+    tool_id: 'remove_state_machine_transition',
+    description: 'Remove a transition between two states in an AnimationNodeStateMachine',
+    godot_command: 'animation/remove_transition',
+    gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
+    gd_function: 'remove_state_machine_transition',
+    ts_file: 'server/src/tools/animation.ts',
+    category: 'animation',
+  },
+  {
+    tool_id: 'remove_animation_track',
+    description: 'Remove a track from an animation',
+    godot_command: 'animation/remove_track',
+    gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
+    gd_function: 'remove_animation_track',
+    ts_file: 'server/src/tools/animation.ts',
+    category: 'animation',
+  },
+  {
+    tool_id: 'remove_animation_keyframe',
+    description: 'Remove a keyframe from an animation track at a specific time',
+    godot_command: 'animation/remove_keyframe',
+    gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
+    gd_function: 'remove_animation_keyframe',
+    ts_file: 'server/src/tools/animation.ts',
+    category: 'animation',
+  },
+  {
+    tool_id: 'remove_animation_tree',
+    description: 'Remove an AnimationTree node from the scene',
+    godot_command: 'animation/remove_tree',
+    gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
+    gd_function: 'remove_animation_tree',
+    ts_file: 'server/src/tools/animation.ts',
+    category: 'animation',
+  },
+  {
+    tool_id: 'get_tree_parameter',
+    description: 'Get the current value of a parameter on an AnimationTree',
+    godot_command: 'animation/get_tree_parameter',
+    gd_file: 'addons/godot_mcp/commands/animation_commands.gd',
+    gd_function: 'get_tree_parameter',
+    ts_file: 'server/src/tools/animation.ts',
     category: 'animation',
   },
   {
@@ -196,7 +260,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/audio_commands.gd',
     gd_function: 'add_audio_player',
     ts_file: 'server/src/tools/audio.ts',
-    test_file: null,
     category: 'audio',
   },
   {
@@ -206,7 +269,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/audio_commands.gd',
     gd_function: 'remove_audio_player',
     ts_file: 'server/src/tools/audio.ts',
-    test_file: null,
     category: 'audio',
   },
   {
@@ -216,7 +278,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/audio_commands.gd',
     gd_function: 'add_audio_bus',
     ts_file: 'server/src/tools/audio.ts',
-    test_file: null,
     category: 'audio',
   },
   {
@@ -226,7 +287,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/audio_commands.gd',
     gd_function: 'add_audio_bus_effect',
     ts_file: 'server/src/tools/audio.ts',
-    test_file: null,
     category: 'audio',
   },
   {
@@ -236,7 +296,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/audio_commands.gd',
     gd_function: 'set_audio_bus',
     ts_file: 'server/src/tools/audio.ts',
-    test_file: null,
     category: 'audio',
   },
   {
@@ -246,7 +305,24 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/audio_commands.gd',
     gd_function: 'get_audio_bus_layout',
     ts_file: 'server/src/tools/audio.ts',
-    test_file: null,
+    category: 'audio',
+  },
+  {
+    tool_id: 'remove_audio_bus_effect',
+    description: 'Remove an effect from an audio bus by index',
+    godot_command: 'audio/remove_bus_effect',
+    gd_file: 'addons/godot_mcp/commands/audio_commands.gd',
+    gd_function: 'remove_audio_bus_effect',
+    ts_file: 'server/src/tools/audio.ts',
+    category: 'audio',
+  },
+  {
+    tool_id: 'remove_audio_bus_by_name',
+    description: 'Remove an audio bus by name (cannot remove Master)',
+    godot_command: 'audio/remove_bus',
+    gd_file: 'addons/godot_mcp/commands/audio_commands.gd',
+    gd_function: 'remove_audio_bus_by_name',
+    ts_file: 'server/src/tools/audio.ts',
     category: 'audio',
   },
   {
@@ -256,7 +332,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/audio_commands.gd',
     gd_function: 'get_audio_info',
     ts_file: 'server/src/tools/audio.ts',
-    test_file: null,
     category: 'audio',
   },
   {
@@ -266,27 +341,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/audio_config_commands.gd',
     gd_function: 'get_audio_settings',
     ts_file: 'server/src/tools/audio_config.ts',
-    test_file: null,
     category: 'audio_config',
   },
   {
     tool_id: 'set_audio_bus_layout',
-    description: 'Replace the entire audio bus layout with the given bus definitions',
-    godot_command: 'audio_config/set_bus_layout',
+    description: 'Replace the entire audio bus layout with the given bus definitions. Use "volume" or "volume_db" key for bus volume in dB.',
+    godot_command: 'audio_config/add_bus_config',
     gd_file: 'addons/godot_mcp/commands/audio_config_commands.gd',
     gd_function: 'set_audio_bus_layout',
     ts_file: 'server/src/tools/audio_config.ts',
-    test_file: null,
-    category: 'audio_config',
-  },
-  {
-    tool_id: 'add_audio_bus_config',
-    description: 'Add a new audio bus at a specific position',
-    godot_command: 'audio_config/add_bus_config',
-    gd_file: 'addons/godot_mcp/commands/audio_config_commands.gd',
-    gd_function: 'add_audio_bus_config',
-    ts_file: 'server/src/tools/audio_config.ts',
-    test_file: null,
     category: 'audio_config',
   },
   {
@@ -296,27 +359,42 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/audio_config_commands.gd',
     gd_function: 'remove_audio_bus',
     ts_file: 'server/src/tools/audio_config.ts',
-    test_file: null,
     category: 'audio_config',
   },
   {
     tool_id: 'set_audio_bus_volume',
-    description: 'Set the volume of a specific audio bus',
-    godot_command: 'audio_config/set_bus_volume',
+    description: 'Set the volume of a specific audio bus. Use "volume" or "volume_db" key for the volume value.',
+    godot_command: 'audio_config/get_bus_effects',
     gd_file: 'addons/godot_mcp/commands/audio_config_commands.gd',
     gd_function: 'set_audio_bus_volume',
     ts_file: 'server/src/tools/audio_config.ts',
-    test_file: null,
     category: 'audio_config',
   },
   {
-    tool_id: 'get_audio_bus_effects',
-    description: 'Get all effects on a specific audio bus with their properties',
-    godot_command: 'audio_config/get_bus_effects',
+    tool_id: 'set_audio_driver',
+    description: 'Set the audio driver (takes effect on next Godot restart). Valid values: WASAPI, XAudio2, PulseAudio, ALSA, CoreAudio, Android, AudioWorklet, ScriptProcessor, Dummy',
+    godot_command: 'audio_config/set_driver',
     gd_file: 'addons/godot_mcp/commands/audio_config_commands.gd',
-    gd_function: 'get_audio_bus_effects',
+    gd_function: 'set_audio_driver',
     ts_file: 'server/src/tools/audio_config.ts',
-    test_file: null,
+    category: 'audio_config',
+  },
+  {
+    tool_id: 'set_audio_mix_rate',
+    description: 'Set the audio mix rate in Hz (takes effect on next Godot restart). Range: 11025-192000',
+    godot_command: 'audio_config/set_mix_rate',
+    gd_file: 'addons/godot_mcp/commands/audio_config_commands.gd',
+    gd_function: 'set_audio_mix_rate',
+    ts_file: 'server/src/tools/audio_config.ts',
+    category: 'audio_config',
+  },
+  {
+    tool_id: 'set_audio_output_latency',
+    description: 'Set the audio output latency in milliseconds (takes effect on next Godot restart). Range: 1-100',
+    godot_command: 'audio_config/set_output_latency',
+    gd_file: 'addons/godot_mcp/commands/audio_config_commands.gd',
+    gd_function: 'set_audio_output_latency',
+    ts_file: 'server/src/tools/audio_config.ts',
     category: 'audio_config',
   },
   {
@@ -326,7 +404,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/batch_commands.gd',
     gd_function: 'find_nodes_by_type',
     ts_file: 'server/src/tools/batch.ts',
-    test_file: null,
     category: 'batch',
   },
   {
@@ -336,7 +413,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/batch_commands.gd',
     gd_function: 'find_signal_connections',
     ts_file: 'server/src/tools/batch.ts',
-    test_file: null,
     category: 'batch',
   },
   {
@@ -346,7 +422,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/batch_commands.gd',
     gd_function: 'batch_set_property',
     ts_file: 'server/src/tools/batch.ts',
-    test_file: null,
+    category: 'batch',
+  },
+  {
+    tool_id: 'batch_get_property',
+    description: 'Get a property value from all nodes of a given type in the currently open scene',
+    godot_command: 'batch/get_property',
+    gd_file: 'addons/godot_mcp/commands/batch_commands.gd',
+    gd_function: 'batch_get_property',
+    ts_file: 'server/src/tools/batch.ts',
     category: 'batch',
   },
   {
@@ -356,7 +440,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/batch_commands.gd',
     gd_function: 'find_node_references',
     ts_file: 'server/src/tools/batch.ts',
-    test_file: null,
     category: 'batch',
   },
   {
@@ -366,7 +449,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/batch_commands.gd',
     gd_function: 'get_scene_dependencies',
     ts_file: 'server/src/tools/batch.ts',
-    test_file: null,
     category: 'batch',
   },
   {
@@ -376,7 +458,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/batch_commands.gd',
     gd_function: 'cross_scene_set_property',
     ts_file: 'server/src/tools/batch.ts',
-    test_file: null,
+    category: 'batch',
+  },
+  {
+    tool_id: 'cross_scene_get_property',
+    description: 'Get a property value from nodes of a given type across all .tscn scenes on disk',
+    godot_command: 'batch/cross_scene_get',
+    gd_file: 'addons/godot_mcp/commands/batch_commands.gd',
+    gd_function: 'cross_scene_get_property',
+    ts_file: 'server/src/tools/batch.ts',
     category: 'batch',
   },
   {
@@ -386,7 +476,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/batch_commands.gd',
     gd_function: 'find_script_references',
     ts_file: 'server/src/tools/batch.ts',
-    test_file: null,
     category: 'batch',
   },
   {
@@ -396,7 +485,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/batch_commands.gd',
     gd_function: 'detect_circular_dependencies',
     ts_file: 'server/src/tools/batch.ts',
-    test_file: null,
     category: 'batch',
   },
   {
@@ -406,7 +494,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/build_config_commands.gd',
     gd_function: 'get_build_settings',
     ts_file: 'server/src/tools/build_config.ts',
-    test_file: null,
     category: 'build_config',
   },
   {
@@ -416,7 +503,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/build_config_commands.gd',
     gd_function: 'set_build_configuration',
     ts_file: 'server/src/tools/build_config.ts',
-    test_file: null,
     category: 'build_config',
   },
   {
@@ -426,7 +512,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/build_config_commands.gd',
     gd_function: 'set_scripting_backend',
     ts_file: 'server/src/tools/build_config.ts',
-    test_file: null,
     category: 'build_config',
   },
   {
@@ -436,7 +521,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/build_config_commands.gd',
     gd_function: 'set_export_filter',
     ts_file: 'server/src/tools/build_config.ts',
-    test_file: null,
     category: 'build_config',
   },
   {
@@ -446,7 +530,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/build_config_commands.gd',
     gd_function: 'set_custom_features',
     ts_file: 'server/src/tools/build_config.ts',
-    test_file: null,
     category: 'build_config',
   },
   {
@@ -456,7 +539,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/build_config_commands.gd',
     gd_function: 'set_debug_options',
     ts_file: 'server/src/tools/build_config.ts',
-    test_file: null,
     category: 'build_config',
   },
   {
@@ -466,7 +548,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/build_config_commands.gd',
     gd_function: 'validate_build_settings',
     ts_file: 'server/src/tools/build_config.ts',
-    test_file: null,
     category: 'build_config',
   },
   {
@@ -476,7 +557,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/build_config_commands.gd',
     gd_function: 'get_build_command',
     ts_file: 'server/src/tools/build_config.ts',
-    test_file: null,
     category: 'build_config',
   },
   {
@@ -486,7 +566,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/debugging_commands.gd',
     gd_function: 'set_breakpoint',
     ts_file: 'server/src/tools/debugging.ts',
-    test_file: null,
     category: 'debugging',
   },
   {
@@ -496,7 +575,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/debugging_commands.gd',
     gd_function: 'remove_breakpoint',
     ts_file: 'server/src/tools/debugging.ts',
-    test_file: null,
     category: 'debugging',
   },
   {
@@ -506,7 +584,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/debugging_commands.gd',
     gd_function: 'list_breakpoints',
     ts_file: 'server/src/tools/debugging.ts',
-    test_file: null,
     category: 'debugging',
   },
   {
@@ -516,7 +593,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/debugging_commands.gd',
     gd_function: 'get_call_stack',
     ts_file: 'server/src/tools/debugging.ts',
-    test_file: null,
     category: 'debugging',
   },
   {
@@ -526,7 +602,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/debugging_commands.gd',
     gd_function: 'evaluate_expression',
     ts_file: 'server/src/tools/debugging.ts',
-    test_file: null,
     category: 'debugging',
   },
   {
@@ -536,7 +611,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/debugging_commands.gd',
     gd_function: 'step_over',
     ts_file: 'server/src/tools/debugging.ts',
-    test_file: null,
     category: 'debugging',
   },
   {
@@ -546,7 +620,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/debugging_commands.gd',
     gd_function: 'step_into',
     ts_file: 'server/src/tools/debugging.ts',
-    test_file: null,
     category: 'debugging',
   },
   {
@@ -556,7 +629,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/debugging_commands.gd',
     gd_function: 'continue_execution',
     ts_file: 'server/src/tools/debugging.ts',
-    test_file: null,
     category: 'debugging',
   },
   {
@@ -566,47 +638,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/debug_config_commands.gd',
     gd_function: 'get_debug_settings',
     ts_file: 'server/src/tools/debug_config.ts',
-    test_file: null,
     category: 'debug_config',
   },
   {
     tool_id: 'set_remote_debug',
     description: 'Configure remote debugging connection',
-    godot_command: 'debug_config/set_remote_debug',
+    godot_command: 'debug_config/get_log',
     gd_file: 'addons/godot_mcp/commands/debug_config_commands.gd',
     gd_function: 'set_remote_debug',
     ts_file: 'server/src/tools/debug_config.ts',
-    test_file: null,
-    category: 'debug_config',
-  },
-  {
-    tool_id: 'set_profiler_settings',
-    description: 'Configure profiler limits. Note: profiler on/off toggles (CPU, GPU, etc.) are controlled by the editor debugger panel during gameplay and cannot be set via ProjectSettings.',
-    godot_command: 'debug_config/set_profilers',
-    gd_file: 'addons/godot_mcp/commands/debug_config_commands.gd',
-    gd_function: 'set_profiler_settings',
-    ts_file: 'server/src/tools/debug_config.ts',
-    test_file: null,
-    category: 'debug_config',
-  },
-  {
-    tool_id: 'set_error_handling',
-    description: 'Configure how the editor handles errors and warnings during gameplay',
-    godot_command: 'debug_config/set_error_handling',
-    gd_file: 'addons/godot_mcp/commands/debug_config_commands.gd',
-    gd_function: 'set_error_handling',
-    ts_file: 'server/src/tools/debug_config.ts',
-    test_file: null,
-    category: 'debug_config',
-  },
-  {
-    tool_id: 'get_editor_log',
-    description: 'Get entries from the editor log, optionally filtered by type',
-    godot_command: 'debug_config/get_log',
-    gd_file: 'addons/godot_mcp/commands/debug_config_commands.gd',
-    gd_function: 'get_editor_log',
-    ts_file: 'server/src/tools/debug_config.ts',
-    test_file: null,
     category: 'debug_config',
   },
   {
@@ -616,7 +656,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/debug_config_commands.gd',
     gd_function: 'clear_editor_log',
     ts_file: 'server/src/tools/debug_config.ts',
-    test_file: null,
     category: 'debug_config',
   },
   {
@@ -626,7 +665,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_commands.gd',
     gd_function: 'get_editor_errors',
     ts_file: 'server/src/tools/editor.ts',
-    test_file: null,
     category: 'editor',
   },
   {
@@ -636,7 +674,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_commands.gd',
     gd_function: 'get_editor_screenshot',
     ts_file: 'server/src/tools/editor.ts',
-    test_file: null,
     category: 'editor',
   },
   {
@@ -646,7 +683,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_commands.gd',
     gd_function: 'get_game_screenshot',
     ts_file: 'server/src/tools/editor.ts',
-    test_file: null,
     category: 'editor',
   },
   {
@@ -656,7 +692,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_commands.gd',
     gd_function: 'execute_editor_script',
     ts_file: 'server/src/tools/editor.ts',
-    test_file: null,
     category: 'editor',
   },
   {
@@ -666,7 +701,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_commands.gd',
     gd_function: 'clear_output',
     ts_file: 'server/src/tools/editor.ts',
-    test_file: null,
     category: 'editor',
   },
   {
@@ -676,7 +710,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_commands.gd',
     gd_function: 'get_signals',
     ts_file: 'server/src/tools/editor.ts',
-    test_file: null,
     category: 'editor',
   },
   {
@@ -686,7 +719,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_commands.gd',
     gd_function: 'reload_plugin',
     ts_file: 'server/src/tools/editor.ts',
-    test_file: null,
     category: 'editor',
   },
   {
@@ -696,7 +728,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_commands.gd',
     gd_function: 'reload_project',
     ts_file: 'server/src/tools/editor.ts',
-    test_file: null,
     category: 'editor',
   },
   {
@@ -706,7 +737,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_commands.gd',
     gd_function: 'get_output_log',
     ts_file: 'server/src/tools/editor.ts',
-    test_file: null,
+    category: 'editor',
+  },
+  {
+    tool_id: 'get_diagnostics',
+    description: 'Get MCP bridge diagnostics: module load status, tool count, connection state. Works even when all tools are unavailable.',
+    godot_command: 'mcp/diagnostics',
+    gd_file: 'addons/godot_mcp/commands/editor_commands.gd',
+    gd_function: 'get_diagnostics',
+    ts_file: 'server/src/tools/editor.ts',
     category: 'editor',
   },
   {
@@ -716,7 +755,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_config_commands.gd',
     gd_function: 'get_editor_settings',
     ts_file: 'server/src/tools/editor_config.ts',
-    test_file: null,
     category: 'editor_config',
   },
   {
@@ -726,7 +764,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_config_commands.gd',
     gd_function: 'set_editor_theme',
     ts_file: 'server/src/tools/editor_config.ts',
-    test_file: null,
+    category: 'editor_config',
+  },
+  {
+    tool_id: 'set_main_screen_tab',
+    description: 'Switch the active editor tab (2D, 3D, Script, AssetLib). This only changes which main screen tab is visible, not the full panel layout.',
+    godot_command: 'editor_config/set_layout',
+    gd_file: 'addons/godot_mcp/commands/editor_config_commands.gd',
+    gd_function: 'set_main_screen_tab',
+    ts_file: 'server/src/tools/editor_config.ts',
     category: 'editor_config',
   },
   {
@@ -736,7 +782,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_config_commands.gd',
     gd_function: 'set_font_size',
     ts_file: 'server/src/tools/editor_config.ts',
-    test_file: null,
     category: 'editor_config',
   },
   {
@@ -746,7 +791,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_config_commands.gd',
     gd_function: 'set_editor_scale',
     ts_file: 'server/src/tools/editor_config.ts',
-    test_file: null,
     category: 'editor_config',
   },
   {
@@ -756,7 +800,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_config_commands.gd',
     gd_function: 'save_editor_layout',
     ts_file: 'server/src/tools/editor_config.ts',
-    test_file: null,
     category: 'editor_config',
   },
   {
@@ -766,7 +809,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_config_commands.gd',
     gd_function: 'load_editor_layout',
     ts_file: 'server/src/tools/editor_config.ts',
-    test_file: null,
     category: 'editor_config',
   },
   {
@@ -776,7 +818,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/editor_config_commands.gd',
     gd_function: 'reset_editor_layout',
     ts_file: 'server/src/tools/editor_config.ts',
-    test_file: null,
+    category: 'editor_config',
+  },
+  {
+    tool_id: 'delete_editor_layout',
+    description: 'Delete a previously saved editor layout',
+    godot_command: 'editor_config/delete_layout',
+    gd_file: 'addons/godot_mcp/commands/editor_config_commands.gd',
+    gd_function: 'delete_editor_layout',
+    ts_file: 'server/src/tools/editor_config.ts',
     category: 'editor_config',
   },
   {
@@ -786,7 +836,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/export_commands.gd',
     gd_function: 'list_export_presets',
     ts_file: 'server/src/tools/export.ts',
-    test_file: null,
     category: 'export',
   },
   {
@@ -796,7 +845,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/export_commands.gd',
     gd_function: 'export_project',
     ts_file: 'server/src/tools/export.ts',
-    test_file: null,
     category: 'export',
   },
   {
@@ -806,7 +854,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/export_commands.gd',
     gd_function: 'get_export_info',
     ts_file: 'server/src/tools/export.ts',
-    test_file: null,
     category: 'export',
   },
   {
@@ -816,7 +863,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/export_commands.gd',
     gd_function: 'validate_export',
     ts_file: 'server/src/tools/export.ts',
-    test_file: null,
     category: 'export',
   },
   {
@@ -826,7 +872,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/export_commands.gd',
     gd_function: 'get_export_templates',
     ts_file: 'server/src/tools/export.ts',
-    test_file: null,
     category: 'export',
   },
   {
@@ -836,17 +881,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/export_commands.gd',
     gd_function: 'create_export_preset',
     ts_file: 'server/src/tools/export.ts',
-    test_file: null,
     category: 'export',
   },
   {
     tool_id: 'delete_export_preset',
     description: 'Delete an export preset from the project',
-    godot_command: 'export/delete_preset',
+    godot_command: 'export/delete_export_preset',
     gd_file: 'addons/godot_mcp/commands/export_commands.gd',
     gd_function: 'delete_export_preset',
     ts_file: 'server/src/tools/export.ts',
-    test_file: null,
     category: 'export',
   },
   {
@@ -856,7 +899,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/gameplay_automation_commands.gd',
     gd_function: 'simulate_gameplay_scenario',
     ts_file: 'server/src/tools/gameplay_automation.ts',
-    test_file: null,
     category: 'gameplay_automation',
   },
   {
@@ -866,7 +908,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/gameplay_automation_commands.gd',
     gd_function: 'record_gameplay',
     ts_file: 'server/src/tools/gameplay_automation.ts',
-    test_file: null,
     category: 'gameplay_automation',
   },
   {
@@ -876,7 +917,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/gameplay_automation_commands.gd',
     gd_function: 'replay_gameplay',
     ts_file: 'server/src/tools/gameplay_automation.ts',
-    test_file: null,
     category: 'gameplay_automation',
   },
   {
@@ -886,7 +926,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/gameplay_automation_commands.gd',
     gd_function: 'create_test_character',
     ts_file: 'server/src/tools/gameplay_automation.ts',
-    test_file: null,
+    category: 'gameplay_automation',
+  },
+  {
+    tool_id: 'delete_test_character',
+    description: 'Delete test character(s) from the scene and clean up the internal tracking array. Can target a specific character by path or delete all tracked test characters.',
+    godot_command: 'delete_test_character',
+    gd_file: 'addons/godot_mcp/commands/gameplay_automation_commands.gd',
+    gd_function: 'delete_test_character',
+    ts_file: 'server/src/tools/gameplay_automation.ts',
     category: 'gameplay_automation',
   },
   {
@@ -896,7 +944,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/gameplay_automation_commands.gd',
     gd_function: 'navigate_character',
     ts_file: 'server/src/tools/gameplay_automation.ts',
-    test_file: null,
     category: 'gameplay_automation',
   },
   {
@@ -906,7 +953,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/gameplay_automation_commands.gd',
     gd_function: 'assert_game_state',
     ts_file: 'server/src/tools/gameplay_automation.ts',
-    test_file: null,
     category: 'gameplay_automation',
   },
   {
@@ -916,7 +962,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/gameplay_automation_commands.gd',
     gd_function: 'wait_for_game_event',
     ts_file: 'server/src/tools/gameplay_automation.ts',
-    test_file: null,
     category: 'gameplay_automation',
   },
   {
@@ -926,7 +971,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/input_commands.gd',
     gd_function: 'simulate_key',
     ts_file: 'server/src/tools/input.ts',
-    test_file: null,
     category: 'input',
   },
   {
@@ -936,7 +980,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/input_commands.gd',
     gd_function: 'simulate_mouse_click',
     ts_file: 'server/src/tools/input.ts',
-    test_file: null,
     category: 'input',
   },
   {
@@ -946,7 +989,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/input_commands.gd',
     gd_function: 'simulate_mouse_move',
     ts_file: 'server/src/tools/input.ts',
-    test_file: null,
     category: 'input',
   },
   {
@@ -956,7 +998,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/input_commands.gd',
     gd_function: 'simulate_action',
     ts_file: 'server/src/tools/input.ts',
-    test_file: null,
     category: 'input',
   },
   {
@@ -966,7 +1007,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/input_commands.gd',
     gd_function: 'simulate_sequence',
     ts_file: 'server/src/tools/input.ts',
-    test_file: null,
     category: 'input',
   },
   {
@@ -976,7 +1016,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/input_commands.gd',
     gd_function: 'get_input_actions',
     ts_file: 'server/src/tools/input.ts',
-    test_file: null,
     category: 'input',
   },
   {
@@ -986,7 +1025,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/input_commands.gd',
     gd_function: 'set_input_action',
     ts_file: 'server/src/tools/input.ts',
-    test_file: null,
+    category: 'input',
+  },
+  {
+    tool_id: 'remove_input_action',
+    description: 'Remove an input action from the InputMap',
+    godot_command: 'input/remove_action',
+    gd_file: 'addons/godot_mcp/commands/input_commands.gd',
+    gd_function: 'remove_input_action',
+    ts_file: 'server/src/tools/input.ts',
     category: 'input',
   },
   {
@@ -996,7 +1043,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/memory_profiling_commands.gd',
     gd_function: 'get_memory_usage',
     ts_file: 'server/src/tools/memory_profiling.ts',
-    test_file: null,
     category: 'memory_profiling',
   },
   {
@@ -1006,7 +1052,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/memory_profiling_commands.gd',
     gd_function: 'track_object_creation',
     ts_file: 'server/src/tools/memory_profiling.ts',
-    test_file: null,
+    category: 'memory_profiling',
+  },
+  {
+    tool_id: 'stop_object_tracking',
+    description: 'Stop object tracking and return the accumulated creation log. Must call track_object_creation first.',
+    godot_command: 'stop_object_tracking',
+    gd_file: 'addons/godot_mcp/commands/memory_profiling_commands.gd',
+    gd_function: 'stop_object_tracking',
+    ts_file: 'server/src/tools/memory_profiling.ts',
     category: 'memory_profiling',
   },
   {
@@ -1016,7 +1070,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/memory_profiling_commands.gd',
     gd_function: 'find_memory_leaks',
     ts_file: 'server/src/tools/memory_profiling.ts',
-    test_file: null,
     category: 'memory_profiling',
   },
   {
@@ -1026,7 +1079,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/memory_profiling_commands.gd',
     gd_function: 'get_object_count',
     ts_file: 'server/src/tools/memory_profiling.ts',
-    test_file: null,
     category: 'memory_profiling',
   },
   {
@@ -1036,47 +1088,24 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/memory_profiling_commands.gd',
     gd_function: 'force_garbage_collection',
     ts_file: 'server/src/tools/memory_profiling.ts',
-    test_file: null,
     category: 'memory_profiling',
   },
   {
     tool_id: 'setup_navigation_region',
     description: 'Add a NavigationRegion2D or NavigationRegion3D with optional configuration',
-    godot_command: 'navigation/setup_region',
+    godot_command: 'navigation/bake_mesh',
     gd_file: 'addons/godot_mcp/commands/navigation_commands.gd',
     gd_function: 'setup_navigation_region',
     ts_file: 'server/src/tools/navigation.ts',
-    test_file: null,
-    category: 'navigation',
-  },
-  {
-    tool_id: 'setup_navigation_agent',
-    description: 'Add a NavigationAgent2D or NavigationAgent3D to a node',
-    godot_command: 'navigation/setup_agent',
-    gd_file: 'addons/godot_mcp/commands/navigation_commands.gd',
-    gd_function: 'setup_navigation_agent',
-    ts_file: 'server/src/tools/navigation.ts',
-    test_file: null,
-    category: 'navigation',
-  },
-  {
-    tool_id: 'bake_navigation_mesh',
-    description: 'Bake the navigation mesh for a NavigationRegion',
-    godot_command: 'navigation/bake_mesh',
-    gd_file: 'addons/godot_mcp/commands/navigation_commands.gd',
-    gd_function: 'bake_navigation_mesh',
-    ts_file: 'server/src/tools/navigation.ts',
-    test_file: null,
     category: 'navigation',
   },
   {
     tool_id: 'set_navigation_layers',
-    description: 'Set navigation layers and/or mask for pathfinding filtering',
+    description: 'Set navigation layers for pathfinding filtering',
     godot_command: 'navigation/set_layers',
     gd_file: 'addons/godot_mcp/commands/navigation_commands.gd',
     gd_function: 'set_navigation_layers',
     ts_file: 'server/src/tools/navigation.ts',
-    test_file: null,
     category: 'navigation',
   },
   {
@@ -1086,37 +1115,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/navigation_commands.gd',
     gd_function: 'get_navigation_info',
     ts_file: 'server/src/tools/navigation.ts',
-    test_file: null,
     category: 'navigation',
   },
   {
     tool_id: 'find_navigation_path',
     description: 'Find a navigation path between two points',
-    godot_command: 'navigation/find_path',
+    godot_command: 'navigation/remove_region',
     gd_file: 'addons/godot_mcp/commands/navigation_commands.gd',
     gd_function: 'find_navigation_path',
     ts_file: 'server/src/tools/navigation.ts',
-    test_file: null,
-    category: 'navigation',
-  },
-  {
-    tool_id: 'setup_navigation_link',
-    description: 'Add a NavigationLink2D or NavigationLink3D for connecting navigation regions',
-    godot_command: 'navigation/setup_link',
-    gd_file: 'addons/godot_mcp/commands/navigation_commands.gd',
-    gd_function: 'setup_navigation_link',
-    ts_file: 'server/src/tools/navigation.ts',
-    test_file: null,
-    category: 'navigation',
-  },
-  {
-    tool_id: 'remove_navigation_region',
-    description: 'Remove a navigation region node from the scene',
-    godot_command: 'navigation/remove_region',
-    gd_file: 'addons/godot_mcp/commands/navigation_commands.gd',
-    gd_function: 'remove_navigation_region',
-    ts_file: 'server/src/tools/navigation.ts',
-    test_file: null,
     category: 'navigation',
   },
   {
@@ -1126,7 +1133,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/navigation_commands.gd',
     gd_function: 'remove_navigation_agent',
     ts_file: 'server/src/tools/navigation.ts',
-    test_file: null,
     category: 'navigation',
   },
   {
@@ -1136,7 +1142,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/navigation_commands.gd',
     gd_function: 'remove_navigation_link',
     ts_file: 'server/src/tools/navigation.ts',
-    test_file: null,
     category: 'navigation',
   },
   {
@@ -1146,7 +1151,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'add_node',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1156,7 +1160,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'delete_node',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1166,7 +1169,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'duplicate_node',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1176,7 +1178,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'move_node',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1186,7 +1187,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'update_property',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1196,7 +1196,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'get_node_properties',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1206,7 +1205,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'add_resource',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
+    category: 'node',
+  },
+  {
+    tool_id: 'remove_resource',
+    description: 'Remove a resource from a node property (sets it to null)',
+    godot_command: 'node/remove_resource',
+    gd_file: 'addons/godot_mcp/commands/node_commands.gd',
+    gd_function: 'remove_resource',
+    ts_file: 'server/src/tools/node.ts',
     category: 'node',
   },
   {
@@ -1216,7 +1223,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'set_anchor_preset',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1226,7 +1232,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'rename_node',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1236,7 +1241,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'connect_signal',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1246,7 +1250,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'disconnect_signal',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1256,7 +1259,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'get_node_groups',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1266,7 +1268,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'set_node_groups',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1276,7 +1277,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'find_nodes_in_group',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1286,7 +1286,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'get_editor_selection',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1296,7 +1295,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'select_nodes',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1306,7 +1304,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_commands.gd',
     gd_function: 'clear_editor_selection',
     ts_file: 'server/src/tools/node.ts',
-    test_file: null,
     category: 'node',
   },
   {
@@ -1316,7 +1313,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_config_commands.gd',
     gd_function: 'get_node_default_properties',
     ts_file: 'server/src/tools/node_config.ts',
-    test_file: null,
     category: 'node_config',
   },
   {
@@ -1326,28 +1322,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_config_commands.gd',
     gd_function: 'set_node_preset',
     ts_file: 'server/src/tools/node_config.ts',
-    test_file: null,
     category: 'node_config',
   },
   {
     tool_id: 'get_available_node_types',
     description: 'Get all available node types, optionally filtered by category',
-    godot_command: 'node_config/get_types',
+    godot_command: 'node_config/get_signals',
     gd_file: 'addons/godot_mcp/commands/node_config_commands.gd',
     gd_function: 'get_available_node_types',
     ts_file: 'server/src/tools/node_config.ts',
-    test_file: null,
-    category: 'node_config',
-  },
-  {
-    tool_id: 'get_node_signals',
-    description:
-      'Get all signals defined on a node type with their argument signatures. Provide either "type" (a class name like "CharacterBody3D") or "path" (a node instance path like "Player" - the class will be resolved automatically).',
-    godot_command: 'node_config/get_signals',
-    gd_file: 'addons/godot_mcp/commands/node_config_commands.gd',
-    gd_function: 'get_node_signals',
-    ts_file: 'server/src/tools/node_config.ts',
-    test_file: null,
     category: 'node_config',
   },
   {
@@ -1357,7 +1340,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_config_commands.gd',
     gd_function: 'get_node_methods',
     ts_file: 'server/src/tools/node_config.ts',
-    test_file: null,
     category: 'node_config',
   },
   {
@@ -1367,7 +1349,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_config_commands.gd',
     gd_function: 'get_node_enums',
     ts_file: 'server/src/tools/node_config.ts',
-    test_file: null,
     category: 'node_config',
   },
   {
@@ -1377,7 +1358,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_config_commands.gd',
     gd_function: 'get_node_constants',
     ts_file: 'server/src/tools/node_config.ts',
-    test_file: null,
     category: 'node_config',
   },
   {
@@ -1387,7 +1367,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/node_config_commands.gd',
     gd_function: 'get_class_hierarchy',
     ts_file: 'server/src/tools/node_config.ts',
-    test_file: null,
     category: 'node_config',
   },
   {
@@ -1397,7 +1376,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
     gd_function: 'create_particles',
     ts_file: 'server/src/tools/particles.ts',
-    test_file: null,
     category: 'particles',
   },
   {
@@ -1407,7 +1385,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
     gd_function: 'delete_particles',
     ts_file: 'server/src/tools/particles.ts',
-    test_file: null,
     category: 'particles',
   },
   {
@@ -1417,7 +1394,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
     gd_function: 'set_particle_material',
     ts_file: 'server/src/tools/particles.ts',
-    test_file: null,
     category: 'particles',
   },
   {
@@ -1427,7 +1403,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
     gd_function: 'set_particle_color_gradient',
     ts_file: 'server/src/tools/particles.ts',
-    test_file: null,
     category: 'particles',
   },
   {
@@ -1437,7 +1412,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
     gd_function: 'apply_particle_preset',
     ts_file: 'server/src/tools/particles.ts',
-    test_file: null,
     category: 'particles',
   },
   {
@@ -1447,7 +1421,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
     gd_function: 'get_particle_info',
     ts_file: 'server/src/tools/particles.ts',
-    test_file: null,
     category: 'particles',
   },
   {
@@ -1457,7 +1430,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
     gd_function: 'set_particle_emission_shape',
     ts_file: 'server/src/tools/particles.ts',
-    test_file: null,
     category: 'particles',
   },
   {
@@ -1467,7 +1439,42 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
     gd_function: 'set_particle_velocity_curve',
     ts_file: 'server/src/tools/particles.ts',
-    test_file: null,
+    category: 'particles',
+  },
+  {
+    tool_id: 'get_particle_material',
+    description: 'Read ParticleProcessMaterial properties from a particle system',
+    godot_command: 'particles/get_material',
+    gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
+    gd_function: 'get_particle_material',
+    ts_file: 'server/src/tools/particles.ts',
+    category: 'particles',
+  },
+  {
+    tool_id: 'get_particle_color_gradient',
+    description: 'Read the color gradient (color ramp) from a particle system',
+    godot_command: 'particles/get_color_gradient',
+    gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
+    gd_function: 'get_particle_color_gradient',
+    ts_file: 'server/src/tools/particles.ts',
+    category: 'particles',
+  },
+  {
+    tool_id: 'get_particle_emission_shape',
+    description: "Read the emission shape configuration from a particle system's process material",
+    godot_command: 'particles/get_emission_shape',
+    gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
+    gd_function: 'get_particle_emission_shape',
+    ts_file: 'server/src/tools/particles.ts',
+    category: 'particles',
+  },
+  {
+    tool_id: 'get_particle_velocity_curve',
+    description: "Read the velocity limit curve from a particle system's process material",
+    godot_command: 'particles/get_velocity_curve',
+    gd_file: 'addons/godot_mcp/commands/particles_commands.gd',
+    gd_function: 'get_particle_velocity_curve',
+    ts_file: 'server/src/tools/particles.ts',
     category: 'particles',
   },
   {
@@ -1477,7 +1484,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
     gd_function: 'setup_physics_body',
     ts_file: 'server/src/tools/physics.ts',
-    test_file: null,
     category: 'physics',
   },
   {
@@ -1487,17 +1493,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
     gd_function: 'setup_collision',
     ts_file: 'server/src/tools/physics.ts',
-    test_file: null,
     category: 'physics',
   },
   {
     tool_id: 'set_physics_layers',
-    description: 'Set physics collision layers and masks on a node',
+    description: 'Set physics collision layers and masks on a node. Layer/mask values can be a single layer NUMBER (1-32) or an ARRAY of numbers to set multiple layers simultaneously.',
     godot_command: 'physics/set_layers',
     gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
     gd_function: 'set_physics_layers',
     ts_file: 'server/src/tools/physics.ts',
-    test_file: null,
     category: 'physics',
   },
   {
@@ -1507,7 +1511,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
     gd_function: 'get_physics_layers',
     ts_file: 'server/src/tools/physics.ts',
-    test_file: null,
     category: 'physics',
   },
   {
@@ -1517,7 +1520,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
     gd_function: 'get_collision_info',
     ts_file: 'server/src/tools/physics.ts',
-    test_file: null,
     category: 'physics',
   },
   {
@@ -1527,7 +1529,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
     gd_function: 'add_raycast',
     ts_file: 'server/src/tools/physics.ts',
-    test_file: null,
     category: 'physics',
   },
   {
@@ -1537,7 +1538,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
     gd_function: 'get_physics_material',
     ts_file: 'server/src/tools/physics.ts',
-    test_file: null,
     category: 'physics',
   },
   {
@@ -1547,7 +1547,33 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
     gd_function: 'set_physics_material',
     ts_file: 'server/src/tools/physics.ts',
-    test_file: null,
+    category: 'physics',
+  },
+  {
+    tool_id: 'get_physics_body',
+    description: 'Get physics body properties from a node (mass, gravity_scale, linear_damp, angular_damp)',
+    godot_command: 'physics/get_body',
+    gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
+    gd_function: 'get_physics_body',
+    ts_file: 'server/src/tools/physics.ts',
+    category: 'physics',
+  },
+  {
+    tool_id: 'remove_collision',
+    description: 'Remove collision shape(s) from a physics body',
+    godot_command: 'physics/remove_collision',
+    gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
+    gd_function: 'remove_collision',
+    ts_file: 'server/src/tools/physics.ts',
+    category: 'physics',
+  },
+  {
+    tool_id: 'remove_raycast',
+    description: 'Remove a RayCast node from a parent',
+    godot_command: 'physics/remove_raycast',
+    gd_file: 'addons/godot_mcp/commands/physics_commands.gd',
+    gd_function: 'remove_raycast',
+    ts_file: 'server/src/tools/physics.ts',
     category: 'physics',
   },
   {
@@ -1557,17 +1583,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_config_commands.gd',
     gd_function: 'get_physics_settings',
     ts_file: 'server/src/tools/physics_config.ts',
-    test_file: null,
     category: 'physics_config',
   },
   {
     tool_id: 'set_gravity',
-    description: 'Set the default gravity vector for the physics world',
+    description: 'Set the default gravity vector for the physics world (choose 2D or 3D dimension)',
     godot_command: 'physics_config/set_gravity',
     gd_file: 'addons/godot_mcp/commands/physics_config_commands.gd',
     gd_function: 'set_gravity',
     ts_file: 'server/src/tools/physics_config.ts',
-    test_file: null,
     category: 'physics_config',
   },
   {
@@ -1577,17 +1601,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_config_commands.gd',
     gd_function: 'set_physics_fps',
     ts_file: 'server/src/tools/physics_config.ts',
-    test_file: null,
     category: 'physics_config',
   },
   {
     tool_id: 'set_physics_engine',
-    description: 'Set which physics engine backend to use',
+    description: 'Set which physics engine backend to use for a specific dimension (choose 2D or 3D)',
     godot_command: 'physics_config/set_engine',
     gd_file: 'addons/godot_mcp/commands/physics_config_commands.gd',
     gd_function: 'set_physics_engine',
     ts_file: 'server/src/tools/physics_config.ts',
-    test_file: null,
     category: 'physics_config',
   },
   {
@@ -1597,7 +1619,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_config_commands.gd',
     gd_function: 'set_collision_layer_name',
     ts_file: 'server/src/tools/physics_config.ts',
-    test_file: null,
     category: 'physics_config',
   },
   {
@@ -1607,27 +1628,24 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/physics_config_commands.gd',
     gd_function: 'get_collision_layers',
     ts_file: 'server/src/tools/physics_config.ts',
-    test_file: null,
     category: 'physics_config',
   },
   {
     tool_id: 'set_default_gravity',
-    description: 'Set the default gravity magnitude in project settings',
+    description: 'Set the default gravity magnitude for a specific dimension (choose 2D or 3D)',
     godot_command: 'physics_config/set_default_gravity',
     gd_file: 'addons/godot_mcp/commands/physics_config_commands.gd',
     gd_function: 'set_default_gravity',
     ts_file: 'server/src/tools/physics_config.ts',
-    test_file: null,
     category: 'physics_config',
   },
   {
     tool_id: 'set_default_linear_damp',
-    description: 'Set the default linear damping for physics bodies',
+    description: 'Set the default linear damping for physics bodies in a specific dimension (choose 2D or 3D)',
     godot_command: 'physics_config/set_default_linear_damp',
     gd_file: 'addons/godot_mcp/commands/physics_config_commands.gd',
     gd_function: 'set_default_linear_damp',
     ts_file: 'server/src/tools/physics_config.ts',
-    test_file: null,
     category: 'physics_config',
   },
   {
@@ -1637,7 +1655,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_export_commands.gd',
     gd_function: 'export_for_platform',
     ts_file: 'server/src/tools/platform_export.ts',
-    test_file: null,
     category: 'platform_export',
   },
   {
@@ -1647,7 +1664,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_export_commands.gd',
     gd_function: 'validate_platform_export',
     ts_file: 'server/src/tools/platform_export.ts',
-    test_file: null,
     category: 'platform_export',
   },
   {
@@ -1657,7 +1673,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_export_commands.gd',
     gd_function: 'get_platform_export_templates',
     ts_file: 'server/src/tools/platform_export.ts',
-    test_file: null,
     category: 'platform_export',
   },
   {
@@ -1667,7 +1682,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_export_commands.gd',
     gd_function: 'create_platform_export_preset',
     ts_file: 'server/src/tools/platform_export.ts',
-    test_file: null,
     category: 'platform_export',
   },
   {
@@ -1677,17 +1691,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_export_commands.gd',
     gd_function: 'run_exported_build',
     ts_file: 'server/src/tools/platform_export.ts',
-    test_file: null,
     category: 'platform_export',
   },
   {
     tool_id: 'validate_export_for_platform',
-    description: 'Validate the project for export on a specific platform with detailed checks',
+    description: 'Validate the project for export on a specific platform',
     godot_command: 'export/validate_platform',
     gd_file: 'addons/godot_mcp/commands/platform_export_commands.gd',
     gd_function: 'validate_export_for_platform',
     ts_file: 'server/src/tools/platform_export.ts',
-    test_file: null,
     category: 'platform_export',
   },
   {
@@ -1697,7 +1709,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_specific_commands.gd',
     gd_function: 'get_platform_settings',
     ts_file: 'server/src/tools/platform_specific.ts',
-    test_file: null,
     category: 'platform_specific',
   },
   {
@@ -1707,7 +1718,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_specific_commands.gd',
     gd_function: 'configure_ios',
     ts_file: 'server/src/tools/platform_specific.ts',
-    test_file: null,
     category: 'platform_specific',
   },
   {
@@ -1717,7 +1727,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_specific_commands.gd',
     gd_function: 'configure_android',
     ts_file: 'server/src/tools/platform_specific.ts',
-    test_file: null,
     category: 'platform_specific',
   },
   {
@@ -1727,7 +1736,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_specific_commands.gd',
     gd_function: 'configure_web',
     ts_file: 'server/src/tools/platform_specific.ts',
-    test_file: null,
     category: 'platform_specific',
   },
   {
@@ -1737,7 +1745,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_specific_commands.gd',
     gd_function: 'get_platform_capabilities',
     ts_file: 'server/src/tools/platform_specific.ts',
-    test_file: null,
     category: 'platform_specific',
   },
   {
@@ -1747,7 +1754,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/platform_specific_commands.gd',
     gd_function: 'validate_platform_build',
     ts_file: 'server/src/tools/platform_specific.ts',
-    test_file: null,
     category: 'platform_specific',
   },
   {
@@ -1757,7 +1763,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/profiling_commands.gd',
     gd_function: 'get_performance_monitors',
     ts_file: 'server/src/tools/profiling.ts',
-    test_file: null,
     category: 'profiling',
   },
   {
@@ -1767,7 +1772,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/profiling_commands.gd',
     gd_function: 'get_editor_performance',
     ts_file: 'server/src/tools/profiling.ts',
-    test_file: null,
     category: 'profiling',
   },
   {
@@ -1777,7 +1781,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_commands.gd',
     gd_function: 'get_project_info',
     ts_file: 'server/src/tools/project.ts',
-    test_file: null,
     category: 'project',
   },
   {
@@ -1787,17 +1790,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_commands.gd',
     gd_function: 'get_filesystem_tree',
     ts_file: 'server/src/tools/project.ts',
-    test_file: null,
     category: 'project',
   },
   {
     tool_id: 'search_files',
-    description: 'Search for files in the project by name pattern or content',
+    description: 'Search for files in the project by name pattern or content. Supports glob patterns (*, ?) for filename search. Set search_content=true to also search inside file contents.',
     godot_command: 'project/search_files',
     gd_file: 'addons/godot_mcp/commands/project_commands.gd',
     gd_function: 'search_files',
     ts_file: 'server/src/tools/project.ts',
-    test_file: null,
     category: 'project',
   },
   {
@@ -1807,7 +1808,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_commands.gd',
     gd_function: 'get_project_settings',
     ts_file: 'server/src/tools/project.ts',
-    test_file: null,
     category: 'project',
   },
   {
@@ -1817,7 +1817,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_commands.gd',
     gd_function: 'set_project_setting',
     ts_file: 'server/src/tools/project.ts',
-    test_file: null,
+    category: 'project',
+  },
+  {
+    tool_id: 'remove_project_setting',
+    description: 'Remove a project setting from project.godot. Use this instead of passing null to set_project_setting.',
+    godot_command: 'project/remove_setting',
+    gd_file: 'addons/godot_mcp/commands/project_commands.gd',
+    gd_function: 'remove_project_setting',
+    ts_file: 'server/src/tools/project.ts',
     category: 'project',
   },
   {
@@ -1827,7 +1835,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_commands.gd',
     gd_function: 'uid_to_project_path',
     ts_file: 'server/src/tools/project.ts',
-    test_file: null,
     category: 'project',
   },
   {
@@ -1837,7 +1844,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_commands.gd',
     gd_function: 'project_path_to_uid',
     ts_file: 'server/src/tools/project.ts',
-    test_file: null,
     category: 'project',
   },
   {
@@ -1847,7 +1853,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'get_project_setting',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
@@ -1857,7 +1862,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'set_project_setting_config',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
@@ -1867,7 +1871,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'get_all_project_settings',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
@@ -1877,7 +1880,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'reset_project_setting',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
@@ -1887,17 +1889,16 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'get_input_map',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
     tool_id: 'set_input_map',
-    description: 'Replace the entire input map with the given actions and events',
+    description:
+      'Replace or merge the input map. When merge=false (default), erases ALL existing actions first (full replacement). When merge=true, only adds/updates the provided actions, preserving existing ones.',
     godot_command: 'project_config/set_input_map',
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'set_input_map',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
@@ -1907,17 +1908,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'add_input_action',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
-    tool_id: 'remove_input_action',
+    tool_id: 'project_config_remove_input_action',
     description: 'Remove an input action from the InputMap',
     godot_command: 'project_config/remove_input_action',
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
-    gd_function: 'remove_input_action',
+    gd_function: 'project_config_remove_input_action',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
@@ -1927,7 +1926,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'get_autoloads',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
@@ -1937,7 +1935,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'add_autoload_config',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
@@ -1947,7 +1944,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'remove_autoload_config',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
     category: 'project_config',
   },
   {
@@ -1957,7 +1953,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
     gd_function: 'reorder_autoloads',
     ts_file: 'server/src/tools/project_config.ts',
-    test_file: null,
+    category: 'project_config',
+  },
+  {
+    tool_id: 'remove_project_config_setting',
+    description: 'Remove a project setting from project.godot. Use this instead of setting a value to null.',
+    godot_command: 'project_config/remove_setting',
+    gd_file: 'addons/godot_mcp/commands/project_config_commands.gd',
+    gd_function: 'remove_project_config_setting',
+    ts_file: 'server/src/tools/project_config.ts',
     category: 'project_config',
   },
   {
@@ -1967,7 +1971,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
     gd_function: 'create_project',
     ts_file: 'server/src/tools/project_creation.ts',
-    test_file: null,
     category: 'project_creation',
   },
   {
@@ -1977,7 +1980,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
     gd_function: 'create_project_from_template',
     ts_file: 'server/src/tools/project_creation.ts',
-    test_file: null,
     category: 'project_creation',
   },
   {
@@ -1987,7 +1989,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
     gd_function: 'scaffold_project_structure',
     ts_file: 'server/src/tools/project_creation.ts',
-    test_file: null,
     category: 'project_creation',
   },
   {
@@ -1997,7 +1998,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
     gd_function: 'create_project_with_assets',
     ts_file: 'server/src/tools/project_creation.ts',
-    test_file: null,
     category: 'project_creation',
   },
   {
@@ -2007,7 +2007,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
     gd_function: 'initialize_git_repository',
     ts_file: 'server/src/tools/project_creation.ts',
-    test_file: null,
     category: 'project_creation',
   },
   {
@@ -2017,7 +2016,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
     gd_function: 'create_project_readme',
     ts_file: 'server/src/tools/project_creation.ts',
-    test_file: null,
     category: 'project_creation',
   },
   {
@@ -2027,7 +2025,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
     gd_function: 'create_project_license',
     ts_file: 'server/src/tools/project_creation.ts',
-    test_file: null,
     category: 'project_creation',
   },
   {
@@ -2037,7 +2034,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
     gd_function: 'setup_project_dependencies',
     ts_file: 'server/src/tools/project_creation.ts',
-    test_file: null,
     category: 'project_creation',
   },
   {
@@ -2047,7 +2043,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
     gd_function: 'validate_project_structure',
     ts_file: 'server/src/tools/project_creation.ts',
-    test_file: null,
     category: 'project_creation',
   },
   {
@@ -2057,7 +2052,24 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
     gd_function: 'get_project_templates',
     ts_file: 'server/src/tools/project_creation.ts',
-    test_file: null,
+    category: 'project_creation',
+  },
+  {
+    tool_id: 'delete_project',
+    description: 'Delete a Godot project entirely from disk. Requires confirmation to prevent accidental data loss.',
+    godot_command: 'project_creation/delete_project',
+    gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
+    gd_function: 'delete_project',
+    ts_file: 'server/src/tools/project_creation.ts',
+    category: 'project_creation',
+  },
+  {
+    tool_id: 'remove_project_dependencies',
+    description: 'Remove installed addon dependencies from a Godot project',
+    godot_command: 'project_creation/remove_dependencies',
+    gd_file: 'addons/godot_mcp/commands/project_creation_commands.gd',
+    gd_function: 'remove_project_dependencies',
+    ts_file: 'server/src/tools/project_creation.ts',
     category: 'project_creation',
   },
   {
@@ -2067,7 +2079,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/rendering_config_commands.gd',
     gd_function: 'get_rendering_settings',
     ts_file: 'server/src/tools/rendering_config.ts',
-    test_file: null,
     category: 'rendering_config',
   },
   {
@@ -2077,7 +2088,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/rendering_config_commands.gd',
     gd_function: 'set_rendering_quality',
     ts_file: 'server/src/tools/rendering_config.ts',
-    test_file: null,
     category: 'rendering_config',
   },
   {
@@ -2087,7 +2097,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/rendering_config_commands.gd',
     gd_function: 'set_renderer',
     ts_file: 'server/src/tools/rendering_config.ts',
-    test_file: null,
     category: 'rendering_config',
   },
   {
@@ -2097,7 +2106,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/rendering_config_commands.gd',
     gd_function: 'set_anti_aliasing',
     ts_file: 'server/src/tools/rendering_config.ts',
-    test_file: null,
     category: 'rendering_config',
   },
   {
@@ -2107,7 +2115,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/rendering_config_commands.gd',
     gd_function: 'set_shadow_quality',
     ts_file: 'server/src/tools/rendering_config.ts',
-    test_file: null,
     category: 'rendering_config',
   },
   {
@@ -2117,7 +2124,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/rendering_config_commands.gd',
     gd_function: 'set_gi_quality',
     ts_file: 'server/src/tools/rendering_config.ts',
-    test_file: null,
+    category: 'rendering_config',
+  },
+  {
+    tool_id: 'set_post_processing',
+    description: 'Configure post-processing effects (bloom, SSAO, SSR, glow, DOF)',
+    godot_command: 'rendering_config/set_post_processing',
+    gd_file: 'addons/godot_mcp/commands/rendering_config_commands.gd',
+    gd_function: 'set_post_processing',
+    ts_file: 'server/src/tools/rendering_config.ts',
     category: 'rendering_config',
   },
   {
@@ -2127,7 +2142,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/rendering_config_commands.gd',
     gd_function: 'set_viewport_size',
     ts_file: 'server/src/tools/rendering_config.ts',
-    test_file: null,
     category: 'rendering_config',
   },
   {
@@ -2137,7 +2151,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/rendering_config_commands.gd',
     gd_function: 'set_window_settings',
     ts_file: 'server/src/tools/rendering_config.ts',
-    test_file: null,
     category: 'rendering_config',
   },
   {
@@ -2147,17 +2160,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/rendering_config_commands.gd',
     gd_function: 'get_rendering_info',
     ts_file: 'server/src/tools/rendering_config.ts',
-    test_file: null,
     category: 'rendering_config',
   },
   {
     tool_id: 'read_resource',
-    description: 'Read a Godot resource file (.tres, .res) and get its properties',
+    description: 'Read a Godot resource file and get its properties',
     godot_command: 'resource/read',
     gd_file: 'addons/godot_mcp/commands/resource_commands.gd',
     gd_function: 'read_resource',
     ts_file: 'server/src/tools/resource.ts',
-    test_file: null,
     category: 'resource',
   },
   {
@@ -2167,7 +2178,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_commands.gd',
     gd_function: 'edit_resource',
     ts_file: 'server/src/tools/resource.ts',
-    test_file: null,
     category: 'resource',
   },
   {
@@ -2177,17 +2187,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_commands.gd',
     gd_function: 'create_resource',
     ts_file: 'server/src/tools/resource.ts',
-    test_file: null,
     category: 'resource',
   },
   {
     tool_id: 'delete_resource',
-    description: 'Delete a Godot resource file (.tres, .res) from the project',
+    description: 'Delete a Godot resource file from the project',
     godot_command: 'resource/delete',
     gd_file: 'addons/godot_mcp/commands/resource_commands.gd',
     gd_function: 'delete_resource',
     ts_file: 'server/src/tools/resource.ts',
-    test_file: null,
     category: 'resource',
   },
   {
@@ -2197,7 +2205,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_commands.gd',
     gd_function: 'get_resource_preview',
     ts_file: 'server/src/tools/resource.ts',
-    test_file: null,
     category: 'resource',
   },
   {
@@ -2207,7 +2214,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_commands.gd',
     gd_function: 'add_autoload',
     ts_file: 'server/src/tools/resource.ts',
-    test_file: null,
     category: 'resource',
   },
   {
@@ -2217,7 +2223,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_commands.gd',
     gd_function: 'remove_autoload',
     ts_file: 'server/src/tools/resource.ts',
-    test_file: null,
     category: 'resource',
   },
   {
@@ -2227,7 +2232,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_commands.gd',
     gd_function: 'duplicate_resource',
     ts_file: 'server/src/tools/resource.ts',
-    test_file: null,
     category: 'resource',
   },
   {
@@ -2237,7 +2241,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_commands.gd',
     gd_function: 'list_resources',
     ts_file: 'server/src/tools/resource.ts',
-    test_file: null,
     category: 'resource',
   },
   {
@@ -2247,7 +2250,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_commands.gd',
     gd_function: 'get_resource_dependencies',
     ts_file: 'server/src/tools/resource.ts',
-    test_file: null,
     category: 'resource',
   },
   {
@@ -2257,7 +2259,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_config_commands.gd',
     gd_function: 'get_resource_types',
     ts_file: 'server/src/tools/resource_config.ts',
-    test_file: null,
     category: 'resource_config',
   },
   {
@@ -2267,7 +2268,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_config_commands.gd',
     gd_function: 'get_resource_properties',
     ts_file: 'server/src/tools/resource_config.ts',
-    test_file: null,
     category: 'resource_config',
   },
   {
@@ -2277,7 +2277,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_config_commands.gd',
     gd_function: 'create_resource_from_template',
     ts_file: 'server/src/tools/resource_config.ts',
-    test_file: null,
     category: 'resource_config',
   },
   {
@@ -2287,7 +2286,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_config_commands.gd',
     gd_function: 'import_resource',
     ts_file: 'server/src/tools/resource_config.ts',
-    test_file: null,
     category: 'resource_config',
   },
   {
@@ -2297,7 +2295,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_config_commands.gd',
     gd_function: 'get_resource_import_settings',
     ts_file: 'server/src/tools/resource_config.ts',
-    test_file: null,
     category: 'resource_config',
   },
   {
@@ -2307,7 +2304,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/resource_config_commands.gd',
     gd_function: 'set_resource_import_settings',
     ts_file: 'server/src/tools/resource_config.ts',
-    test_file: null,
     category: 'resource_config',
   },
   {
@@ -2317,7 +2313,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'get_game_scene_tree',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2327,7 +2322,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'get_game_node_properties',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2337,7 +2331,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'set_game_node_property',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2347,7 +2340,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'execute_game_script',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2357,7 +2349,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'capture_frames',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2367,7 +2358,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'monitor_properties',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2377,7 +2367,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'start_recording',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2387,7 +2376,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'stop_recording',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2397,7 +2385,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'replay_recording',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2407,7 +2394,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'find_nodes_by_script',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2417,7 +2403,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'get_autoload',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2427,7 +2412,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'batch_get_properties',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2437,7 +2421,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'find_ui_elements',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2447,7 +2430,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'click_button_by_text',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2457,7 +2439,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'wait_for_node',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2467,7 +2448,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'find_nearby_nodes',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2477,7 +2457,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'navigate_to',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2487,7 +2466,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'move_to',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
     category: 'runtime',
   },
   {
@@ -2497,7 +2475,51 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
     gd_function: 'watch_signals',
     ts_file: 'server/src/tools/runtime.ts',
-    test_file: null,
+    category: 'runtime',
+  },
+  {
+    tool_id: 'unwatch_signals',
+    description: 'Stop watching signals on a game node that was previously being monitored',
+    godot_command: 'runtime/unwatch_signals',
+    gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
+    gd_function: 'unwatch_signals',
+    ts_file: 'server/src/tools/runtime.ts',
+    category: 'runtime',
+  },
+  {
+    tool_id: 'delete_captured_frames',
+    description: 'Delete captured frames from disk that were previously saved by capture_frames',
+    godot_command: 'runtime/delete_captured_frames',
+    gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
+    gd_function: 'delete_captured_frames',
+    ts_file: 'server/src/tools/runtime.ts',
+    category: 'runtime',
+  },
+  {
+    tool_id: 'stop_monitoring',
+    description: 'Stop an active property monitoring session that was started by monitor_properties',
+    godot_command: 'runtime/stop_monitoring',
+    gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
+    gd_function: 'stop_monitoring',
+    ts_file: 'server/src/tools/runtime.ts',
+    category: 'runtime',
+  },
+  {
+    tool_id: 'batch_set_properties',
+    description: 'Set multiple properties on multiple nodes in one call',
+    godot_command: 'runtime/batch_set_properties',
+    gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
+    gd_function: 'batch_set_properties',
+    ts_file: 'server/src/tools/runtime.ts',
+    category: 'runtime',
+  },
+  {
+    tool_id: 'get_monitor_results',
+    description: 'Get aggregated results for a completed monitor_properties session by its monitor_id',
+    godot_command: 'runtime/get_monitor_results',
+    gd_file: 'addons/godot_mcp/commands/runtime_commands.gd',
+    gd_function: 'get_monitor_results',
+    ts_file: 'server/src/tools/runtime.ts',
     category: 'runtime',
   },
   {
@@ -2507,7 +2529,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/save_load_commands.gd',
     gd_function: 'save_game_state',
     ts_file: 'server/src/tools/save_load.ts',
-    test_file: null,
     category: 'save_load',
   },
   {
@@ -2517,7 +2538,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/save_load_commands.gd',
     gd_function: 'load_game_state',
     ts_file: 'server/src/tools/save_load.ts',
-    test_file: null,
     category: 'save_load',
   },
   {
@@ -2527,7 +2547,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/save_load_commands.gd',
     gd_function: 'list_save_files',
     ts_file: 'server/src/tools/save_load.ts',
-    test_file: null,
     category: 'save_load',
   },
   {
@@ -2537,7 +2556,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/save_load_commands.gd',
     gd_function: 'delete_save_file',
     ts_file: 'server/src/tools/save_load.ts',
-    test_file: null,
     category: 'save_load',
   },
   {
@@ -2547,7 +2565,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/save_load_commands.gd',
     gd_function: 'compare_save_states',
     ts_file: 'server/src/tools/save_load.ts',
-    test_file: null,
     category: 'save_load',
   },
   {
@@ -2557,7 +2574,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'get_scene_tree',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2567,7 +2583,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'get_scene_file_content',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2577,7 +2592,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'create_scene',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2587,7 +2601,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'open_scene',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2597,7 +2610,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'delete_scene',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2607,7 +2619,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'add_scene_instance',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2617,7 +2628,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'play_scene',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2627,7 +2637,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'stop_scene',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2637,7 +2646,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'save_scene',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2647,7 +2655,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'get_loaded_scenes',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2657,7 +2664,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'set_main_scene',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
     category: 'scene',
   },
   {
@@ -2667,7 +2673,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
     gd_function: 'get_main_scene',
     ts_file: 'server/src/tools/scene.ts',
-    test_file: null,
+    category: 'scene',
+  },
+  {
+    tool_id: 'close_scene',
+    description: 'Close the currently edited scene in the editor',
+    godot_command: 'scene/close',
+    gd_file: 'addons/godot_mcp/commands/scene_commands.gd',
+    gd_function: 'close_scene',
+    ts_file: 'server/src/tools/scene.ts',
     category: 'scene',
   },
   {
@@ -2677,7 +2691,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
     gd_function: 'add_mesh_instance',
     ts_file: 'server/src/tools/scene3d.ts',
-    test_file: null,
+    category: 'scene3d',
+  },
+  {
+    tool_id: 'get_mesh_instance',
+    description: 'Get properties of a MeshInstance3D node (mesh type, size, material)',
+    godot_command: 'scene3d/get_mesh',
+    gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
+    gd_function: 'get_mesh_instance',
+    ts_file: 'server/src/tools/scene3d.ts',
     category: 'scene3d',
   },
   {
@@ -2687,7 +2709,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
     gd_function: 'setup_camera_3d',
     ts_file: 'server/src/tools/scene3d.ts',
-    test_file: null,
+    category: 'scene3d',
+  },
+  {
+    tool_id: 'get_camera_3d',
+    description: 'Get Camera3D properties (fov, near, far, current, transform)',
+    godot_command: 'scene3d/get_camera',
+    gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
+    gd_function: 'get_camera_3d',
+    ts_file: 'server/src/tools/scene3d.ts',
     category: 'scene3d',
   },
   {
@@ -2697,7 +2727,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
     gd_function: 'setup_lighting',
     ts_file: 'server/src/tools/scene3d.ts',
-    test_file: null,
+    category: 'scene3d',
+  },
+  {
+    tool_id: 'get_lighting',
+    description: 'Get Light3D properties (type, color, energy, shadow_enabled, transform)',
+    godot_command: 'scene3d/get_lighting',
+    gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
+    gd_function: 'get_lighting',
+    ts_file: 'server/src/tools/scene3d.ts',
     category: 'scene3d',
   },
   {
@@ -2707,7 +2745,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
     gd_function: 'setup_environment',
     ts_file: 'server/src/tools/scene3d.ts',
-    test_file: null,
+    category: 'scene3d',
+  },
+  {
+    tool_id: 'get_environment',
+    description: 'Get WorldEnvironment settings (background, ambient, fog, glow, SSAO, tonemap)',
+    godot_command: 'scene3d/get_environment',
+    gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
+    gd_function: 'get_environment',
+    ts_file: 'server/src/tools/scene3d.ts',
     category: 'scene3d',
   },
   {
@@ -2717,7 +2763,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
     gd_function: 'add_gridmap',
     ts_file: 'server/src/tools/scene3d.ts',
-    test_file: null,
+    category: 'scene3d',
+  },
+  {
+    tool_id: 'get_gridmap',
+    description: 'Get GridMap node properties (cell_size, mesh_library)',
+    godot_command: 'scene3d/get_gridmap',
+    gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
+    gd_function: 'get_gridmap',
+    ts_file: 'server/src/tools/scene3d.ts',
     category: 'scene3d',
   },
   {
@@ -2727,7 +2781,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
     gd_function: 'set_material_3d',
     ts_file: 'server/src/tools/scene3d.ts',
-    test_file: null,
+    category: 'scene3d',
+  },
+  {
+    tool_id: 'get_material_3d',
+    description: 'Get material properties from a 3D mesh node',
+    godot_command: 'scene3d/get_material',
+    gd_file: 'addons/godot_mcp/commands/scene3d_commands.gd',
+    gd_function: 'get_material_3d',
+    ts_file: 'server/src/tools/scene3d.ts',
     category: 'scene3d',
   },
   {
@@ -2737,7 +2799,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_config_commands.gd',
     gd_function: 'get_scene_inheritance',
     ts_file: 'server/src/tools/scene_config.ts',
-    test_file: null,
     category: 'scene_config',
   },
   {
@@ -2747,7 +2808,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_config_commands.gd',
     gd_function: 'set_scene_unique_name',
     ts_file: 'server/src/tools/scene_config.ts',
-    test_file: null,
     category: 'scene_config',
   },
   {
@@ -2757,7 +2817,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_config_commands.gd',
     gd_function: 'get_scene_groups',
     ts_file: 'server/src/tools/scene_config.ts',
-    test_file: null,
     category: 'scene_config',
   },
   {
@@ -2767,7 +2826,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_config_commands.gd',
     gd_function: 'set_scene_group',
     ts_file: 'server/src/tools/scene_config.ts',
-    test_file: null,
     category: 'scene_config',
   },
   {
@@ -2777,7 +2835,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_config_commands.gd',
     gd_function: 'get_scene_meta',
     ts_file: 'server/src/tools/scene_config.ts',
-    test_file: null,
     category: 'scene_config',
   },
   {
@@ -2787,7 +2844,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/scene_config_commands.gd',
     gd_function: 'set_scene_meta',
     ts_file: 'server/src/tools/scene_config.ts',
-    test_file: null,
+    category: 'scene_config',
+  },
+  {
+    tool_id: 'remove_scene_meta',
+    description: "Remove metadata from the current scene's root node",
+    godot_command: 'scene_config/remove_meta',
+    gd_file: 'addons/godot_mcp/commands/scene_config_commands.gd',
+    gd_function: 'remove_scene_meta',
+    ts_file: 'server/src/tools/scene_config.ts',
     category: 'scene_config',
   },
   {
@@ -2797,7 +2862,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/script_commands.gd',
     gd_function: 'list_scripts',
     ts_file: 'server/src/tools/script.ts',
-    test_file: null,
     category: 'script',
   },
   {
@@ -2807,7 +2871,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/script_commands.gd',
     gd_function: 'read_script',
     ts_file: 'server/src/tools/script.ts',
-    test_file: null,
     category: 'script',
   },
   {
@@ -2817,7 +2880,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/script_commands.gd',
     gd_function: 'create_script',
     ts_file: 'server/src/tools/script.ts',
-    test_file: null,
     category: 'script',
   },
   {
@@ -2827,7 +2889,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/script_commands.gd',
     gd_function: 'delete_script',
     ts_file: 'server/src/tools/script.ts',
-    test_file: null,
     category: 'script',
   },
   {
@@ -2837,7 +2898,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/script_commands.gd',
     gd_function: 'edit_script',
     ts_file: 'server/src/tools/script.ts',
-    test_file: null,
     category: 'script',
   },
   {
@@ -2847,7 +2907,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/script_commands.gd',
     gd_function: 'attach_script',
     ts_file: 'server/src/tools/script.ts',
-    test_file: null,
+    category: 'script',
+  },
+  {
+    tool_id: 'detach_script',
+    description: 'Detach a script from a node (sets script to null)',
+    godot_command: 'script/detach',
+    gd_file: 'addons/godot_mcp/commands/script_commands.gd',
+    gd_function: 'detach_script',
+    ts_file: 'server/src/tools/script.ts',
     category: 'script',
   },
   {
@@ -2857,7 +2925,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/script_commands.gd',
     gd_function: 'get_open_scripts',
     ts_file: 'server/src/tools/script.ts',
-    test_file: null,
     category: 'script',
   },
   {
@@ -2867,7 +2934,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/script_commands.gd',
     gd_function: 'validate_script',
     ts_file: 'server/src/tools/script.ts',
-    test_file: null,
     category: 'script',
   },
   {
@@ -2877,7 +2943,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/script_commands.gd',
     gd_function: 'search_in_files',
     ts_file: 'server/src/tools/script.ts',
-    test_file: null,
     category: 'script',
   },
   {
@@ -2887,7 +2952,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
     gd_function: 'create_shader',
     ts_file: 'server/src/tools/shader.ts',
-    test_file: null,
     category: 'shader',
   },
   {
@@ -2897,7 +2961,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
     gd_function: 'read_shader',
     ts_file: 'server/src/tools/shader.ts',
-    test_file: null,
     category: 'shader',
   },
   {
@@ -2907,7 +2970,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
     gd_function: 'edit_shader',
     ts_file: 'server/src/tools/shader.ts',
-    test_file: null,
     category: 'shader',
   },
   {
@@ -2917,7 +2979,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
     gd_function: 'assign_shader_material',
     ts_file: 'server/src/tools/shader.ts',
-    test_file: null,
     category: 'shader',
   },
   {
@@ -2927,7 +2988,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
     gd_function: 'set_shader_param',
     ts_file: 'server/src/tools/shader.ts',
-    test_file: null,
     category: 'shader',
   },
   {
@@ -2937,7 +2997,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
     gd_function: 'get_shader_params',
     ts_file: 'server/src/tools/shader.ts',
-    test_file: null,
+    category: 'shader',
+  },
+  {
+    tool_id: 'reset_shader_param',
+    description: 'Reset a shader parameter to its default value (remove the override)',
+    godot_command: 'shader/reset_param',
+    gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
+    gd_function: 'reset_shader_param',
+    ts_file: 'server/src/tools/shader.ts',
     category: 'shader',
   },
   {
@@ -2947,17 +3015,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
     gd_function: 'list_shaders',
     ts_file: 'server/src/tools/shader.ts',
-    test_file: null,
-    category: 'shader',
-  },
-  {
-    tool_id: 'validate_shader',
-    description: 'Validate a shader file for compilation errors',
-    godot_command: 'shader/validate',
-    gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
-    gd_function: 'validate_shader',
-    ts_file: 'server/src/tools/shader.ts',
-    test_file: null,
     category: 'shader',
   },
   {
@@ -2967,7 +3024,25 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
     gd_function: 'delete_shader',
     ts_file: 'server/src/tools/shader.ts',
-    test_file: null,
+    category: 'shader',
+  },
+  {
+    tool_id: 'unassign_material',
+    description: 'Remove ShaderMaterial from a node (set material/material_override to null)',
+    godot_command: 'shader/unassign_material',
+    gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
+    gd_function: 'unassign_material',
+    ts_file: 'server/src/tools/shader.ts',
+    category: 'shader',
+  },
+  {
+    tool_id: 'validate_shader',
+    description:
+      'Validate a shader file for compilation errors. NOTE: Godot 4.x does NOT expose the ShaderLanguage class (C++ internal) to GDScript — only text-level checks (brace matching, vec arg counts, semicolons) and ResourceLoader.load() are performed. Undeclared variables and type mismatches are NOT detected. This is a known Godot engine limitation, not an addon bug. Use Godot\\',
+    godot_command: 'shader/validate',
+    gd_file: 'addons/godot_mcp/commands/shader_commands.gd',
+    gd_function: 'validate_shader',
+    ts_file: 'server/src/tools/shader.ts',
     category: 'shader',
   },
   {
@@ -2977,7 +3052,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/testing_commands.gd',
     gd_function: 'run_test_scenario',
     ts_file: 'server/src/tools/testing.ts',
-    test_file: null,
     category: 'testing',
   },
   {
@@ -2987,7 +3061,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/testing_commands.gd',
     gd_function: 'assert_node_state',
     ts_file: 'server/src/tools/testing.ts',
-    test_file: null,
     category: 'testing',
   },
   {
@@ -2997,7 +3070,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/testing_commands.gd',
     gd_function: 'assert_screen_text',
     ts_file: 'server/src/tools/testing.ts',
-    test_file: null,
     category: 'testing',
   },
   {
@@ -3007,7 +3079,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/testing_commands.gd',
     gd_function: 'run_stress_test',
     ts_file: 'server/src/tools/testing.ts',
-    test_file: null,
     category: 'testing',
   },
   {
@@ -3017,7 +3088,15 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/testing_commands.gd',
     gd_function: 'get_test_report',
     ts_file: 'server/src/tools/testing.ts',
-    test_file: null,
+    category: 'testing',
+  },
+  {
+    tool_id: 'clear_test_report',
+    description: 'Clear all accumulated test results and reset session state',
+    godot_command: 'testing/clear_report',
+    gd_file: 'addons/godot_mcp/commands/testing_commands.gd',
+    gd_function: 'clear_test_report',
+    ts_file: 'server/src/tools/testing.ts',
     category: 'testing',
   },
   {
@@ -3027,7 +3106,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
     gd_function: 'create_theme',
     ts_file: 'server/src/tools/theme.ts',
-    test_file: null,
     category: 'theme',
   },
   {
@@ -3037,7 +3115,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
     gd_function: 'delete_theme',
     ts_file: 'server/src/tools/theme.ts',
-    test_file: null,
     category: 'theme',
   },
   {
@@ -3047,7 +3124,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
     gd_function: 'set_theme_color',
     ts_file: 'server/src/tools/theme.ts',
-    test_file: null,
     category: 'theme',
   },
   {
@@ -3057,7 +3133,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
     gd_function: 'set_theme_constant',
     ts_file: 'server/src/tools/theme.ts',
-    test_file: null,
     category: 'theme',
   },
   {
@@ -3067,7 +3142,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
     gd_function: 'set_theme_font_size',
     ts_file: 'server/src/tools/theme.ts',
-    test_file: null,
     category: 'theme',
   },
   {
@@ -3077,7 +3151,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
     gd_function: 'set_theme_stylebox',
     ts_file: 'server/src/tools/theme.ts',
-    test_file: null,
     category: 'theme',
   },
   {
@@ -3087,7 +3160,42 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
     gd_function: 'get_theme_info',
     ts_file: 'server/src/tools/theme.ts',
-    test_file: null,
+    category: 'theme',
+  },
+  {
+    tool_id: 'get_theme_color',
+    description: 'Get a specific color value from a theme',
+    godot_command: 'theme/get_color',
+    gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
+    gd_function: 'get_theme_color',
+    ts_file: 'server/src/tools/theme.ts',
+    category: 'theme',
+  },
+  {
+    tool_id: 'get_theme_constant',
+    description: 'Get a specific constant value from a theme',
+    godot_command: 'theme/get_constant',
+    gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
+    gd_function: 'get_theme_constant',
+    ts_file: 'server/src/tools/theme.ts',
+    category: 'theme',
+  },
+  {
+    tool_id: 'get_theme_font_size',
+    description: 'Get a specific font size value from a theme',
+    godot_command: 'theme/get_font_size',
+    gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
+    gd_function: 'get_theme_font_size',
+    ts_file: 'server/src/tools/theme.ts',
+    category: 'theme',
+  },
+  {
+    tool_id: 'get_theme_stylebox',
+    description: 'Get a specific StyleBox from a theme with its properties',
+    godot_command: 'theme/get_stylebox',
+    gd_file: 'addons/godot_mcp/commands/theme_commands.gd',
+    gd_function: 'get_theme_stylebox',
+    ts_file: 'server/src/tools/theme.ts',
     category: 'theme',
   },
   {
@@ -3097,7 +3205,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'tilemap_set_cell',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
@@ -3107,7 +3214,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'tilemap_fill_rect',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
@@ -3117,7 +3223,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'tilemap_get_cell',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
@@ -3127,7 +3232,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'tilemap_clear',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
@@ -3137,17 +3241,16 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'tilemap_get_info',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
     tool_id: 'tilemap_get_used_cells',
-    description: 'Get all used cell coordinates in a TileMap',
+    description:
+      'Get all used cell coordinates in a TileMap. Uses compact [[x,y],...] format. Capped at 1000 cells by default — use limit: 0 for all cells (caution: large maps may cause WebSocket crashes).',
     godot_command: 'tilemap/get_used_cells',
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'tilemap_get_used_cells',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
@@ -3157,7 +3260,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'gridmap_set_cell',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
@@ -3167,7 +3269,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'gridmap_get_cell',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
@@ -3177,17 +3278,16 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'gridmap_clear',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
     tool_id: 'gridmap_get_used_cells',
-    description: 'Get all used cell coordinates in a GridMap',
+    description:
+      'Get all used cell coordinates in a GridMap. Uses compact [[x,y,z],...] format. Capped at 1000 cells by default — use limit: 0 for all cells (caution: large maps may cause WebSocket crashes).',
     godot_command: 'gridmap/get_used_cells',
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'gridmap_get_used_cells',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
@@ -3197,7 +3297,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/tilemap_commands.gd',
     gd_function: 'gridmap_get_info',
     ts_file: 'server/src/tools/tilemap.ts',
-    test_file: null,
     category: 'tilemap',
   },
   {
@@ -3207,7 +3306,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/visual_testing_commands.gd',
     gd_function: 'take_screenshot_with_context',
     ts_file: 'server/src/tools/visual_testing.ts',
-    test_file: null,
     category: 'visual_testing',
   },
   {
@@ -3217,7 +3315,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/visual_testing_commands.gd',
     gd_function: 'compare_screenshots',
     ts_file: 'server/src/tools/visual_testing.ts',
-    test_file: null,
     category: 'visual_testing',
   },
   {
@@ -3227,7 +3324,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/visual_testing_commands.gd',
     gd_function: 'assert_visual_match',
     ts_file: 'server/src/tools/visual_testing.ts',
-    test_file: null,
     category: 'visual_testing',
   },
   {
@@ -3237,7 +3333,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/visual_testing_commands.gd',
     gd_function: 'record_visual_regression',
     ts_file: 'server/src/tools/visual_testing.ts',
-    test_file: null,
     category: 'visual_testing',
   },
   {
@@ -3247,7 +3342,6 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/visual_testing_commands.gd',
     gd_function: 'get_visual_diff_report',
     ts_file: 'server/src/tools/visual_testing.ts',
-    test_file: null,
     category: 'visual_testing',
   },
   {
@@ -3257,7 +3351,42 @@ const TOOLS_CATALOG = [
     gd_file: 'addons/godot_mcp/commands/visual_testing_commands.gd',
     gd_function: 'set_visual_baseline',
     ts_file: 'server/src/tools/visual_testing.ts',
-    test_file: null,
+    category: 'visual_testing',
+  },
+  {
+    tool_id: 'delete_screenshot',
+    description: 'Delete a captured screenshot and its context metadata from user://mcp_visual_tests/',
+    godot_command: 'delete_screenshot',
+    gd_file: 'addons/godot_mcp/commands/visual_testing_commands.gd',
+    gd_function: 'delete_screenshot',
+    ts_file: 'server/src/tools/visual_testing.ts',
+    category: 'visual_testing',
+  },
+  {
+    tool_id: 'delete_visual_recording',
+    description: 'Delete a visual recording session and all its captured frames from user://mcp_visual_tests/recordings/',
+    godot_command: 'delete_visual_recording',
+    gd_file: 'addons/godot_mcp/commands/visual_testing_commands.gd',
+    gd_function: 'delete_visual_recording',
+    ts_file: 'server/src/tools/visual_testing.ts',
+    category: 'visual_testing',
+  },
+  {
+    tool_id: 'clear_visual_diff_report',
+    description: 'Clear all accumulated visual test results (assertions) and in-memory recordings. Resets the session state for get_visual_diff_report.',
+    godot_command: 'clear_visual_diff_report',
+    gd_file: 'addons/godot_mcp/commands/visual_testing_commands.gd',
+    gd_function: 'clear_visual_diff_report',
+    ts_file: 'server/src/tools/visual_testing.ts',
+    category: 'visual_testing',
+  },
+  {
+    tool_id: 'list_visual_baselines',
+    description: 'List all saved visual baseline screenshots in user://mcp_visual_tests/baselines/',
+    godot_command: 'list_visual_baselines',
+    gd_file: 'addons/godot_mcp/commands/visual_testing_commands.gd',
+    gd_function: 'list_visual_baselines',
+    ts_file: 'server/src/tools/visual_testing.ts',
     category: 'visual_testing',
   },
 ];

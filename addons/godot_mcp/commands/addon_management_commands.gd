@@ -1,6 +1,7 @@
 ## Addon management commands module - 6 tools.
 ## Provides addon discovery, installation from multiple sources,
 ## uninstallation, updating, configuration management, and config reading.
+@tool
 class_name MCPAddonManagementCommands
 extends RefCounted
 
@@ -373,15 +374,21 @@ func _get_addon_info(addon_name: String) -> Dictionary:
 
 ## Helper: Install from Asset Library.
 func _install_from_asset_lib(name: String) -> Dictionary:
-	# The Asset Library installation requires the editor's built-in mechanism.
-	# We return the command info for the user/editor to execute.
-	return {"result": {
-		"success": true,
-		"name": name,
-		"source": "asset_lib",
-		"message": "Asset Library installation initiated for '%s'. Use the Godot editor's AssetLib tab to complete installation, or use the CLI: godot --headless --install-addon '%s'" % [name, name],
-		"note": "The Godot editor's Asset Library provides the most reliable installation. Search for '%s' in the AssetLib tab." % name,
-	}}
+	# The Godot editor does not expose a programmatic Asset Library installation API
+	# (EditorAssetLibrary has no install method). Attempt the CLI path first.
+	var cli_output: Array = []
+	var cli_err: Error = OS.execute("godot", PackedStringArray(["--headless", "--install-addon", name]), cli_output, true, false)
+	if cli_err == OK:
+		_safe_refresh_filesystem()
+		return {"result": {
+			"success": true,
+			"name": name,
+			"source": "asset_lib",
+			"output": "".join(cli_output),
+			"message": "Addon '%s' installed via CLI" % name,
+		}}
+	# CLI install not available — return a clear error instead of misleading success.
+	return {"error": "Asset Library installation requires manual action. Use the Godot editor's AssetLib tab to search for '%s' and install, or run: godot --headless --install-addon '%s'" % [name, name]}
 
 
 ## Helper: Install from git.
@@ -392,11 +399,28 @@ func _install_from_git(name: String, url: String) -> Dictionary:
 	if DirAccess.dir_exists_absolute(target_dir):
 		return {"error": "Addon directory already exists: %s. Uninstall first." % name}
 
+	# Reset idle timer before long git clone to avoid WebSocket timeout
+	if _plugin != null and _plugin.has_method("_reset_idle_timer"):
+		_plugin.call_deferred("_reset_idle_timer")
+
 	# Clone the repository
 	var output: Array = []
 	var err: Error = OS.execute("git", PackedStringArray(["clone", url, target_dir]), output, true, false)
 	if err != OK:
-		return {"error": "Git clone failed: %s" % "".join(output)}
+		# Sanitize git output — on Windows with non-ASCII paths (e.g. Cyrillic),
+		# OS.execute may return mojibake due to console encoding mismatch (BUG-005).
+		var raw_output: String = "".join(output)
+		# Replace non-printable/garbled characters with replacement marker
+		var sanitized := ""
+		for c in raw_output:
+			var ch: int = c.unicode_at(0)
+			if ch >= 0x20 and ch <= 0x7E or ch >= 0xA0:
+				sanitized += c
+			elif ch > 0 and ch < 0x20:
+				pass  # skip control chars
+		if sanitized.is_empty():
+			sanitized = raw_output  # fallback if sanitization removed everything
+		return {"error": "Git clone failed: %s" % sanitized}
 
 	# Save metadata for future updates
 	var meta_path: String = target_dir.path_join(".mcp_addon_meta.json")
@@ -431,13 +455,34 @@ func _install_from_local(name: String, local_path: String) -> Dictionary:
 	if not DirAccess.dir_exists_absolute(source_path):
 		return {"error": "Source directory not found: %s" % local_path}
 
+	# Block copying from the project's own addons/ directory to prevent
+	# WebSocket disconnects caused by file-locking conflicts with the
+	# currently loaded editor plugin (BUG-001).
+	# Normalize path separators: ProjectSettings.globalize_path returns /,
+	# but user-provided paths on Windows use \.  GDScript begins_with is
+	# byte-exact, so \ ≠ / and the guard fails without normalization.
+	var project_addons_dir: String = ProjectSettings.globalize_path(ADDONS_DIR)
+	var cmp_source: String = source_path.replace("\\", "/")
+	var cmp_addons: String = project_addons_dir.replace("\\", "/")
+	# Ensure trailing separator so "addons" does not match "addons_foo"
+	if not cmp_addons.ends_with("/"):
+		cmp_addons += "/"
+	if cmp_source.begins_with(cmp_addons):
+		return {"error": "Cannot install from the project's own addons/ directory. Use an external path or git/asset_lib source instead."}
+
 	var target_dir: String = ProjectSettings.globalize_path(ADDONS_DIR.path_join(name))
 
 	# Check if already exists
 	if DirAccess.dir_exists_absolute(target_dir):
 		return {"error": "Addon directory already exists: %s. Uninstall first." % name}
 
-	# Copy directory
+	# Reset idle timer before long synchronous copy to avoid WebSocket timeout.
+	# The plugin processes WebSocket messages on the main thread; a long copy
+	# can block message processing and trigger idle disconnect.
+	if _plugin != null and _plugin.has_method("_reset_idle_timer"):
+		_plugin.call_deferred("_reset_idle_timer")
+
+	# Copy directory (synchronous — may block WebSocket briefly for large dirs)
 	var err: Error = MCPCommandHelpers.copy_directory_recursive(source_path, target_dir)
 	if err != OK:
 		return {"error": "Failed to copy addon: %s" % error_string(err)}

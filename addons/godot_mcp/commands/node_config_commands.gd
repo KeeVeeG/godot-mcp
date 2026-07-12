@@ -1,5 +1,6 @@
 ## Node introspection commands module - 8 tools.
 ## Handles node type metadata: properties, signals, methods, enums, constants, hierarchy.
+@tool
 class_name MCPNodeConfigCommands
 extends RefCounted
 
@@ -288,8 +289,11 @@ func _get_defaults(params: Dictionary) -> Dictionary:
 		return {"success": false, "error": "Type cannot be empty"}
 	if not ClassDB.class_exists(type):
 		return {"success": false, "error": "Unknown type: %s" % type}
-	if not ClassDB.is_parent_class(type, "Node"):
-		return {"success": false, "error": "Not a Node type: %s" % type}
+	# Allow Node-derived types (the primary use case) and "Object" base class.
+	# Non-Node types like Resource, Material, etc. have no meaningful defaults
+	# and would return empty dicts — reject them with a clear message.
+	if type != "Object" and not ClassDB.is_parent_class(type, "Node"):
+		return {"success": false, "error": "Not a Node type: %s. Use a Node-derived class or 'Object' for base type." % type}
 	var instance: Object = ClassDB.instantiate(type)
 	if instance == null:
 		return {"success": false, "error": "Cannot instantiate: %s" % type}
@@ -430,31 +434,32 @@ func _get_types(params: Dictionary) -> Dictionary:
 func _get_signals(params: Dictionary) -> Dictionary:
 	var type: String = params.get("type", "")
 	var node_path: String = params.get("path", "")
-	if type.is_empty():
-		# Fallback: resolve from node instance path
-		if node_path.is_empty():
-			return {"success": false, "error": "Either 'type' or 'path' is required"}
+
+	var warning: String = ""
+	if not node_path.is_empty():
 		var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, node_path)
 		if node == null:
-			return {"success": false, "error": "Node not found: %s" % node_path}
-		type = node.get_class()
-		var script_obj: Variant = node.get_script()
-		if script_obj != null and script_obj is GDScript:
-			var script: GDScript = script_obj as GDScript
-			var cls: StringName = script.get_class_name()
-			if cls != "" and ClassDB.class_exists(String(cls)):
-				type = String(cls)
+			# Path not found — if type is provided, fall back to it with a warning
+			if not type.is_empty():
+				warning = "'%s' node not found, falling back to type '%s'" % [node_path, type]
+			else:
+				return {"success": false, "error": "Node not found: %s" % node_path}
+		else:
+			var resolved_type: String = node.get_class()
+			var script_obj: Variant = node.get_script()
+			if script_obj != null and script_obj is GDScript:
+				var script: GDScript = script_obj as GDScript
+				var cls: StringName = script.get_class_name()
+				if cls != "" and ClassDB.class_exists(String(cls)):
+					resolved_type = String(cls)
+			if not type.is_empty() and resolved_type != type:
+				warning = "type/class-mismatch: '%s' != '%s'. Using the type resolved from the node at '%s'." % [type, resolved_type, node_path]
+			type = resolved_type
+	elif type.is_empty():
+		return {"success": false, "error": "Either 'type' or 'path' is required"}
+
 	if not ClassDB.class_exists(type):
 		return {"success": false, "error": "Unknown type: %s" % type}
-	# When both type and path are provided, detect mismatches (path takes priority).
-	var warning: String = ""
-	if not node_path.is_empty() and not type.is_empty():
-		var path_node: Node = MCPCommandHelpers.resolve_node_path(_plugin, node_path)
-		if path_node != null:
-			var resolved_type: String = path_node.get_class()
-			if resolved_type != type:
-				warning = "type/class-mismatch: '%s' != '%s'. Using the type resolved from the node at '%s'." % [type, resolved_type, node_path]
-				type = resolved_type
 	var signals_list: Array = ClassDB.class_get_signal_list(type, false)
 	var result: Array = []
 	for sig: Dictionary in signals_list:

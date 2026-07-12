@@ -1,5 +1,6 @@
 ## Batch commands module - 10 tools.
 ## Handles cross-scene queries, batch operations, and dependency analysis.
+@tool
 class_name MCPBatchCommands
 extends RefCounted
 
@@ -28,7 +29,6 @@ func get_commands() -> Dictionary:
 ## Recursively walk the scene tree and find all nodes matching a given type.
 func find_nodes_by_type(params: Dictionary) -> Dictionary:
 	var type_name: String = params.get("type_name", params.get("type", ""))
-	var include_inactive: bool = params.get("include_inactive", false)
 
 	if type_name.is_empty():
 		return {"error": "Type is required"}
@@ -38,15 +38,11 @@ func find_nodes_by_type(params: Dictionary) -> Dictionary:
 		return {"error": "No scene open"}
 
 	var results: Array = []
-	_find_by_type_recursive(root, type_name, include_inactive, results)
+	_find_by_type_recursive(root, type_name, results)
 	return {"result": {"type": type_name, "count": results.size(), "nodes": results}}
 
 
-func _find_by_type_recursive(node: Node, type_name: String, include_inactive: bool, results: Array) -> void:
-	if not include_inactive and node.has_method("is_visible_in_tree") and not node.is_visible_in_tree():
-		for child: Node in node.get_children():
-			_find_by_type_recursive(child, type_name, include_inactive, results)
-		return
+func _find_by_type_recursive(node: Node, type_name: String, results: Array) -> void:
 	if _node_matches_type(node, type_name):
 		results.append({
 			"path": MCPCommandHelpers.get_node_path(node, _plugin),
@@ -54,7 +50,7 @@ func _find_by_type_recursive(node: Node, type_name: String, include_inactive: bo
 			"type": node.get_class(),
 		})
 	for child: Node in node.get_children():
-		_find_by_type_recursive(child, type_name, include_inactive, results)
+		_find_by_type_recursive(child, type_name, results)
 
 
 ## Find all signal connections in the scene tree.
@@ -207,29 +203,35 @@ func batch_set_property(params: Dictionary) -> Dictionary:
 	# Pre-validate: check if any nodes of this type exist and the property is valid
 	var first_match: Node = _find_first_node_of_type(root, type_name)
 	if first_match == null:
-		return {"result": {"type": type_name, "property": property, "nodes_modified": 0}}
+		return {"error": "No nodes of type '%s' found in scene" % type_name}
 	if not MCPCommandHelpers.has_property(first_match, property):
 		return {"error": "Property '%s' does not exist on %s" % [property, type_name]}
+
+	# Pre-validate value type: parse the value to match the target property's expected type.
+	# If parse_for_property returns null for a non-null input, the value is incompatible
+	# with the property type (e.g., string "hello" for a bool property).
+	var expected_type: int = MCPCommandHelpers.get_property_type(first_match, property)
+	var typed_value: Variant = MCPVariantCodec.parse_for_property(value, expected_type)
+	if typed_value == null and value != null:
+		return {"error": "Cannot convert value to expected type for property '%s' on %s (expected %s)" % [property, type_name, type_string(expected_type)]}
 
 	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
 	ur.create_action("MCP: Batch set %s.%s" % [type_name, property])
 	var count: int = 0
-	count = _batch_set_recursive(root, type_name, property, value, count, ur)
+	count = _batch_set_recursive(root, type_name, property, typed_value, count, ur)
 	ur.commit_action()
 	return {"result": {"type": type_name, "property": property, "nodes_modified": count}}
 
 
-func _batch_set_recursive(node: Node, type_name: String, property: String, value: Variant, count: int, ur: EditorUndoRedoManager) -> int:
+func _batch_set_recursive(node: Node, type_name: String, property: String, typed_value: Variant, count: int, ur: EditorUndoRedoManager) -> int:
 	if _node_matches_type(node, type_name):
-		# Property existence already pre-validated in batch_set_property
-		var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
-		var parsed: Variant = MCPVariantCodec.parse_for_property(value, expected_type)
+		# Property existence and value type already pre-validated in batch_set_property
 		var old_val: Variant = node.get(property)
-		ur.add_do_method(node, "set", property, parsed)
+		ur.add_do_method(node, "set", property, typed_value)
 		ur.add_undo_property(node, property, old_val)
 		count += 1
 	for child: Node in node.get_children():
-		count = _batch_set_recursive(child, type_name, property, value, count, ur)
+		count = _batch_set_recursive(child, type_name, property, typed_value, count, ur)
 	return count
 
 
@@ -261,12 +263,12 @@ func batch_get_property(params: Dictionary) -> Dictionary:
 
 func _batch_get_recursive(node: Node, type_name: String, property: String, results: Array) -> void:
 	if _node_matches_type(node, type_name):
-		var value: Variant = node.get(property)
+		var raw_value: Variant = node.get(property)
 		results.append({
 			"path": MCPCommandHelpers.get_node_path(node, _plugin),
 			"name": str(node.name),
 			"type": node.get_class(),
-			"value": value,
+			"value": MCPVariantCodec.serialize_value(raw_value),
 		})
 	for child: Node in node.get_children():
 		_batch_get_recursive(child, type_name, property, results)
@@ -430,7 +432,7 @@ func find_script_references(params: Dictionary) -> Dictionary:
 	if not check_path.begins_with("res://"):
 		check_path = "res://" + script_path
 	if not FileAccess.file_exists(check_path):
-		return {"error": "Script not found: %s" % check_path, "isError": true}
+		return {"error": "Script not found: %s" % check_path}
 
 	var results: Array = []
 	_search_files_recursive(
@@ -577,6 +579,12 @@ func _tscn_contains_node_path(file_path: String, node_path: String) -> bool:
 				return true
 			if trimmed.contains('parent="' + parent_path + '"'):
 				return true
+			# Godot stores direct children of the root node with parent=".",
+			# not parent="RootNodeName". When parent_path is a single segment
+			# (no slashes), also accept parent="." — this correctly matches
+			# root-level children like "SceneB/TestButton".
+			if "/" not in parent_path and trimmed.contains('parent="."'):
+				return true
 
 	# Also check for literal path in connection lines and other references
 	return content.contains(node_path)
@@ -619,8 +627,8 @@ func _read_scene_property_values(scene_path: String, type_name: String, property
 				results.append({
 					"name": current_name,
 					"parent": current_parent,
-					"value": prop_value if prop_found else null,
-					"has_property": prop_found,
+					"value": _clean_tscn_value(prop_value) if prop_found else null,
+					"is_stored_on_disk": prop_found,
 				})
 			in_matching_node = false
 			prop_found = false
@@ -630,14 +638,20 @@ func _read_scene_property_values(scene_path: String, type_name: String, property
 			current_parent = _extract_attr(trimmed, "parent")
 			if current_type == type_name or (current_type.is_empty() and type_name == "Node"):
 				in_matching_node = true
+				# Node names are stored in the [node name="..."] header, not as
+				# a standalone "name = ..." property in the body. When the
+				# requested property is "name", use the header value directly.
+				if property == "name":
+					prop_value = current_name
+					prop_found = true
 		elif trimmed.begins_with("[") and not trimmed.begins_with("[node"):
 			# Exiting node section
 			if in_matching_node:
 				results.append({
 					"name": current_name,
 					"parent": current_parent,
-					"value": prop_value if prop_found else null,
-					"has_property": prop_found,
+					"value": _clean_tscn_value(prop_value) if prop_found else null,
+					"is_stored_on_disk": prop_found,
 				})
 				in_matching_node = false
 				prop_found = false
@@ -651,11 +665,21 @@ func _read_scene_property_values(scene_path: String, type_name: String, property
 		results.append({
 			"name": current_name,
 			"parent": current_parent,
-			"value": prop_value if prop_found else null,
-			"has_property": prop_found,
+			"value": _clean_tscn_value(prop_value) if prop_found else null,
+			"is_stored_on_disk": prop_found,
 		})
 
 	return results
+
+
+## Strip surrounding quotes from .tscn string values and unescape internal quotes.
+## .tscn stores strings as "value". This returns value (without outer quotes).
+## Non-string values (Vector2(...), numbers, booleans) are returned as-is.
+static func _clean_tscn_value(raw: String) -> String:
+	if raw.begins_with('"') and raw.ends_with('"'):
+		var inner: String = raw.substr(1, raw.length() - 2)
+		return inner.replace('\\"', '"')
+	return raw
 
 
 ## Helper: modify a .tscn file to set a property on matching nodes.

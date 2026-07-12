@@ -1,5 +1,6 @@
 ## Resource configuration commands module - 6 tools.
 ## Handles resource type introspection, creation, and import settings.
+@tool
 class_name MCPResourceConfigCommands
 extends RefCounted
 
@@ -31,7 +32,7 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 		"import": return _import(params)
 		"get_resource_import_settings": return _get_import_settings(params)
 		"set_resource_import_settings": return _set_import_settings(params)
-	return {"error": "Unknown method: " + method}
+	return {"success": false, "error": "Unknown method: " + method}
 
 
 ## Get all registered resource types.
@@ -49,9 +50,9 @@ func _get_types() -> Dictionary:
 func _get_properties(params: Dictionary) -> Dictionary:
 	var type: String = params.get("type", "")
 	if type.is_empty():
-		return {"error": "Type cannot be empty"}
+		return {"success": false, "error": "Type cannot be empty"}
 	if not ClassDB.class_exists(type):
-		return {"error": "Unknown type: %s" % type}
+		return {"success": false, "error": "Unknown type: %s" % type}
 	# Theme override data is stored in private HashMaps, not exposed via get_property_list().
 	# get_property_list() only returns 3 default properties (default_base_scale,
 	# default_font, default_font_size). Use a dedicated handler.
@@ -59,7 +60,9 @@ func _get_properties(params: Dictionary) -> Dictionary:
 		return _get_theme_properties()
 	var instance: Object = ClassDB.instantiate(type)
 	if instance == null:
-		return {"error": "Cannot instantiate: %s" % type}
+		if not ClassDB.can_instantiate(type):
+			return {"result": {"type": type, "properties": [], "count": 0, "note": "Abstract type — cannot be instantiated directly, no serializable storage properties"}}
+		return {"success": false, "error": "Cannot instantiate: %s" % type}
 	var properties: Array = []
 	for p: Dictionary in instance.get_property_list():
 		var pname: String = p["name"] as String
@@ -76,7 +79,13 @@ func _get_properties(params: Dictionary) -> Dictionary:
 		})
 	if instance is Resource:
 		pass  # Resources don't need queue_free
-	return {"result": {"type": type, "properties": properties, "count": properties.size()}}
+	var result: Dictionary = {"type": type, "properties": properties, "count": properties.size()}
+	if properties.size() == 0:
+		if not ClassDB.can_instantiate(type):
+			result["note"] = "Abstract type — cannot be instantiated directly, no serializable storage properties"
+		else:
+			result["note"] = "No serializable storage properties found for this type"
+	return {"result": result}
 
 
 ## Convert a Variant.Type to a human-readable property type name.
@@ -198,37 +207,54 @@ func _create_from_template(params: Dictionary) -> Dictionary:
 	var template: String = params.get("template", "")
 	var path: String = params.get("path", "")
 	if type.is_empty():
-		return {"error": "Type cannot be empty"}
+		return {"success": false, "error": "Type cannot be empty"}
 	if path.is_empty():
-		return {"error": "Path cannot be empty"}
+		return {"success": false, "error": "Path cannot be empty"}
 	if not path.begins_with("res://") and not path.begins_with("user://"):
-		return {"error": "Path must start with 'res://' or 'user://', got: %s" % path}
+		return {"success": false, "error": "Path must start with 'res://' or 'user://', got: %s" % path}
 	if path.ends_with("/"):
-		return {"error": "Path cannot be a directory (ends with '/'): %s" % path}
+		return {"success": false, "error": "Path cannot be a directory (ends with '/'): %s" % path}
 	if path.get_extension().is_empty():
-		return {"error": "Path must include a file extension (e.g. .tres, .res): %s" % path}
+		return {"success": false, "error": "Path must include a file extension (e.g. .tres, .res): %s" % path}
 	if path.length() > 200:
-		return {"error": "Path too long (%d chars, max 200): %s" % [path.length(), path]}
+		return {"success": false, "error": "Path too long (%d chars, max 200): %s" % [path.length(), path]}
 	if not ClassDB.class_exists(type):
-		return {"error": "Unknown type: %s" % type}
+		return {"success": false, "error": "Unknown type: %s" % type}
 	var res: Resource = null
 	if template != "":
 		if not FileAccess.file_exists(template):
-			return {"error": "Template not found: %s" % template}
+			return {"success": false, "error": "Template not found: %s" % template}
 		var template_res: Resource = ResourceLoader.load(template)
 		if template_res:
+			if not template_res.is_class(type):
+				return {"success": false, "error": "Template type '%s' does not match requested type '%s'. Use type '%s' or omit the template parameter" % [template_res.get_class(), type, template_res.get_class()]}
 			res = template_res.duplicate()
 		else:
-			return {"error": "Failed to load template: %s" % template}
+			return {"success": false, "error": "Failed to load template: %s" % template}
 	if res == null:
 		res = ClassDB.instantiate(type) as Resource
 	if res == null:
-		return {"error": "Failed to create resource of type: %s" % type}
+		return {"success": false, "error": "Failed to create resource of type: %s" % type}
 	MCPCommandHelpers.ensure_dir(path.get_base_dir())
+	var existed: bool = FileAccess.file_exists(path)
+	var previous_type: String = ""
+	if existed:
+		var existing: Resource = ResourceLoader.load(path)
+		if existing:
+			previous_type = existing.get_class()
 	var err: Error = ResourceSaver.save(res, path)
 	if err != OK:
-		return {"error": "Failed to save resource: %s" % error_string(err)}
-	return {"result": {"type": type, "path": path, "message": "Resource created"}}
+		return {"success": false, "error": "Failed to save resource: %s" % error_string(err)}
+	var actual_type: String = res.get_class()
+	var result: Dictionary = {"type": actual_type, "path": path}
+	if existed:
+		result["overwritten"] = true
+		result["previous_type"] = previous_type
+		result["message"] = "Resource overwritten (was: %s, now: %s)" % [previous_type, actual_type]
+	else:
+		result["overwritten"] = false
+		result["message"] = "Resource created"
+	return {"result": result}
 
 
 ## Import a file as a resource.
@@ -236,16 +262,16 @@ func _import(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var settings: Dictionary = params.get("settings", {})
 	if path.is_empty():
-		return {"error": "Path cannot be empty"}
+		return {"success": false, "error": "Path cannot be empty"}
 	if not FileAccess.file_exists(path):
-		return {"error": "File not found: %s" % path}
+		return {"success": false, "error": "File not found: %s" % path}
 	# Check if file is importable (has or will get a .import file).
 	# Non-importable files (.gd, .tres, .tscn) never get .import files.
 	var import_file: String = path + ".import"
 	var ext: String = path.get_extension().to_lower()
 	var non_importable: Array[String] = ["gd", "tres", "res", "tscn", "gdshader", "gdshaderinc"]
 	if ext in non_importable:
-		return {"error": "File is not importable (no .import pipeline for .%s): %s" % [ext, path]}
+		return {"success": false, "error": "File is not importable (no .import pipeline for .%s): %s" % [ext, path]}
 	# Trigger reimport first (generates/updates .import with defaults)
 	var fs: EditorFileSystem = _plugin.get_editor_interface().get_resource_filesystem()
 	if fs:
@@ -261,6 +287,9 @@ func _import(params: Dictionary) -> Dictionary:
 					option_key = key.substr(7)  # strip params/ prefix
 				config.set_value("params", option_key, settings[key])
 			config.save(import_file)
+			# Reimport again so the applied settings take effect immediately
+			if fs:
+				fs.reimport_files(PackedStringArray([path]))
 	return {"result": {"path": path, "message": "Resource import triggered"}}
 
 
@@ -268,16 +297,18 @@ func _import(params: Dictionary) -> Dictionary:
 func _get_import_settings(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
-		return {"error": "Path cannot be empty"}
+		return {"success": false, "error": "Path cannot be empty"}
+	if DirAccess.dir_exists_absolute(path):
+		return {"success": false, "error": "Path is a directory, not a file: %s" % path}
 	if not FileAccess.file_exists(path):
-		return {"error": "File not found: %s" % path}
+		return {"success": false, "error": "File not found: %s" % path}
 	var import_file: String = path + ".import"
 	if not FileAccess.file_exists(import_file):
-		return {"error": "File exists but is not importable (no .import file): %s" % path}
+		return {"success": false, "error": "File exists but is not importable (no .import file): %s" % path}
 	var config: ConfigFile = ConfigFile.new()
 	var err: Error = config.load(import_file)
 	if err != OK:
-		return {"error": "Failed to load import file: %s" % error_string(err)}
+		return {"success": false, "error": "Failed to load import file: %s" % error_string(err)}
 	var settings: Dictionary = {}
 	for section: String in config.get_sections():
 		for key: String in config.get_section_keys(section):
@@ -290,14 +321,16 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var settings: Dictionary = params.get("settings", {})
 	if path.is_empty():
-		return {"error": "Path cannot be empty"}
+		return {"success": false, "error": "Path cannot be empty"}
 	if settings.is_empty():
-		return {"error": "Settings cannot be empty — no changes applied"}
+		return {"result": {"path": path, "message": "No changes — settings was empty", "applied": {}}}
+	if DirAccess.dir_exists_absolute(path):
+		return {"success": false, "error": "Path is a directory, not a file: %s" % path}
 	if not FileAccess.file_exists(path):
-		return {"error": "File not found: %s" % path}
+		return {"success": false, "error": "File not found: %s" % path}
 	var import_file: String = path + ".import"
 	if not FileAccess.file_exists(import_file):
-		return {"error": "File exists but is not importable (no .import file): %s" % path}
+		return {"success": false, "error": "File exists but is not importable (no .import file): %s" % path}
 	var config: ConfigFile = ConfigFile.new()
 	config.load(import_file)
 
@@ -315,21 +348,31 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 			option_key = key.substr(7)
 		if existing_params.has(option_key):
 			var expected_type: int = typeof(existing_params[option_key])
-			if typeof(settings[key]) != expected_type:
+			var value = settings[key]
+			# Coerce JSON float to int when setting expects int (JSON has no integer type)
+			if expected_type == TYPE_INT and typeof(value) == TYPE_FLOAT:
+				var f: float = value as float
+				if f == floor(f):
+					value = int(f)
+					settings[key] = value
+				else:
+					errors.append("Type mismatch for '%s': expected int, got float %s (has fractional part). Use integer values for this setting." % [option_key, str(f)])
+					continue
+			if typeof(value) != expected_type:
 				errors.append("Type mismatch for '%s': expected %s, got %s" % [
-					option_key, type_string(expected_type), type_string(typeof(settings[key]))
+					option_key, type_string(expected_type), type_string(typeof(value))
 				])
 		else:
 			errors.append("Unknown import option '%s' — not found in existing import settings" % option_key)
 	if not errors.is_empty():
-		return {"error": "Invalid import settings: %s" % ", ".join(errors)}
+		return {"success": false, "error": "Invalid import settings: %s" % ", ".join(errors)}
 
 	# Semantic validation: detect contradictory combinations
 	# compress/lossy_quality has no effect when compress/mode=0 (Lossless)
 	if settings.has("compress/mode") or settings.has("params/compress/mode"):
 		var mode_key: String = "compress/mode" if settings.has("compress/mode") else "params/compress/mode"
 		if settings[mode_key] == 0 and (settings.has("compress/lossy_quality") or settings.has("params/compress/lossy_quality")):
-			return {"error": "Contradictory settings: compress/mode=0 (Lossless) is incompatible with compress/lossy_quality"}
+			return {"success": false, "error": "Contradictory settings: compress/mode=0 (Lossless) is incompatible with compress/lossy_quality"}
 
 	# All keys validated — write to [params] section
 	for key: String in settings:
@@ -339,7 +382,7 @@ func _set_import_settings(params: Dictionary) -> Dictionary:
 		config.set_value("params", option_key, settings[key])
 	var err: Error = config.save(import_file)
 	if err != OK:
-		return {"error": "Failed to save import settings: %s" % error_string(err)}
+		return {"success": false, "error": "Failed to save import settings: %s" % error_string(err)}
 	# Trigger reimport
 	var fs: EditorFileSystem = _plugin.get_editor_interface().get_resource_filesystem()
 	if fs:

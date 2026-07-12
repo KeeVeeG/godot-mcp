@@ -5,7 +5,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { GodotBridge } from '../godot-bridge.js';
 import { callGodot } from '../server.js';
-import { z, Name } from './shared-types.js';
+import { z } from './shared-types.js';
 
 export function registerPhysicsConfigTools(server: McpServer, bridge: GodotBridge): void {
   // 1. get_physics_settings
@@ -24,10 +24,21 @@ export function registerPhysicsConfigTools(server: McpServer, bridge: GodotBridg
     {
       description: 'Set the default gravity vector for the physics world (choose 2D or 3D dimension)',
       inputSchema: {
-        dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d"'),
-        x: z.number().describe('Gravity X component'),
-        y: z.number().describe('Gravity Y component'),
-        z: z.number().optional().default(0).describe('Gravity Z component (for 3D, default 0)'),
+        dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d" (required)'),
+        x: z
+          .number()
+          .refine((v) => Number.isFinite(v), 'Gravity component must be a finite number')
+          .describe('Gravity X component'),
+        y: z
+          .number()
+          .refine((v) => Number.isFinite(v), 'Gravity component must be a finite number')
+          .describe('Gravity Y component'),
+        z: z
+          .number()
+          .refine((v) => Number.isFinite(v), 'Gravity component must be a finite number')
+          .optional()
+          .default(0)
+          .describe('Gravity Z component (for 3D, default 0)'),
       },
     },
     async (args) => callGodot(bridge, 'physics_config/set_gravity', args as Record<string, unknown>),
@@ -39,7 +50,7 @@ export function registerPhysicsConfigTools(server: McpServer, bridge: GodotBridg
     {
       description: 'Set the physics simulation tick rate',
       inputSchema: {
-        fps: z.number().int().min(1).max(240).optional().default(60).describe('Physics ticks per second (default 60)'),
+        fps: z.number().int({ message: 'FPS must be a whole number (integer)' }).optional().default(60).describe('Physics ticks per second (default 60)'),
       },
     },
     async (args) => callGodot(bridge, 'physics_config/set_fps', args as Record<string, unknown>),
@@ -51,7 +62,7 @@ export function registerPhysicsConfigTools(server: McpServer, bridge: GodotBridg
     {
       description: 'Set which physics engine backend to use for a specific dimension (choose 2D or 3D)',
       inputSchema: {
-        dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d"'),
+        dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d" (required)'),
         engine: z.enum(['default', 'godot_physics', 'jolt']).describe('Physics engine backend'),
       },
     },
@@ -64,8 +75,8 @@ export function registerPhysicsConfigTools(server: McpServer, bridge: GodotBridg
     {
       description: 'Assign a human-readable name to a collision layer (1-32)',
       inputSchema: {
-        layer: z.number().int().min(1).max(32).describe('Layer number (1-32)'),
-        name: Name.describe("Layer name (e.g. 'Player', 'Enemies', 'Terrain')"),
+        layer: z.number().int().describe('Layer number (1-32)'),
+        name: z.string().min(1, 'Layer name must not be empty').describe("Layer name (e.g. 'Player', 'Enemies', 'Terrain')"),
       },
     },
     async (args) => callGodot(bridge, 'physics_config/set_layer_name', args as Record<string, unknown>),
@@ -87,8 +98,12 @@ export function registerPhysicsConfigTools(server: McpServer, bridge: GodotBridg
     {
       description: 'Set the default gravity magnitude for a specific dimension (choose 2D or 3D)',
       inputSchema: {
-        dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d"'),
-        value: z.number().describe('Gravity value (980.0 for 2D, 9.8 for 3D)'),
+        dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d" (required)'),
+        value: z
+          .number()
+          .min(0, 'Gravity magnitude must be non-negative')
+          .refine((v) => Number.isFinite(v), 'Gravity magnitude must be a finite number')
+          .describe('Gravity value (980.0 for 2D, 9.8 for 3D)'),
       },
     },
     async (args) => callGodot(bridge, 'physics_config/set_default_gravity', args as Record<string, unknown>),
@@ -100,8 +115,14 @@ export function registerPhysicsConfigTools(server: McpServer, bridge: GodotBridg
     {
       description: 'Set the default linear damping for physics bodies in a specific dimension (choose 2D or 3D)',
       inputSchema: {
-        dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d"'),
-        value: z.number().min(0).optional().default(0.1).describe('Linear damping value (default 0.1)'),
+        dimension: z.enum(['2d', '3d']).describe('Physics dimension: "2d" or "3d" (required)'),
+        value: z
+          .number()
+          .min(0)
+          .refine((v) => Number.isFinite(v), 'Damping value must be a finite number')
+          .optional()
+          .default(0.1)
+          .describe('Linear damping value (default 0.1)'),
       },
     },
     async (args) => callGodot(bridge, 'physics_config/set_default_linear_damp', args as Record<string, unknown>),

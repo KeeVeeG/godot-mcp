@@ -5,7 +5,16 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { GodotBridge } from '../godot-bridge.js';
 import { callGodot } from '../server.js';
-import { z } from './shared-types.js';
+import { z, errorResult } from './shared-types.js';
+import type { ToolResult } from './shared-types.js';
+
+function validateNoExtraKeys(args: Record<string, unknown>, allowedKeys: string[], toolName: string): ToolResult | null {
+  const extraKeys = Object.keys(args).filter((k) => !allowedKeys.includes(k));
+  if (extraKeys.length > 0) {
+    return errorResult(`${toolName}: unknown parameter(s): ${extraKeys.join(', ')}. Allowed: ${allowedKeys.join(', ')}`);
+  }
+  return null;
+}
 
 export function registerDebugConfigTools(server: McpServer, bridge: GodotBridge): void {
   // 1. get_debug_settings
@@ -23,13 +32,19 @@ export function registerDebugConfigTools(server: McpServer, bridge: GodotBridge)
     'set_remote_debug',
     {
       description: 'Configure remote debugging connection',
-      inputSchema: {
-        enabled: z.boolean().describe('Enable/disable remote debugging'),
-        host: z.string().optional().default('127.0.0.1').describe("Debug host address (default: '127.0.0.1')"),
-        port: z.number().int().min(1).max(65535).optional().default(6007).describe('Debug port (default: 6007)'),
-      },
+      inputSchema: z
+        .object({
+          enabled: z.boolean().describe('Enable/disable remote debugging'),
+          host: z.string().min(1, 'Host must not be empty').max(253, 'Host exceeds DNS maximum length').optional().default('127.0.0.1').describe("Debug host address (default: '127.0.0.1')"),
+          port: z.number().int().min(1).max(65535).optional().default(6007).describe('Debug port (default: 6007)'),
+        })
+        .passthrough(),
     },
-    async (args) => callGodot(bridge, 'debug_config/set_remote_debug', args as Record<string, unknown>),
+    async (args) => {
+      const err = validateNoExtraKeys(args, ['enabled', 'host', 'port'], 'set_remote_debug');
+      if (err) return err;
+      return callGodot(bridge, 'debug_config/set_remote_debug', args as Record<string, unknown>);
+    },
   );
 
   // 3. set_profiler_settings
@@ -37,16 +52,22 @@ export function registerDebugConfigTools(server: McpServer, bridge: GodotBridge)
     'set_profiler_settings',
     {
       description: 'Configure profiler limits. Note: profiler on/off toggles (CPU, GPU, etc.) are controlled by the editor debugger panel during gameplay and cannot be set via ProjectSettings.',
-      inputSchema: {
-        max_functions: z.number().int().optional().describe('Max functions tracked by script profiler (range: 16-512)'),
-        max_timestamp_query_elements: z.number().int().optional().describe('Max timestamp query elements (default: 256)'),
-        cpu: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
-        gpu: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
-        memory: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
-        network: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
-      },
+      inputSchema: z
+        .object({
+          max_functions: z.number().int().min(16).max(16384).optional().describe('Max functions tracked by script profiler (Godot default: 16384)'),
+          max_timestamp_query_elements: z.number().int().min(1).optional().describe('Max timestamp query elements (default: 256)'),
+          cpu: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
+          gpu: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
+          memory: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
+          network: z.boolean().optional().describe('Not configurable here — controlled by the editor debugger panel'),
+        })
+        .passthrough(),
     },
-    async (args) => callGodot(bridge, 'debug_config/set_profilers', args as Record<string, unknown>),
+    async (args) => {
+      const err = validateNoExtraKeys(args, ['max_functions', 'max_timestamp_query_elements', 'cpu', 'gpu', 'memory', 'network'], 'set_profiler_settings');
+      if (err) return err;
+      return callGodot(bridge, 'debug_config/set_profilers', args as Record<string, unknown>);
+    },
   );
 
   // 4. set_error_handling
@@ -55,12 +76,18 @@ export function registerDebugConfigTools(server: McpServer, bridge: GodotBridge)
     {
       description:
         'Configure how the editor handles errors during gameplay. Note: Godot 4.x has no "break on warning" mechanism — warnings are compile-time only (IGNORE/WARN/ERROR levels in ProjectSettings). To treat warnings as errors that prevent compilation, use set_project_setting on debug/gdscript/warnings/<name> keys.',
-      inputSchema: {
-        break_on_error: z.boolean().optional().describe('Break into debugger on runtime error'),
-        break_on_warning: z.boolean().optional().describe('Break into debugger on warnings (not persistable — controlled by editor debugger)'),
-      },
+      inputSchema: z
+        .object({
+          break_on_error: z.boolean().optional().describe('Break into debugger on runtime error'),
+          break_on_warning: z.boolean().optional().describe('Break into debugger on warnings (not persistable — controlled by editor debugger)'),
+        })
+        .passthrough(),
     },
-    async (args) => callGodot(bridge, 'debug_config/set_error_handling', args as Record<string, unknown>),
+    async (args) => {
+      const err = validateNoExtraKeys(args, ['break_on_error', 'break_on_warning'], 'set_error_handling');
+      if (err) return err;
+      return callGodot(bridge, 'debug_config/set_error_handling', args as Record<string, unknown>);
+    },
   );
 
   // 5. get_editor_log

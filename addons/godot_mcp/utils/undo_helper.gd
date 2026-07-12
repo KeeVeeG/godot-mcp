@@ -1,6 +1,7 @@
 ## UndoRedo helper wrapper for Godot editor mutations.
 ## All scene modifications should go through this helper
 ## to ensure proper undo/redo support.
+@tool
 class_name MCUndoHelper
 extends RefCounted
 
@@ -20,7 +21,7 @@ func _init(plugin: EditorPlugin) -> void:
 func add_node_with_undo(node: Node, parent: Node) -> void:
 	var ur: EditorUndoRedoManager = _undo_redo_manager
 	ur.create_action("MCP: Add node %s" % node.name)
-	ur.add_do_method(parent, "add_child", node)
+	ur.add_do_method(parent, "add_child", node, true)
 	ur.add_do_method(node, "set_owner", _get_edited_scene_root())
 	ur.add_undo_method(parent, "remove_child", node)
 	ur.commit_action()

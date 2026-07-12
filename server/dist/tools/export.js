@@ -48,6 +48,6 @@ export function registerExportTools(server, bridge) {
         inputSchema: {
             name: z.string().describe('Name of the export preset to delete'),
         },
-    }, async (args) => callGodot(bridge, 'export/delete_preset', args));
+    }, async (args) => callGodot(bridge, 'export/delete_export_preset', args));
 }
 //# sourceMappingURL=export.js.map

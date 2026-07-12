@@ -105,4 +105,14 @@ export function registerEditorTools(server: McpServer, bridge: GodotBridge): voi
     },
     async () => callGodot(bridge, 'editor/get_output_log'),
   );
+
+  // 10. get_diagnostics — {} -> plugin health report
+  server.registerTool(
+    'get_diagnostics',
+    {
+      description: 'Get MCP bridge diagnostics: module load status, tool count, connection state. Works even when all tools are unavailable.',
+      inputSchema: {},
+    },
+    async () => callGodot(bridge, 'mcp/diagnostics'),
+  );
 }

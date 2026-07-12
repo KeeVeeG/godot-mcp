@@ -85,6 +85,6 @@ export function registerExportTools(server: McpServer, bridge: GodotBridge): voi
         name: z.string().describe('Name of the export preset to delete'),
       },
     },
-    async (args) => callGodot(bridge, 'export/delete_preset', args as Record<string, unknown>),
+    async (args) => callGodot(bridge, 'export/delete_export_preset', args as Record<string, unknown>),
   );
 }

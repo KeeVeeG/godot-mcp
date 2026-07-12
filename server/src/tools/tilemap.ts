@@ -16,7 +16,7 @@ export function registerTilemapTools(server: McpServer, bridge: GodotBridge): vo
       inputSchema: {
         path: NodePath.describe('TileMap node path'),
         coords: Coord2D,
-        source_id: z.number().int().optional().describe('TileSet source ID'),
+        source_id: z.number().int().optional().describe('TileSet source ID (defaults to 0)'),
         atlas_coords: Coord2D.optional().describe('Atlas coordinates [x, y]'),
         alternative_tile: z.number().int().optional().describe('Alternative tile ID'),
       },
@@ -39,8 +39,9 @@ export function registerTilemapTools(server: McpServer, bridge: GodotBridge): vo
             h: z.number().int().positive(),
           })
           .describe('Rectangle to fill'),
-        source_id: z.number().int().optional().describe('TileSet source ID'),
+        source_id: z.number().int().optional().describe('TileSet source ID (defaults to 0)'),
         atlas_coords: Coord2D.optional().describe('Atlas coordinates [x, y]'),
+        alternative_tile: z.number().int().optional().describe('Alternative tile ID'),
       },
     },
     async (args) => callGodot(bridge, 'tilemap/fill_rect', args as Record<string, unknown>),
@@ -87,9 +88,11 @@ export function registerTilemapTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'tilemap_get_used_cells',
     {
-      description: 'Get all used cell coordinates in a TileMap',
+      description:
+        'Get all used cell coordinates in a TileMap. Uses compact [[x,y],...] format. Capped at 1000 cells by default — use limit: 0 for all cells (caution: large maps may cause WebSocket crashes).',
       inputSchema: {
         path: NodePath.describe('TileMap node path'),
+        limit: z.number().int().optional().describe('Maximum cells to return (default: 1000, use 0 for no limit)'),
       },
     },
     async (args) => callGodot(bridge, 'tilemap/get_used_cells', args as Record<string, unknown>),
@@ -142,9 +145,11 @@ export function registerTilemapTools(server: McpServer, bridge: GodotBridge): vo
   server.registerTool(
     'gridmap_get_used_cells',
     {
-      description: 'Get all used cell coordinates in a GridMap',
+      description:
+        'Get all used cell coordinates in a GridMap. Uses compact [[x,y,z],...] format. Capped at 1000 cells by default — use limit: 0 for all cells (caution: large maps may cause WebSocket crashes).',
       inputSchema: {
         path: NodePath.describe('GridMap node path'),
+        limit: z.number().int().optional().describe('Maximum cells to return (default: 1000, use 0 for no limit)'),
       },
     },
     async (args) => callGodot(bridge, 'gridmap/get_used_cells', args as Record<string, unknown>),

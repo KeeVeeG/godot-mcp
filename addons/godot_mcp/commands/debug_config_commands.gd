@@ -1,5 +1,6 @@
 ## Debug configuration commands module - 6 tools.
 ## Handles debug settings, remote debugging, profilers, and editor log.
+@tool
 class_name MCPDebugConfigCommands
 extends RefCounted
 
@@ -34,17 +35,65 @@ func execute(method: String, params: Dictionary) -> Dictionary:
 	return {"success": false, "error": "Unknown method: " + method}
 
 
+## Safely cast a value to int, returning an error if the value is not a valid integer.
+## Returns: [true, int_value] on success, [false, error_message] on failure.
+func _safe_int(value, param_name: String) -> Array:
+	if value == null:
+		return [false, "%s: expected integer, got null" % param_name]
+	if typeof(value) == TYPE_INT:
+		return [true, value]
+	if typeof(value) == TYPE_FLOAT:
+		if is_nan(value) or is_inf(value):
+			return [false, "%s: value must be a finite integer, got %s" % [param_name, "NaN" if is_nan(value) else "INF"]]
+		# Accept whole-number floats (common when JSON numbers cross the bridge)
+		if value == floor(value):
+			return [true, int(value)]
+		return [false, "%s: expected integer, got float (%s)" % [param_name, value]]
+	if typeof(value) == TYPE_BOOL:
+		return [true, 1 if value else 0]
+	if typeof(value) == TYPE_STRING:
+		if value.is_valid_int():
+			return [true, value.to_int()]
+		return [false, "%s: expected integer, got string '%s'" % [param_name, value]]
+	return [false, "%s: expected integer, got %s" % [param_name, type_string(typeof(value))]]
+
+## Safely cast a value to bool, returning an error if the value is not a valid boolean.
+## Returns: [true, bool_value] on success, [false, error_message] on failure.
+func _safe_bool(value, param_name: String) -> Array:
+	if value == null:
+		return [false, "%s: expected boolean, got null" % param_name]
+	if typeof(value) == TYPE_BOOL:
+		return [true, value]
+	if typeof(value) == TYPE_INT:
+		return [true, value != 0]
+	if typeof(value) == TYPE_FLOAT:
+		if is_nan(value) or is_inf(value):
+			return [false, "%s: value must be a finite boolean, got %s" % [param_name, "NaN" if is_nan(value) else "INF"]]
+		return [true, value != 0.0]
+	if typeof(value) == TYPE_STRING:
+		var lower: String = value.to_lower()
+		if lower == "true" or lower == "1":
+			return [true, true]
+		if lower == "false" or lower == "0":
+			return [true, false]
+		return [false, "%s: expected boolean, got string '%s'" % [param_name, value]]
+	return [false, "%s: expected boolean, got %s" % [param_name, type_string(typeof(value))]]
+
 ## Get all debug settings.
 func _get_settings() -> Dictionary:
+	var remote_host: String = EditorInterface.get_editor_settings().get_setting("network/debug/remote_host")
+	# enabled is derived from actual persisted host — empty string means disabled (restored to default)
+	var remote_enabled: bool = not remote_host.is_empty() and remote_host != "127.0.0.1"
+
 	var settings: Dictionary = {
 		"remote_debug": {
-			"enabled": EditorInterface.get_editor_settings().get_setting("network/debug/remote_host") != "127.0.0.1",
-			"host": EditorInterface.get_editor_settings().get_setting("network/debug/remote_host"),
+			"enabled": remote_enabled,
+			"host": remote_host,
 			"port": EditorInterface.get_editor_settings().get_setting("network/debug/remote_port"),
 		},
 		"profilers": {
-			"max_functions": ProjectSettings.get_setting("debug/settings/profiler/max_functions", 16384),
-			"max_timestamp_query_elements": ProjectSettings.get_setting("debug/settings/profiler/max_timestamp_query_elements", 256),
+			"max_functions": int(ProjectSettings.get_setting("debug/settings/profiler/max_functions", 16384)),
+			"max_timestamp_query_elements": int(ProjectSettings.get_setting("debug/settings/profiler/max_timestamp_query_elements", 256)),
 		},
 		"error_handling": {
 			"break_on_error": ProjectSettings.get_setting("debug/gdscript/warnings/enable", true),
@@ -71,11 +120,20 @@ func _set_remote_debug(params: Dictionary) -> Dictionary:
 	if enabled:
 		editor_settings.set_setting("network/debug/remote_host", host)
 		editor_settings.set_setting("network/debug/remote_port", port)
+		var result := {"success": true, "enabled": true, "host": host, "port": port}
+		# get_settings() derives "enabled" from host != "" and host != "127.0.0.1".
+		# When host is localhost, remote machines cannot connect — warn the caller.
+		if host == "127.0.0.1":
+			result["note"] = "Remote debug is only reachable from localhost. Use a non-localhost address for true remote access."
+		return result
 	else:
 		# Restore factory defaults when disabling
-		editor_settings.set_setting("network/debug/remote_host", "127.0.0.1")
-		editor_settings.set_setting("network/debug/remote_port", 6007)
-	return {"success": true, "enabled": enabled, "host": host, "port": port}
+		var default_host: String = "127.0.0.1"
+		var default_port: int = 6007
+		editor_settings.set_setting("network/debug/remote_host", default_host)
+		editor_settings.set_setting("network/debug/remote_port", default_port)
+		# Return actual persisted values, not the input echo
+		return {"success": true, "enabled": false, "host": default_host, "port": default_port}
 
 
 ## Enable/disable profilers.
@@ -86,15 +144,23 @@ func _set_profilers(params: Dictionary) -> Dictionary:
 	var warnings: Array = []
 	var has_savable: bool = false
 
-	# Configurable profiler limits (actual ProjectSettings)
+	# Configurable profiler limits with safe type validation
 	if params.has("max_functions"):
-		ProjectSettings.set_setting("debug/settings/profiler/max_functions", params["max_functions"] as int)
-		changed["max_functions"] = params["max_functions"] as int
-		has_savable = true
+		var result: Array = _safe_int(params["max_functions"], "max_functions")
+		if result[0]:
+			ProjectSettings.set_setting("debug/settings/profiler/max_functions", result[1])
+			changed["max_functions"] = result[1]
+			has_savable = true
+		else:
+			return {"success": false, "error": str(result[1])}
 	if params.has("max_timestamp_query_elements"):
-		ProjectSettings.set_setting("debug/settings/profiler/max_timestamp_query_elements", params["max_timestamp_query_elements"] as int)
-		changed["max_timestamp_query_elements"] = params["max_timestamp_query_elements"] as int
-		has_savable = true
+		var result: Array = _safe_int(params["max_timestamp_query_elements"], "max_timestamp_query_elements")
+		if result[0]:
+			ProjectSettings.set_setting("debug/settings/profiler/max_timestamp_query_elements", result[1])
+			changed["max_timestamp_query_elements"] = result[1]
+			has_savable = true
+		else:
+			return {"success": false, "error": str(result[1])}
 
 	# UI-only toggles — report as warnings
 	for toggle: String in ["cpu", "gpu", "memory", "network"]:
@@ -121,13 +187,20 @@ func _set_error_handling(params: Dictionary) -> Dictionary:
 	var changed: Dictionary = {}
 	var has_persistable: bool = false
 	if params.has("break_on_error"):
-		var boe: bool = params["break_on_error"] as bool
-		ProjectSettings.set_setting("debug/gdscript/warnings/enable", boe)
-		changed["break_on_error"] = boe
-		has_persistable = true
+		var result: Array = _safe_bool(params["break_on_error"], "break_on_error")
+		if result[0]:
+			var boe: bool = result[1]
+			ProjectSettings.set_setting("debug/gdscript/warnings/enable", boe)
+			changed["break_on_error"] = boe
+			has_persistable = true
+		else:
+			return {"success": false, "error": str(result[1])}
 	if params.has("break_on_warning"):
-		changed["break_on_warning"] = params["break_on_warning"] as bool
-		changed["note"] = "Break on warning is controlled by the editor debugger"
+		var result: Array = _safe_bool(params["break_on_warning"], "break_on_warning")
+		if result[0]:
+			changed["note"] = "break_on_warning=%s requested but NOT persisted — controlled by editor debugger" % result[1]
+		else:
+			return {"success": false, "error": str(result[1])}
 	if changed.is_empty():
 		return {"success": false, "error": "No error handling settings provided"}
 	if has_persistable:

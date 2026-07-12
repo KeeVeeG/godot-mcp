@@ -51,15 +51,48 @@ export async function callGodot(bridge: GodotBridge, method: string, params: Rec
     // Check if GDScript command returned a structured error (success: false)
     if (result && typeof result === 'object' && (result as Record<string, unknown>).success === false) {
       const errorData = result as Record<string, unknown>;
-      const errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData);
-      // Format as JSON to match the success-result pattern: content[0].text is always parseable JSON
-      const text = JSON.stringify({ success: false, error: errorMessage }, null, 2);
+      let errorMessage: string;
+      if (typeof errorData.error === 'string') {
+        errorMessage = errorData.error;
+      } else if (Array.isArray(errorData.errors) && errorData.errors.length > 0) {
+        // Handle {success: false, errors: [...]} pattern (e.g. create_project_with_assets)
+        errorMessage = errorData.errors.join('; ');
+      } else {
+        // Fallback: build message from known keys instead of JSON.stringify-ing the whole object
+        const parts: string[] = [];
+        if (typeof errorData.error === 'string') parts.push(errorData.error);
+        if (Array.isArray(errorData.errors)) parts.push(errorData.errors.join('; '));
+        errorMessage = parts.length > 0 ? parts.join('; ') : JSON.stringify(errorData);
+      }
+      // Preserve the full structured error in the response for programmatic consumers
+      const text = JSON.stringify({ ...errorData, error: errorMessage }, null, 2);
       return { content: [{ type: 'text', text }], isError: true };
     }
-    const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+    // Safety net: also detect legacy {"error": "string"} format (without success key).
+    // The command_router.gd normalizes these to {"success": false, "error": "..."},
+    // but this catch-all ensures errors are never silently treated as successes.
+    if (result && typeof result === 'object' && typeof (result as Record<string, unknown>).error === 'string' && !('result' in result)) {
+      const errMsg = (result as Record<string, unknown>).error as string;
+      return { content: [{ type: 'text', text: JSON.stringify({ success: false, error: errMsg }, null, 2) }], isError: true };
+    }
+    const text = typeof result === 'string' ? result : JSON.stringify(result);
     return { content: [{ type: 'text', text }] };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return createErrorResult(`Godot request failed: ${message}`);
+    const code: number | undefined = (error as Error & { code?: number }).code;
+
+    // Build diagnostic hints for common JSON-RPC error codes
+    let hint = '';
+    if (code === -32601) {
+      // METHOD_NOT_FOUND — the Godot plugin's command_router has no handler for this method.
+      // This typically means the plugin's command modules failed to load.
+      // Check the Godot Output panel for "[MCP] Registered X command modules with Y tools"
+      // — if X=0 or Y is lower than expected, modules have loading/parse errors.
+      hint = ' (Hint: method not found on Godot side — verify the MCP plugin is loaded and modules registered. Check Godot Output panel for "[MCP] Registered" log.)';
+    } else if (code) {
+      hint = ` [code ${code}]`;
+    }
+
+    return createErrorResult(`Godot request failed: ${message}${hint}`);
   }
 }

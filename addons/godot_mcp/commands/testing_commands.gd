@@ -1,6 +1,7 @@
-## Testing commands module - 6 tools.
+## Testing commands module - 6 tools. (v4-fixes-20260711)
 ## Provides test scenario execution, state assertions, stress tests,
 ## aggregated test reporting, and result clearing.
+@tool
 class_name MCPTestingCommands
 extends RefCounted
 
@@ -105,6 +106,11 @@ func assert_node_state(params: Dictionary) -> Dictionary:
 	var expected: Variant = params.get("expected")
 	var operator: String = params.get("operator", "==")
 
+	# Validate operator
+	const VALID_OPERATORS: Array[String] = ["==", "!=", ">", "<", ">=", "<=", "contains"]
+	if not (operator in VALID_OPERATORS):
+		return {"error": "Invalid operator '%s'. Valid operators: %s" % [operator, ", ".join(VALID_OPERATORS)]}
+
 	if path.is_empty() or property.is_empty():
 		return {"error": "Path and property are required"}
 
@@ -116,7 +122,7 @@ func assert_node_state(params: Dictionary) -> Dictionary:
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
-	var actual: Variant = node.get(property)
+	var actual: Variant = MCPCommandHelpers.get_nested_property(node, property)
 	var passed: bool = MCPCommandHelpers.compare_values(actual, expected, operator)
 
 	var entry: Dictionary = {
@@ -176,6 +182,9 @@ func run_stress_test(params: Dictionary) -> Dictionary:
 	var parent_path: String = params.get("parent_path", "")
 	var properties: Dictionary = params.get("properties", {})
 
+	if count < 0:
+		return {"error": "Count must be non-negative, got: %d" % count}
+
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
@@ -218,7 +227,7 @@ func run_stress_test(params: Dictionary) -> Dictionary:
 		"nodes_spawned": created.size(),
 		"creation_time_ms": creation_time_ms,
 		"avg_time_per_node_ms": creation_time_ms / max(count, 1),
-		"message": "Spawned %d %s nodes in %.2fms (nodes removed after test)." % [count, node_type, creation_time_ms],
+		"message": "Spawned %d %s nodes in %.2fms (nodes removed after test)." % [created.size(), node_type, creation_time_ms],
 	}}
 
 
@@ -235,7 +244,27 @@ func get_test_report(_params: Dictionary) -> Dictionary:
 			passed += 1
 		else:
 			failed += 1
-			failures.append(entry)
+			# Normalize scenario assert steps to flat format for consistency
+			# Extract rich fields (path, property, actual, expected, operator) from inner result
+			# so that scenario-based and standalone assertion failures have the same format.
+			if entry.has("type") and entry["type"] == "assert_node_state" and entry.has("result"):
+				var inner: Dictionary = entry["result"]
+				var normalized: Dictionary = {"passed": false, "step": entry.get("step", -1), "type": "assert_node_state"}
+				if inner.has("message"):
+					normalized["message"] = inner["message"]
+				if inner.has("path"):
+					normalized["path"] = inner["path"]
+				if inner.has("property"):
+					normalized["property"] = inner["property"]
+				if inner.has("actual"):
+					normalized["actual"] = inner["actual"]
+				if inner.has("expected"):
+					normalized["expected"] = inner["expected"]
+				if inner.has("operator"):
+					normalized["operator"] = inner["operator"]
+				failures.append(normalized)
+			else:
+				failures.append(entry)
 
 	return {"result": {
 		"total_tests": total,
@@ -348,10 +377,11 @@ func _step_set_property(params: Dictionary) -> Dictionary:
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
-	var parsed: Variant = value
-	if MCPCommandHelpers.has_property(node, property):
-		var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
-		parsed = MCPVariantCodec.parse_for_property(value, expected_type)
+	if not MCPCommandHelpers.has_property(node, property):
+		return {"error": "Property '%s' not found on node '%s'" % [property, path]}
+
+	var expected_type: int = MCPCommandHelpers.get_property_type(node, property)
+	var parsed: Variant = MCPVariantCodec.parse_for_property(value, expected_type)
 
 	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
 	ur.create_action("MCP: Test set %s.%s" % [path, property])
@@ -363,7 +393,45 @@ func _step_set_property(params: Dictionary) -> Dictionary:
 
 
 func _step_assert_state(params: Dictionary) -> Dictionary:
-	return assert_node_state(params)
+	# Inlined from assert_node_state to avoid double-counting in _test_results.
+	# assert_node_state appends its own entry; we need ONE entry per step, not two.
+	var path: String = params.get("path", "")
+	var property: String = params.get("property", "")
+	var expected: Variant = params.get("expected")
+	var operator: String = params.get("operator", "==")
+
+	# Validate operator — must match standalone assert_node_state behavior
+	const VALID_OPERATORS: Array[String] = ["==", "!=", ">", "<", ">=", "<=", "contains"]
+	if not (operator in VALID_OPERATORS):
+		return {"error": "Invalid operator '%s'. Valid operators: %s" % [operator, ", ".join(VALID_OPERATORS)]}
+
+	if path.is_empty() or property.is_empty():
+		return {"error": "Path and property are required"}
+
+	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if root == null:
+		return {"error": "No scene open"}
+
+	var node: Node = root.get_node_or_null(path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+
+	var actual: Variant = MCPCommandHelpers.get_nested_property(node, property)
+	var passed: bool = MCPCommandHelpers.compare_values(actual, expected, operator)
+
+	return {
+		"passed": passed,
+		"path": path,
+		"property": property,
+		"actual": MCPVariantCodec.serialize_value(actual),
+		"expected": expected,
+		"operator": operator,
+		"message": "Assertion %s: %s.%s actual=%s %s expected=%s" % [
+			"passed" if passed else "FAILED",
+			path, property,
+			str(actual), operator, str(expected),
+		],
+	}
 
 
 func _step_connect_signal(params: Dictionary) -> Dictionary:
@@ -389,6 +457,9 @@ func _step_connect_signal(params: Dictionary) -> Dictionary:
 
 	if not source.has_signal(signal_name):
 		return {"error": "Signal '%s' not found on %s" % [signal_name, source_path]}
+
+	if not target.has_method(method_name):
+		return {"error": "Method '%s' not found on %s" % [method_name, target_path]}
 
 	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
 	ur.create_action("MCP: Test connect signal %s.%s" % [source_path, signal_name])

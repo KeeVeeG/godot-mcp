@@ -1,5 +1,6 @@
 ## Status panel for the Godot MCP plugin.
 ## Shows connection status, port, and an activity log.
+@tool
 class_name MCPStatusPanel
 extends PanelContainer
 

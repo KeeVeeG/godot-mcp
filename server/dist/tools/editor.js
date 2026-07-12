@@ -57,5 +57,10 @@ export function registerEditorTools(server, bridge) {
         description: 'Get the contents of the editor output log',
         inputSchema: {},
     }, async () => callGodot(bridge, 'editor/get_output_log'));
+    // 10. get_diagnostics — {} -> plugin health report
+    server.registerTool('get_diagnostics', {
+        description: 'Get MCP bridge diagnostics: module load status, tool count, connection state. Works even when all tools are unavailable.',
+        inputSchema: {},
+    }, async () => callGodot(bridge, 'mcp/diagnostics'));
 }
 //# sourceMappingURL=editor.js.map

@@ -87,7 +87,7 @@ export function registerThemeTools(server: McpServer, bridge: GodotBridge): void
         theme_type: z.string().describe('Control type'),
         name: z.string().describe("StyleBox name (e.g. 'normal', 'hover', 'pressed')"),
         properties: Properties.describe('StyleBox properties (e.g. bg_color, border_width)'),
-        stylebox_type: z.enum(['Flat', 'Line', 'Empty']).optional().default('Flat').describe('StyleBox type to create (default: Flat)'),
+        stylebox_type: z.enum(['Flat', 'Line', 'Empty']).optional().describe('StyleBox type to create. Omit to fall back to "type" in properties dict.'),
       },
     },
     async (args) => callGodot(bridge, 'theme/set_stylebox', args as Record<string, unknown>),

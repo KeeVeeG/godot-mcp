@@ -1,5 +1,6 @@
 ## Shader commands module - 9 tools.
 ## Handles shader creation, editing, and material assignment.
+@tool
 class_name MCPShaderCommands
 extends RefCounted
 
@@ -34,10 +35,14 @@ func create_shader(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var shader_type: String = params.get("shader_type", params.get("type", "canvas_item"))
 	var content: String = params.get("content", "")
+	var overwrite: bool = params.get("overwrite", false)
 	if path.is_empty():
 		return {"error": "Path is required"}
 	if not path.ends_with(".gdshader"):
 		path += ".gdshader"
+
+	if FileAccess.file_exists(path) and not overwrite:
+		return {"error": "Shader already exists: %s. Use overwrite=true to replace." % path}
 
 	if content.is_empty():
 		match shader_type:
@@ -83,6 +88,7 @@ func edit_shader(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var old_text: String = params.get("old_text", "")
 	var new_text: String = params.get("new_text", "")
+	var replace_all: bool = params.get("replace_all", false)
 	if path.is_empty():
 		return {"error": "path is required"}
 	if old_text.is_empty():
@@ -100,6 +106,9 @@ func edit_shader(params: Dictionary) -> Dictionary:
 		return {"error": "old_text not found in shader"}
 
 	var count: int = content.count(old_text)
+	if count > 1 and not replace_all:
+		return {"error": "Found %d matches for old_text — use replace_all=true to replace all, or provide more context for a unique match." % count}
+
 	content = content.replace(old_text, new_text)
 
 	file = FileAccess.open(path, FileAccess.WRITE)
@@ -131,6 +140,16 @@ func assign_shader_material(params: Dictionary) -> Dictionary:
 	var mat: ShaderMaterial = ShaderMaterial.new()
 	mat.shader = shader
 
+	# D4 fix: Detect shader type / node type mismatch and warn
+	var shader_code: String = shader.code.strip_edges()
+	var is_spatial_shader: bool = shader_code.begins_with("shader_type spatial") or shader_code.begins_with("shader_type particles") or shader_code.begins_with("shader_type sky") or shader_code.begins_with("shader_type fog")
+	var is_canvas_shader: bool = shader_code.begins_with("shader_type canvas_item") or shader_code.begins_with("shader_type visual")
+	var mismatch_warning: String = ""
+	if is_spatial_shader and node is CanvasItem:
+		mismatch_warning = " (WARNING: spatial/3D shader assigned to 2D CanvasItem node — shader will not render correctly)"
+	elif is_canvas_shader and node is Node3D:
+		mismatch_warning = " (WARNING: canvas_item/2D shader assigned to 3D Node3D — shader will not render correctly)"
+
 	if _undo_helper:
 		if node is CanvasItem:
 			_undo_helper.set_property_with_undo(node, "material", mat)
@@ -143,7 +162,11 @@ func assign_shader_material(params: Dictionary) -> Dictionary:
 			(node as CanvasItem).material = mat
 		elif node is Node3D:
 			(node as Node3D).material_override = mat
-	return {"result": "Shader material assigned to %s" % node_path}
+
+	var msg: String = "Shader material assigned to %s" % node_path
+	if not mismatch_warning.is_empty():
+		msg += mismatch_warning
+	return {"result": msg}
 
 
 ## Remove shader material from a node (set material/material_override to null).
@@ -159,13 +182,22 @@ func unassign_material(params: Dictionary) -> Dictionary:
 	if node == null:
 		return {"error": "Node not found: %s" % node_path}
 
+	# Check if node actually has a ShaderMaterial before attempting removal
+	var has_material: bool = false
+	if node is CanvasItem:
+		has_material = (node as CanvasItem).material != null and (node as CanvasItem).material is ShaderMaterial
+	elif node is Node3D:
+		has_material = (node as Node3D).material_override != null and (node as Node3D).material_override is ShaderMaterial
+	else:
+		return {"error": "Node does not support materials: %s" % node.get_class()}
+	if not has_material:
+		return {"error": "Node does not have a ShaderMaterial"}
+
 	if _undo_helper:
 		if node is CanvasItem:
 			_undo_helper.set_property_with_undo(node, "material", null)
 		elif node is Node3D:
 			_undo_helper.set_property_with_undo(node, "material_override", null)
-		else:
-			return {"error": "Node does not support materials: %s" % node.get_class()}
 	else:
 		if node is CanvasItem:
 			(node as CanvasItem).material = null
@@ -204,22 +236,50 @@ func set_shader_param(params: Dictionary) -> Dictionary:
 
 	var shader_mat: ShaderMaterial = mat as ShaderMaterial
 	
-	# Verify the uniform exists on the shader
+	# Verify the uniform exists on the shader.
+	# Force-reload from disk (CACHE_MODE_IGNORE) to pick up file changes
+	# after edit_shader — prevents stale uniform list from cached Shader.
 	var shader: Shader = shader_mat.shader
+	var uniform_type: int = -1
+	if shader and not shader.resource_path.is_empty():
+		# Save overrides before reload (same pattern as get_shader_params)
+		var saved_overrides: Dictionary = {}
+		var old_uniforms: Array = shader.get_shader_uniform_list()
+		for u: Dictionary in old_uniforms:
+			var pname: String = u["name"] as String
+			saved_overrides[pname] = shader_mat.get_shader_parameter(pname)
+		var fresh_shader: Shader = ResourceLoader.load(shader.resource_path, "", ResourceLoader.CACHE_MODE_IGNORE) as Shader
+		if fresh_shader:
+			shader_mat.shader = fresh_shader
+			shader = fresh_shader
+			# Restore overrides for uniforms that still exist
+			var fresh_uniforms: Array = shader.get_shader_uniform_list()
+			for u: Dictionary in fresh_uniforms:
+				var pname: String = u["name"] as String
+				if saved_overrides.has(pname):
+					shader_mat.set_shader_parameter(pname, saved_overrides[pname])
 	if shader:
 		var uniform_list: Array = shader.get_shader_uniform_list()
+		# Fallback: if Godot returns no uniforms (shader compilation failed),
+		# parse uniform declarations from shader file text (same as get_shader_params).
+		if uniform_list.is_empty():
+			uniform_list = _parse_uniforms_from_text(shader.resource_path)
 		var found: bool = false
 		for u: Dictionary in uniform_list:
 			if u.get("name", "") == param:
 				found = true
+				uniform_type = u.get("type", -1) as int
 				break
 		if not found:
 			return {"error": "Shader does not have uniform '%s'" % param}
 	
-	# Parse value appropriately
-	var parsed: Variant = value
-	if value is String:
-		parsed = MCPVariantCodec._auto_parse_string(value as String)
+	# Parse value with type validation
+	var parsed: Variant = _parse_param_value(value, uniform_type, param)
+	
+	# Check if _parse_param_value returned an error
+	if parsed is Dictionary and (parsed as Dictionary).has("error"):
+		return parsed
+	
 	# Store old value for undo
 	var old_val: Variant = shader_mat.get_shader_parameter(param)
 	if _undo_helper:
@@ -231,6 +291,154 @@ func set_shader_param(params: Dictionary) -> Dictionary:
 	else:
 		shader_mat.set_shader_parameter(param, parsed)
 	return {"result": "Shader param '%s' set on %s" % [param, node_path]}
+
+
+## Parse and validate a shader parameter value against its expected type.
+## Converts string/array/dict values to proper Godot types (Color, Vector4, etc.)
+## and rejects type mismatches.
+func _parse_param_value(value: Variant, uniform_type: int, param_name: String) -> Variant:
+	# If value is already the correct Godot type, pass through
+	if uniform_type < 0:
+		# Unknown type — pass through after auto-parsing strings
+		if value is String:
+			return MCPVariantCodec._auto_parse_string(value as String)
+		return value
+
+	# Handle string values — try parse with type validation
+	if value is String:
+		var s: String = value as String
+		match uniform_type:
+			TYPE_FLOAT:
+				if not s.is_valid_float():
+					return {"error": "Type mismatch for uniform '%s': expected float, got string '%s'" % [param_name, s]}
+				return s.to_float()
+			TYPE_INT:
+				if not s.is_valid_int():
+					return {"error": "Type mismatch for uniform '%s': expected int, got string '%s'" % [param_name, s]}
+				return s.to_int()
+			TYPE_BOOL:
+				var lower: String = s.to_lower()
+				if lower == "true": return true
+				if lower == "false": return false
+				return {"error": "Type mismatch for uniform '%s': expected bool, got string '%s'" % [param_name, s]}
+			TYPE_COLOR:
+				var parsed_color: Variant = MCPVariantCodec._auto_parse_string(s)
+				if parsed_color is Color:
+					return parsed_color
+				# Try JSON array: "[1.0, 0.0, 0.0, 1.0]" or JSON object: "{\"r\":1,\"g\":0,\"b\":0,\"a\":1}"
+				var json_arr: Variant = JSON.parse_string(s)
+				if json_arr is Array:
+					var a: Array = json_arr as Array
+					if a.size() == 3:
+						return Color(a[0] as float, a[1] as float, a[2] as float)
+					elif a.size() == 4:
+						return Color(a[0] as float, a[1] as float, a[2] as float, a[3] as float)
+				elif json_arr is Dictionary:
+					return MCPVariantCodec._parse_color(json_arr)
+				return {"error": "Type mismatch for uniform '%s': expected Color, got string '%s' which cannot be parsed as a color" % [param_name, s]}
+			TYPE_VECTOR2, TYPE_VECTOR2I:
+				var parsed_v2: Variant = MCPVariantCodec._auto_parse_string(s)
+				if parsed_v2 is Vector2 or parsed_v2 is Vector2i:
+					return parsed_v2
+				var json_v2: Variant = JSON.parse_string(s)
+				if json_v2 is Array:
+					var a2: Array = json_v2 as Array
+					if a2.size() == 2:
+						return Vector2(a2[0] as float, a2[1] as float)
+				elif json_v2 is Dictionary:
+					return MCPVariantCodec._parse_vector2(json_v2)
+				return {"error": "Type mismatch for uniform '%s': expected Vector2, got string '%s'" % [param_name, s]}
+			TYPE_VECTOR3, TYPE_VECTOR3I:
+				var parsed_v3: Variant = MCPVariantCodec._auto_parse_string(s)
+				if parsed_v3 is Vector3 or parsed_v3 is Vector3i:
+					return parsed_v3
+				var json_v3: Variant = JSON.parse_string(s)
+				if json_v3 is Array:
+					var a3: Array = json_v3 as Array
+					if a3.size() == 3:
+						return Vector3(a3[0] as float, a3[1] as float, a3[2] as float)
+				elif json_v3 is Dictionary:
+					return MCPVariantCodec._parse_vector3(json_v3)
+				return {"error": "Type mismatch for uniform '%s': expected Vector3, got string '%s'" % [param_name, s]}
+			TYPE_VECTOR4, TYPE_VECTOR4I:
+				var parsed_v4: Variant = MCPVariantCodec._auto_parse_string(s)
+				if parsed_v4 is Vector4 or parsed_v4 is Vector4i or parsed_v4 is Color:
+					return parsed_v4
+				var json_v4: Variant = JSON.parse_string(s)
+				if json_v4 is Array:
+					var a4: Array = json_v4 as Array
+					if a4.size() == 4:
+						return Vector4(a4[0] as float, a4[1] as float, a4[2] as float, a4[3] as float)
+				elif json_v4 is Dictionary:
+					return MCPVariantCodec._parse_vector4(json_v4)
+				return {"error": "Type mismatch for uniform '%s': expected Vector4, got string '%s'" % [param_name, s]}
+		# For other types (sampler, texture, etc.), try auto-parse
+		return MCPVariantCodec._auto_parse_string(s)
+
+	# Validate type for non-string values
+	var type_ok: bool = true
+	match uniform_type:
+		TYPE_FLOAT:
+			if not (value is float or value is int):
+				type_ok = false
+		TYPE_INT:
+			if not (value is int or value is float):
+				type_ok = false
+		TYPE_BOOL:
+			if not value is bool:
+				type_ok = false
+		TYPE_VECTOR2, TYPE_VECTOR2I:
+			if not (value is Vector2 or value is Vector2i or value is Array or value is Dictionary):
+				type_ok = false
+		TYPE_VECTOR3, TYPE_VECTOR3I:
+			if not (value is Vector3 or value is Vector3i or value is Array or value is Dictionary):
+				type_ok = false
+		TYPE_VECTOR4, TYPE_VECTOR4I:
+			if not (value is Vector4 or value is Vector4i or value is Array or value is Dictionary or value is Color):
+				type_ok = false
+		TYPE_COLOR:
+			if not (value is Color or value is Array or value is Dictionary):
+				type_ok = false
+		TYPE_STRING, TYPE_STRING_NAME:
+			if not value is String:
+				type_ok = false
+
+	if type_ok:
+		# Convert arrays/dicts to proper Godot types
+		match uniform_type:
+			TYPE_COLOR:
+				if value is Array:
+					var a: Array = value as Array
+					if a.size() == 3:
+						return Color(a[0] as float, a[1] as float, a[2] as float)
+					elif a.size() == 4:
+						return Color(a[0] as float, a[1] as float, a[2] as float, a[3] as float)
+				elif value is Dictionary:
+					return MCPVariantCodec._parse_color(value)
+			TYPE_VECTOR4:
+				if value is Array:
+					var a: Array = value as Array
+					if a.size() == 4:
+						return Vector4(a[0] as float, a[1] as float, a[2] as float, a[3] as float)
+				elif value is Dictionary:
+					return MCPVariantCodec._parse_vector4(value)
+			TYPE_VECTOR3:
+				if value is Array:
+					var a: Array = value as Array
+					if a.size() == 3:
+						return Vector3(a[0] as float, a[1] as float, a[2] as float)
+				elif value is Dictionary:
+					return MCPVariantCodec._parse_vector3(value)
+			TYPE_VECTOR2:
+				if value is Array:
+					var a: Array = value as Array
+					if a.size() == 2:
+						return Vector2(a[0] as float, a[1] as float)
+				elif value is Dictionary:
+					return MCPVariantCodec._parse_vector2(value)
+		return value
+
+	return {"error": "Type mismatch for uniform '%s': expected %s, got %s" % [param_name, type_string(uniform_type), typeof(value)]}
 
 
 ## Reset a shader parameter to its default value (remove the override).
@@ -342,6 +550,24 @@ func get_shader_params(params: Dictionary) -> Dictionary:
 		for p: Dictionary in param_list:
 			var pname: String = p["name"] as String
 			var val: Variant = shader_mat.get_shader_parameter(pname)
+			# Fall back to shader-declared default if not explicitly set (Issue #3 fix).
+			# ShaderMaterial.get_shader_parameter() returns null for unset uniforms;
+			# RenderingServer.shader_get_parameter_default() reads the default
+			# from the compiled shader (e.g. "uniform float brightness = 1.0" → 1.0).
+			if val == null and shader:
+				val = RenderingServer.shader_get_parameter_default(shader.get_rid(), pname)
+			var utype = p.get("type", "")
+			# Normalize legacy Array values to proper Godot types based on uniform type
+			if val is Array:
+				var a: Array = val as Array
+				if utype is int and utype == TYPE_COLOR and a.size() >= 3:
+					val = Color(a[0] as float, a[1] as float, a[2] as float, a[3] as float if a.size() >= 4 else 1.0)
+				elif utype is int and (utype == TYPE_VECTOR4 or utype == TYPE_VECTOR4I) and a.size() >= 4:
+					val = Vector4(a[0] as float, a[1] as float, a[2] as float, a[3] as float)
+				elif utype is int and (utype == TYPE_VECTOR3 or utype == TYPE_VECTOR3I) and a.size() >= 3:
+					val = Vector3(a[0] as float, a[1] as float, a[2] as float)
+				elif utype is int and (utype == TYPE_VECTOR2 or utype == TYPE_VECTOR2I) and a.size() >= 2:
+					val = Vector2(a[0] as float, a[1] as float)
 			result["parameters"][pname] = {
 				"type": p.get("type", ""),
 				"value": MCPVariantCodec.serialize_value(val),
@@ -380,7 +606,7 @@ func _delete_shader(params: Dictionary) -> Dictionary:
 	var ref_warning: String = ""
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root:
-		var refs: Array = _find_shader_refs_in_scene(root, path, 0, 20)
+		var refs: Array = _find_shader_refs_in_scene(root, path, root, 0, 20)
 		if not refs.is_empty():
 			if not force:
 				var ref_paths: PackedStringArray = []
@@ -463,7 +689,7 @@ func validate_shader(params: Dictionary) -> Dictionary:
 	for u: Dictionary in uniforms:
 		result["uniforms"].append({"name": u.get("name", ""), "type": str(u.get("type", ""))})
 	
-	result["message"] = "Shader passed basic validation. IMPORTANT: ResourceLoader.load() succeeds even for shaders with runtime syntax errors (e.g., wrong arg count, undeclared variables). Compilation errors only appear in the Godot Output panel at runtime. Use Godot's Shader Editor or check the Output panel for definitive validation."
+	result["message"] = "Shader passed basic syntax validation. NOTE: Godot 4.x does NOT expose ShaderLanguage (C++ internal class) to GDScript. Only text-level checks (brace matching, vec arg counts, semicolons) + ResourceLoader.load() are performed. Undeclared variables, type mismatches, and invalid built-in usage are NOT detected. This is a known Godot engine limitation — use the Shader Editor Output panel (which has direct C++ compiler access) for definitive validation. Heuristic: if a shader has declared uniforms but get_shader_uniform_list() returns empty, compilation likely failed."
 	
 	return {"result": result}
 
@@ -472,7 +698,7 @@ func validate_shader(params: Dictionary) -> Dictionary:
 
 
 
-func _find_shader_refs_in_scene(node: Node, shader_path: String, depth: int = 0, max_depth: int = 20) -> Array:
+func _find_shader_refs_in_scene(node: Node, shader_path: String, scene_root: Node, depth: int = 0, max_depth: int = 20) -> Array:
 	var result: Array = []
 	if depth >= max_depth:
 		return result
@@ -486,25 +712,38 @@ func _find_shader_refs_in_scene(node: Node, shader_path: String, depth: int = 0,
 		if val is ShaderMaterial:
 			var shader: Shader = val.shader
 			if shader and shader.resource_path == shader_path:
-				result.append(node.get_path())
+				result.append(scene_root.get_path_to(node))
 				break
 	for child in node.get_children():
-		result.append_array(_find_shader_refs_in_scene(child, shader_path, depth + 1, max_depth))
+		result.append_array(_find_shader_refs_in_scene(child, shader_path, scene_root, depth + 1, max_depth))
 	return result
 
 
 ## Best-effort syntax checks for validate_shader (D4).
 ## Catches common errors that ResourceLoader.load() won't report.
+## NOTE: Godot 4 does NOT expose ShaderLanguage/ShaderCompiler to GDScript.
+## Full compilation error detection requires a GDExtension wrapping those C++ classes.
+## These text-based checks are best-effort only.
 func _basic_syntax_checks(content: String, result: Dictionary) -> void:
 	var lines: PackedStringArray = content.split("\n")
 	var brace_depth: int = 0
 	var line_num: int = 0
+	var declared_vars: Array[String] = []  # Track declared identifiers
+	
+	# Regexes for common error patterns
+	var vec_constructor_re: RegEx = RegEx.new()
+	vec_constructor_re.compile("(vec[234]|ivec[234]|uvec[234]|bvec[234])\\s*\\(([^)]*)\\)")
+	
 	for line in lines:
 		line_num += 1
 		var stripped: String = line.strip_edges()
 		# Skip comments and blank lines
 		if stripped.begins_with("//") or stripped.is_empty():
 			continue
+		# Remove inline comments for analysis
+		var inline_comment: int = stripped.find("//")
+		if inline_comment != -1:
+			stripped = stripped.substr(0, inline_comment).strip_edges()
 		# Track brace depth
 		for ch in line:
 			if ch == "{": brace_depth += 1
@@ -515,6 +754,21 @@ func _basic_syntax_checks(content: String, result: Dictionary) -> void:
 		# Check for multi-line comments start/end
 		if stripped.begins_with("/*") and not stripped.ends_with("*/"):
 			result["warnings"].append("Line %d: multi-line comment block may not be closed" % line_num)
+		# Validate vec/ivec/uvec/bvec constructor argument counts
+		for m: RegExMatch in vec_constructor_re.search_all(stripped):
+			var type_name: String = m.get_string(1)
+			var args: String = m.get_string(2).strip_edges()
+			var expected: int = int(type_name[type_name.length() - 1])  # '2', '3', or '4'
+			# Count comma-separated arguments
+			var arg_count: int = 1 if args.length() > 0 else 0
+			for ch in args:
+				if ch == ",":
+					arg_count += 1
+			if arg_count != expected:
+				result["warnings"].append("Line %d: %s constructor expects %d arguments, got %d — '%s'" % [line_num, type_name, expected, arg_count, m.get_string(0)])
+				result["valid"] = false
+				if not result.has("error"):
+					result["error"] = "Line %d: %s(%s) — wrong argument count (%d instead of %d)" % [line_num, type_name, args, arg_count, expected]
 	
 	if brace_depth != 0:
 		result["warnings"].append("Brace mismatch: %s extra %s brace(s)" % [abs(brace_depth), "opening" if brace_depth > 0 else "closing"])

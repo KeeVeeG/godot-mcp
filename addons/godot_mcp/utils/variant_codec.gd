@@ -1,6 +1,7 @@
 ## Smart variant codec for parsing and serializing Godot types.
 ## Handles Vector2, Vector3, Color, Rect2, Transform2D, Transform3D,
 ## Basis, Quaternion, Plane, AABB and more from string representations.
+@tool
 class_name MCPVariantCodec
 extends RefCounted
 
@@ -139,11 +140,39 @@ static func _extract_numbers(s: String) -> Array[float]:
 	return numbers
 
 
+## Try to parse a string as a JSON object or array.
+## Returns the parsed value if successful and the result is a Dictionary or Array,
+## otherwise returns null (indicating the string is NOT a JSON container).
+static func _try_parse_json_string(s: String) -> Variant:
+	var trimmed: String = s.strip_edges()
+	if not (trimmed.begins_with("{") or trimmed.begins_with("[")):
+		return null
+	var json := JSON.new()
+	if json.parse(trimmed) != OK:
+		return null
+	var data: Variant = json.get_data()
+	if data is Dictionary or data is Array:
+		return data
+	return null
+
+
 static func _parse_vector2(value: Variant) -> Vector2:
 	if value is Vector2:
 		return value as Vector2
 	if value is String:
-		var nums: Array[float] = _extract_numbers(value as String)
+		var s: String = value as String
+		# Try parsing as JSON first (handles double-serialized dicts {"x":2,"y":2})
+		var as_json: Variant = _try_parse_json_string(s)
+		if as_json != null:
+			if as_json is Dictionary:
+				var d: Dictionary = as_json as Dictionary
+				return Vector2(d.get("x", 0.0) as float, d.get("y", 0.0) as float)
+			if as_json is Array:
+				var a: Array = as_json as Array
+				if a.size() >= 2:
+					return Vector2(a[0] as float, a[1] as float)
+		# Fallback: parse constructor strings like "Vector2(1, 2)"
+		var nums: Array[float] = _extract_numbers(s)
 		if nums.size() >= 2:
 			return Vector2(nums[0], nums[1])
 	if value is Dictionary:
@@ -151,10 +180,9 @@ static func _parse_vector2(value: Variant) -> Vector2:
 		var x: float = d.get("x", 0.0) as float
 		var y: float = d.get("y", 0.0) as float
 		return Vector2(x, y)
-	if value is Array:
-		var a: Array = value as Array
-		if a.size() >= 2:
-			return Vector2(a[0] as float, a[1] as float)
+	var a: Array = _to_plain_array(value)
+	if a.size() >= 2:
+		return Vector2(a[0] as float, a[1] as float)
 	return Vector2.ZERO
 
 
@@ -162,7 +190,17 @@ static func _parse_vector2i(value: Variant) -> Vector2i:
 	if value is Vector2i:
 		return value as Vector2i
 	if value is String:
-		var nums: Array[float] = _extract_numbers(value as String)
+		var s: String = value as String
+		var as_json: Variant = _try_parse_json_string(s)
+		if as_json != null:
+			if as_json is Dictionary:
+				var d: Dictionary = as_json as Dictionary
+				return Vector2i(d.get("x", 0) as int, d.get("y", 0) as int)
+			if as_json is Array:
+				var a: Array = as_json as Array
+				if a.size() >= 2:
+					return Vector2i(a[0] as int, a[1] as int)
+		var nums: Array[float] = _extract_numbers(s)
 		if nums.size() >= 2:
 			return Vector2i(int(nums[0]), int(nums[1]))
 	if value is Dictionary:
@@ -175,20 +213,39 @@ static func _parse_vector2i(value: Variant) -> Vector2i:
 	return Vector2i.ZERO
 
 
+# Helper: convert packed array types (returned by JSON.parse_string()) to plain Array.
+# Godot's JSON parser returns PackedInt32Array/PackedFloat32Array for numeric JSON arrays.
+static func _to_plain_array(value: Variant) -> Array:
+	if value is Array:
+		return value
+	if value is PackedInt32Array or value is PackedInt64Array or value is PackedFloat32Array or value is PackedFloat64Array:
+		return Array(value)
+	return []
+
 static func _parse_vector3(value: Variant) -> Vector3:
 	if value is Vector3:
 		return value as Vector3
 	if value is String:
-		var nums: Array[float] = _extract_numbers(value as String)
-		if nums.size() >= 3:
-			return Vector3(nums[0], nums[1], nums[2])
+		var s: String = value as String
+		var as_json: Variant = _try_parse_json_string(s)
+		if as_json != null:
+			if as_json is Dictionary:
+				var d: Dictionary = as_json as Dictionary
+				return Vector3(d.get("x", 0.0) as float, d.get("y", 0.0) as float, d.get("z", 0.0) as float)
+			if as_json is Array:
+				var a: Array = as_json as Array
+				if a.size() >= 3:
+					return Vector3(a[0] as float, a[1] as float, a[2] as float)
+		var nums: Array[float] = _extract_numbers(s)
+		var count: int = nums.size()
+		if count >= 2:
+			return Vector3(nums[0], nums[1], nums[2] if count >= 3 else 0.0)
 	if value is Dictionary:
 		var d: Dictionary = value as Dictionary
 		return Vector3(d.get("x", 0.0) as float, d.get("y", 0.0) as float, d.get("z", 0.0) as float)
-	if value is Array:
-		var a: Array = value as Array
-		if a.size() >= 3:
-			return Vector3(a[0] as float, a[1] as float, a[2] as float)
+	var a: Array = _to_plain_array(value)
+	if a.size() >= 2:
+		return Vector3(a[0] as float, a[1] as float, a[2] as float if a.size() >= 3 else 0.0)
 	return Vector3.ZERO
 
 
@@ -196,16 +253,26 @@ static func _parse_vector3i(value: Variant) -> Vector3i:
 	if value is Vector3i:
 		return value as Vector3i
 	if value is String:
-		var nums: Array[float] = _extract_numbers(value as String)
-		if nums.size() >= 3:
-			return Vector3i(int(nums[0]), int(nums[1]), int(nums[2]))
+		var s: String = value as String
+		var as_json: Variant = _try_parse_json_string(s)
+		if as_json != null:
+			if as_json is Dictionary:
+				var d: Dictionary = as_json as Dictionary
+				return Vector3i(d.get("x", 0) as int, d.get("y", 0) as int, d.get("z", 0) as int)
+			if as_json is Array:
+				var a: Array = as_json as Array
+				if a.size() >= 3:
+					return Vector3i(a[0] as int, a[1] as int, a[2] as int)
+		var nums: Array[float] = _extract_numbers(s)
+		var count: int = nums.size()
+		if count >= 2:
+			return Vector3i(int(nums[0]), int(nums[1]), int(nums[2]) if count >= 3 else 0)
 	if value is Dictionary:
 		var d: Dictionary = value as Dictionary
 		return Vector3i(d.get("x", 0) as int, d.get("y", 0) as int, d.get("z", 0) as int)
-	if value is Array:
-		var a: Array = value as Array
-		if a.size() >= 3:
-			return Vector3i(a[0] as int, a[1] as int, a[2] as int)
+	var a: Array = _to_plain_array(value)
+	if a.size() >= 2:
+		return Vector3i(a[0] as int, a[1] as int, a[2] as int if a.size() >= 3 else 0)
 	return Vector3i.ZERO
 
 
@@ -248,6 +315,18 @@ static func _parse_color(value: Variant) -> Color:
 		return value as Color
 	if value is String:
 		var s: String = value as String
+		# Try parsing as JSON first (handles double-serialized dicts {"r":1,"g":0,"b":0,"a":1})
+		var as_json: Variant = _try_parse_json_string(s)
+		if as_json != null:
+			if as_json is Dictionary:
+				var d: Dictionary = as_json as Dictionary
+				return Color(d.get("r", 1.0) as float, d.get("g", 1.0) as float, d.get("b", 1.0) as float, d.get("a", 1.0) as float)
+			if as_json is Array:
+				var a: Array = as_json as Array
+				if a.size() >= 4:
+					return Color(a[0] as float, a[1] as float, a[2] as float, a[3] as float)
+				elif a.size() >= 3:
+					return Color(a[0] as float, a[1] as float, a[2] as float)
 		# Hex format: #rrggbb or #rrggbbaa
 		if s.begins_with("#"):
 			if Color.html_is_valid(s):
@@ -759,6 +838,11 @@ static func parse_for_property(value: Variant, expected_type: int) -> Variant:
 				var p: String = value["path"]
 				if ResourceLoader.exists(p):
 					return ResourceLoader.load(p)
+			# Load resource from plain path string like "res://file.tres" or UID like "uid://..."
+			if value is String:
+				var s: String = value as String
+				if ResourceLoader.exists(s):
+					return ResourceLoader.load(s)
 			return value
 		_:
 			return value
@@ -782,15 +866,101 @@ static func serialize_input_event(event: InputEvent) -> Dictionary:
 		d["keycode"] = event.keycode
 		d["key_label"] = event.key_label
 		d["physical_keycode"] = event.physical_keycode
+		d["pressed"] = event.pressed
+		if event.echo: d["echo"] = true
 		if event.ctrl_pressed: d["ctrl"] = true
 		if event.shift_pressed: d["shift"] = true
 		if event.alt_pressed: d["alt"] = true
+		if event.meta_pressed: d["meta"] = true
 	elif event is InputEventMouseButton:
 		d["button"] = event.button_index
-		d["double_click"] = event.double_click
+		d["pressed"] = event.pressed
+		if event.double_click: d["double_click"] = true
 	elif event is InputEventJoypadButton:
 		d["button"] = event.button_index
+		d["pressed"] = event.pressed
+		d["pressure"] = event.pressure
+	elif event is InputEventJoypadMotion:
+		d["axis"] = event.axis
+		d["axis_value"] = event.axis_value
 	return d
+
+
+## Parse a mouse button index from a string name ("MOUSE_BUTTON_LEFT", "left", 1), integer, or float.
+## Returns the integer button index, or 0 if unrecognized.
+## Godot's MouseButton enum is 1-based: LEFT=1, RIGHT=2, MIDDLE=3, WHEEL_UP=4, WHEEL_DOWN=5,
+## WHEEL_LEFT=6, WHEEL_RIGHT=7, XBUTTON1=8, XBUTTON2=9.
+static func parse_mouse_button(button_val) -> int:
+	if button_val is int or button_val is float:
+		return int(button_val)
+	if button_val is String:
+		var s: String = button_val as String
+		if s.is_valid_int():
+			return s.to_int()
+		var upper: String = s.to_upper()
+		if upper.begins_with("MOUSE_BUTTON_"):
+			upper = upper.trim_prefix("MOUSE_BUTTON_")
+		match upper:
+			"LEFT": return 1
+			"RIGHT": return 2
+			"MIDDLE": return 3
+			"WHEEL_UP": return 4
+			"WHEEL_DOWN": return 5
+			"WHEEL_LEFT": return 6
+			"WHEEL_RIGHT": return 7
+			"XBUTTON1": return 8
+			"XBUTTON2": return 9
+			_:
+				push_warning("MCP: unrecognized mouse button name: '%s'. Valid: MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE, MOUSE_BUTTON_WHEEL_UP/DOWN/LEFT/RIGHT, MOUSE_BUTTON_XBUTTON1/2" % s)
+				return 0
+	return 0
+
+
+## Parse a keycode from a string name ("KEY_SPACE", "Space", "32"), integer, or float.
+## Returns the integer keycode, or 0 if unrecognized.
+static func parse_keycode(keycode_val) -> int:
+	if keycode_val is int or keycode_val is float:
+		return int(keycode_val)
+	if keycode_val is String:
+		var s: String = keycode_val as String
+		if s.is_valid_int():
+			return s.to_int()
+		var upper: String = s.to_upper()
+		if upper.begins_with("KEY_"):
+			upper = upper.trim_prefix("KEY_")
+		var code: int = OS.find_keycode_from_string(upper)
+		if code == 0 and "_" in upper:
+			# Retry with spaces instead of underscores (for "KP_ENTER" → "Kp Enter")
+			code = OS.find_keycode_from_string(upper.replace("_", " "))
+		if code != 0:
+			return code
+		# Fallback common aliases not covered by find_keycode_from_string
+		match upper:
+			"ENTER", "RETURN": return KEY_ENTER
+			"ESCAPE", "ESC": return KEY_ESCAPE
+			"DELETE", "DEL": return KEY_DELETE
+			"CTRL", "CONTROL": return KEY_CTRL
+			# Numpad keys (OS.find_keycode_from_string may not resolve on non-English locales)
+			"KP_ENTER": return KEY_KP_ENTER
+			"KP_ADD": return KEY_KP_ADD
+			"KP_SUBTRACT": return KEY_KP_SUBTRACT
+			"KP_MULTIPLY": return KEY_KP_MULTIPLY
+			"KP_DIVIDE": return KEY_KP_DIVIDE
+			"KP_PERIOD": return KEY_KP_PERIOD
+			"KP_0": return KEY_KP_0
+			"KP_1": return KEY_KP_1
+			"KP_2": return KEY_KP_2
+			"KP_3": return KEY_KP_3
+			"KP_4": return KEY_KP_4
+			"KP_5": return KEY_KP_5
+			"KP_6": return KEY_KP_6
+			"KP_7": return KEY_KP_7
+			"KP_8": return KEY_KP_8
+			"KP_9": return KEY_KP_9
+			_:
+				if upper.length() == 1:
+					return upper.unicode_at(0)
+	return 0
 
 
 ## Create an InputEvent from a dictionary with type and event data.
@@ -799,14 +969,37 @@ static func create_input_event(event_data: Dictionary) -> InputEvent:
 	match type:
 		"key":
 			var ev := InputEventKey.new()
-			ev.keycode = event_data.get("keycode", 0) as Key
+			ev.keycode = parse_keycode(event_data.get("keycode", 0)) as Key
+			ev.physical_keycode = parse_keycode(event_data.get("physical_keycode", ev.keycode)) as Key
+			ev.key_label = parse_keycode(event_data.get("key_label", 0)) as Key
+			ev.echo = event_data.get("echo", false) as bool
+			ev.pressed = event_data.get("pressed", false) as bool
+			# Restore modifier flags from serialized data.
+			# Accept both "ctrl" (serialized form) and "ctrl_pressed" (user-facing alias).
+			ev.ctrl_pressed = event_data.get("ctrl_pressed", event_data.get("ctrl", false)) as bool
+			ev.shift_pressed = event_data.get("shift_pressed", event_data.get("shift", false)) as bool
+			ev.alt_pressed = event_data.get("alt_pressed", event_data.get("alt", false)) as bool
+			ev.meta_pressed = event_data.get("meta_pressed", event_data.get("meta", false)) as bool
 			return ev
 		"mouse_button":
 			var ev := InputEventMouseButton.new()
-			ev.button_index = event_data.get("button", 1) as MouseButton
+			# Accept both "button_index" (user-facing) and "button" (serialized form).
+			# Use parse_mouse_button() to resolve string names like "MOUSE_BUTTON_LEFT" to integers.
+			var raw_button: Variant = event_data.get("button_index", event_data.get("button", 1))
+			ev.button_index = parse_mouse_button(raw_button) as MouseButton
+			ev.pressed = event_data.get("pressed", false) as bool
+			ev.double_click = event_data.get("double_click", false) as bool
 			return ev
 		"joypad_button":
 			var ev := InputEventJoypadButton.new()
-			ev.button_index = event_data.get("button", 0) as JoyButton
+			# Accept both "button_index" (user-facing) and "button" (serialized form).
+			ev.button_index = event_data.get("button_index", event_data.get("button", 0)) as JoyButton
+			ev.pressed = event_data.get("pressed", false) as bool
+			ev.pressure = event_data.get("pressure", 1.0) as float
+			return ev
+		"joypad_motion":
+			var ev := InputEventJoypadMotion.new()
+			ev.axis = event_data.get("axis", 0) as int
+			ev.axis_value = event_data.get("axis_value", 0.0) as float
 			return ev
 	return null

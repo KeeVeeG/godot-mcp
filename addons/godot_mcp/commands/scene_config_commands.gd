@@ -1,5 +1,6 @@
 ## Scene configuration commands module - 6 tools.
 ## Handles scene inheritance, unique names, groups, and metadata.
+@tool
 class_name MCPSceneConfigCommands
 extends RefCounted
 
@@ -60,15 +61,48 @@ func _get_inheritance(params: Dictionary) -> Dictionary:
 			break
 		var content: String = file.get_as_text()
 		file.close()
-		# Look for inherits="res://..." in the scene file
-		var inherits_pos: int = content.find("inherits=\"")
-		if inherits_pos == -1:
-			break
-		var start_pos: int = inherits_pos + 10
-		var end_pos: int = content.find("\"", start_pos)
-		if end_pos == -1:
-			break
-		current_path = content.substr(start_pos, end_pos - start_pos)
+		# Build ext_resource ID → path map from [ext_resource ...] lines.
+		# NOTE: rfind("id=\"") avoids matching "id=\"" inside "uid=\"...\"".
+		var ext_map := {}
+		for line in content.split("\n"):
+			if line.begins_with("[ext_resource") and line.contains("path=\"") and line.contains("id=\""):
+				var path_start := line.find("path=\"") + 6
+				var path_end := line.find("\"", path_start)
+				var id_start := line.rfind("id=\"") + 4
+				var id_end := line.find("\"", id_start)
+				if path_end > path_start and id_end > id_start:
+					ext_map[line.substr(id_start, id_end - id_start)] = line.substr(path_start, path_end - path_start)
+
+		# Try Godot 4 inheritance: find instance=ExtResource("id") on a [node ...] line
+		var found_inherits := false
+		var ext_res_tag := "ExtResource(\""
+		var ext_res_pos := content.find(ext_res_tag)
+		while ext_res_pos != -1 and not found_inherits:
+			# Check the 20 chars before ExtResource for "instance="
+			var pre_start := max(0, ext_res_pos - 20)
+			var prefix := content.substr(pre_start, ext_res_pos - pre_start)
+			if prefix.contains("instance=") or prefix.contains("instance ="):
+				var id_start := ext_res_pos + ext_res_tag.length()
+				var id_end := content.find("\")", id_start)
+				if id_end != -1:
+					var ref_id := content.substr(id_start, id_end - id_start)
+					if ext_map.has(ref_id):
+						current_path = ext_map[ref_id]
+						found_inherits = true
+			if not found_inherits:
+				ext_res_pos = content.find(ext_res_tag, ext_res_pos + 1)
+
+		if not found_inherits:
+			# Fallback to Godot 3 format: inherits="res://..." in the scene file
+			var inherits_pos: int = content.find("inherits=\"")
+			if inherits_pos == -1:
+				break
+			var start_pos: int = inherits_pos + 10
+			var end_pos: int = content.find("\"", start_pos)
+			if end_pos == -1:
+				break
+			current_path = content.substr(start_pos, end_pos - start_pos)
+
 		if chain.has(current_path):
 			break  # Prevent infinite loops
 	return {"success": true, "scene_path": scene_path, "inheritance_chain": chain, "depth": chain.size()}

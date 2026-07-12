@@ -1,5 +1,6 @@
 ## Project creation commands module - 12 tools.
 ## Handles project scaffolding, templates, git init, licensing, and dependency setup.
+@tool
 class_name MCPProjectCreationCommands
 extends RefCounted
 
@@ -104,6 +105,18 @@ func _create_project(params: Dictionary) -> Dictionary:
 		"ui":
 			_create_default_scene(path, "main", "Control")
 
+	# Validate godot_version against current engine
+	var warnings: Array = []
+	if not godot_version.is_empty():
+		var engine_major: int = Engine.get_version_info().get("major", 4)
+		var engine_minor: int = Engine.get_version_info().get("minor", 0)
+		var engine_version: String = "%d.%d" % [engine_major, engine_minor]
+		if godot_version != engine_version:
+			warnings.append(
+				"godot_version '%s' does not match current Godot engine version '%s'. The project uses config_version=5 (Godot 4.x format) regardless of the version parameter."
+				% [godot_version, engine_version]
+			)
+
 	return {
 		"success": true,
 		"path": path,
@@ -111,6 +124,7 @@ func _create_project(params: Dictionary) -> Dictionary:
 		"template": template,
 		"renderer": renderer,
 		"folders_created": folders,
+		"warnings": warnings,
 	}
 
 
@@ -148,15 +162,22 @@ func _create_project_from_template(params: Dictionary) -> Dictionary:
 	if err != OK:
 		return {"success": false, "error": "Failed to copy template: %s" % error_string(err)}
 
+	var config_path: String = path.path_join("project.godot")
+
 	# Update project name if provided
 	if not name.is_empty():
-		var config_path: String = path.path_join("project.godot")
 		if FileAccess.file_exists(config_path):
 			var cfg: ConfigFile = ConfigFile.new()
 			var cfg_err: Error = cfg.load(config_path)
 			if cfg_err == OK:
 				cfg.set_value("application", "config/name", name)
 				cfg.save(config_path)
+
+	# If name was not provided, read it from the cloned project.godot for the response
+	if name.is_empty() and FileAccess.file_exists(config_path):
+		var read_cfg: ConfigFile = ConfigFile.new()
+		if read_cfg.load(config_path) == OK:
+			name = read_cfg.get_value("application", "config/name", name)
 
 	return {"success": true, "path": path, "template": template_path, "name": name}
 
@@ -208,6 +229,28 @@ func _create_project_with_assets(params: Dictionary) -> Dictionary:
 	if not create_result.get("success", false):
 		return create_result
 
+	# Detect duplicate destinations before importing (prevents silent overwrites)
+	var seen_destinations: Dictionary = {}
+	var duplicate_destinations: Array = []
+	for asset_def in assets:
+		if not (asset_def is Dictionary):
+			continue
+		var asset: Dictionary = asset_def as Dictionary
+		var dest: String = asset.get("destination", "")
+		if not dest.is_empty():
+			if dest in seen_destinations:
+				duplicate_destinations.append(dest)
+			else:
+				seen_destinations[dest] = true
+
+	if not duplicate_destinations.is_empty():
+		_remove_directory_recursive(path)
+		return {
+			"success": false,
+			"error": "Duplicate asset destinations detected: %s. Each asset must have a unique destination within the same call." % str(duplicate_destinations),
+			"duplicate_destinations": duplicate_destinations,
+		}
+
 	# Import assets
 	var imported: Array = []
 	var errors: Array = []
@@ -247,14 +290,25 @@ func _create_project_with_assets(params: Dictionary) -> Dictionary:
 		else:
 			errors.append("Source file not found: %s" % source)
 
+	# Trigger Godot's import pipeline to generate .import files for copied assets
+	if imported.size() > 0:
+		EditorInterface.get_resource_filesystem().scan()
+
 	var all_success: bool = not (errors.size() > 0 and imported.size() == 0)
-	return {
+
+	# Rollback project creation if all assets failed to import (no partial success)
+	if not all_success:
+		_remove_directory_recursive(path)
+
+	var result: Dictionary = {
 		"success": all_success,
-		"path": path,
 		"name": name,
 		"imported": imported,
 		"errors": errors,
 	}
+	if all_success:
+		result["path"] = path
+	return result
 
 
 ## Initialize a git repository with optional .gitignore.
@@ -321,8 +375,11 @@ func _create_project_readme(params: Dictionary) -> Dictionary:
 			if cfg.load(config_path) == OK:
 				project_name = cfg.get_value("application", "config/name", project_name)
 
-	if content.is_empty():
+	if not params.has("content"):
 		content = _generate_readme(project_name, template)
+	else:
+		# Unescape JSON string escape sequences that the JSON transport may have double-escaped
+		content = _unescape_json_string(content)
 
 	var readme_path: String = project_path.path_join("README.md")
 	var file: FileAccess = FileAccess.open(readme_path, FileAccess.WRITE)
@@ -331,7 +388,11 @@ func _create_project_readme(params: Dictionary) -> Dictionary:
 	file.store_string(content)
 	file.close()
 
-	return {"success": true, "path": readme_path, "template": template}
+	var used_template: String = template
+	if params.has("content"):
+		used_template = "custom"
+
+	return {"success": true, "path": readme_path, "template": used_template}
 
 
 ## Create a LICENSE file.
@@ -349,7 +410,12 @@ func _create_project_license(params: Dictionary) -> Dictionary:
 	if not FileAccess.file_exists(project_path.path_join("project.godot")):
 		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
 
+	var warnings: Array = []
 	var license_text: String = ""
+
+	if not custom_text.is_empty() and license_type != "custom":
+		warnings.append("custom_text is ignored for license type '%s' (only used with 'custom')" % license_type)
+
 	match license_type:
 		"MIT":
 			license_text = _get_mit_license()
@@ -362,7 +428,7 @@ func _create_project_license(params: Dictionary) -> Dictionary:
 		"custom":
 			if custom_text.is_empty():
 				return {"success": false, "error": "custom_text is required for custom license"}
-			license_text = custom_text
+			license_text = _unescape_json_string(custom_text)
 		_:
 			return {"success": false, "error": "Unknown license type: %s" % license_type}
 
@@ -373,7 +439,7 @@ func _create_project_license(params: Dictionary) -> Dictionary:
 	file.store_string(license_text)
 	file.close()
 
-	return {"success": true, "path": license_path, "license": license_type}
+	return {"success": true, "path": license_path, "license": license_type, "warnings": warnings}
 
 
 ## Setup project dependencies / addons.
@@ -415,6 +481,9 @@ func _setup_project_dependencies(params: Dictionary) -> Dictionary:
 					errors.append("Local addon '%s' requires url (source path)" % addon_name)
 					continue
 				if DirAccess.dir_exists_absolute(url):
+					if not FileAccess.file_exists(url.path_join("plugin.cfg")):
+						errors.append("Local addon source is not a valid Godot addon (missing plugin.cfg): %s" % url)
+						continue
 					var err: Error = MCPCommandHelpers.copy_directory_recursive(url, dest_path)
 					if err == OK:
 						installed.append(addon_name)
@@ -426,10 +495,22 @@ func _setup_project_dependencies(params: Dictionary) -> Dictionary:
 				if url.is_empty():
 					errors.append("Git addon '%s' requires url" % addon_name)
 					continue
-				# Return instruction for manual git clone
-				installed.append({"name": addon_name, "instruction": "Run: git clone '%s' '%s'" % [url, dest_path]})
+				# Clone the git repository into the addon directory
+				var git_output: Array = []
+				var git_exit: int = OS.execute("git", ["clone", url, dest_path], git_output, true)
+				if git_exit == 0:
+					# Remove .git directory to avoid nesting issues
+					var dot_git: String = dest_path.path_join(".git")
+					if DirAccess.dir_exists_absolute(dot_git):
+						_remove_directory_recursive(dot_git)
+					installed.append(addon_name)
+				else:
+					errors.append("Git clone failed for '%s' (exit %d): %s" % [addon_name, git_exit, "\n".join(git_output)])
 			"asset_lib":
-				installed.append({"name": addon_name, "instruction": "Install from Godot Asset Library: %s" % addon_name})
+				# Asset Library installation requires async HTTP + ZIP extraction
+				# which is not yet implemented in this synchronous context.
+				# Use the Godot editor AssetLib tab or install_from_asset_lib tool instead.
+				errors.append("Asset Library installation not yet supported for '%s'. Use Godot editor AssetLib tab to install, or install from git/local source." % addon_name)
 			_:
 				errors.append("Unknown addon source: %s" % source)
 
@@ -466,7 +547,7 @@ func _validate_project_structure(params: Dictionary) -> Dictionary:
 
 	# Check for recommended directories
 	var recommended_dirs: PackedStringArray = [
-		"scenes", "scripts", "assets", "resources"
+		"scenes", "scripts", "assets", "resources", "shaders", "tests", "addons", "themes"
 	]
 	var existing_dirs: Array = []
 	var missing_dirs: Array = []
@@ -477,6 +558,9 @@ func _validate_project_structure(params: Dictionary) -> Dictionary:
 			missing_dirs.append(dir_name)
 	if missing_dirs.size() > 0:
 		warnings.append("Missing recommended directories: %s" % ", ".join(missing_dirs))
+
+	# Include list of existing top-level directories in info
+	info["existing_directories"] = existing_dirs
 
 	# Check for main scene
 	if info.get("main_scene", "").is_empty():
@@ -558,9 +642,6 @@ func _remove_project_dependencies(params: Dictionary) -> Dictionary:
 	if project_path.is_empty():
 		return {"success": false, "error": "Project path is required"}
 
-	if addons.is_empty():
-		return {"success": false, "error": "addons array is required and must not be empty"}
-
 	if not MCPCommandHelpers.validate_path(project_path):
 		return {"success": false, "error": "Invalid path"}
 
@@ -569,6 +650,9 @@ func _remove_project_dependencies(params: Dictionary) -> Dictionary:
 
 	if not FileAccess.file_exists(project_path.path_join("project.godot")):
 		return {"success": false, "error": "Not a valid Godot project (missing project.godot)"}
+
+	if addons.is_empty():
+		return {"success": false, "error": "addons array is required and must not be empty"}
 
 	var addons_dir: String = project_path.path_join("addons")
 	var removed: Array = []
@@ -643,12 +727,15 @@ func _get_project_templates() -> Dictionary:
 
 
 func _generate_project_godot(project_name: String, renderer: String, godot_version: String = "") -> String:
-	var renderer_setting: String = "Forward Plus"
-	match renderer:
-		"mobile":
-			renderer_setting = "Mobile"
-		"gl_compatibility":
-			renderer_setting = "gl_compatibility"
+	# Normalize renderer: use snake_case values that Godot accepts in project.godot
+	# Valid values: "forward_plus", "mobile", "gl_compatibility"
+	var renderer_setting: String = renderer
+	if renderer == "" or renderer == "forward_plus":
+		renderer_setting = "forward_plus"
+	elif renderer == "mobile":
+		renderer_setting = "mobile"
+	elif renderer == "gl_compatibility":
+		renderer_setting = "gl_compatibility"
 
 	var version_line: String = ""
 	if not godot_version.is_empty():
@@ -673,6 +760,8 @@ func _get_template_folders(template: String) -> PackedStringArray:
 	match template:
 		"empty", "minimal":
 			return PackedStringArray(["scenes", "scripts"])
+		"standard":
+			return PackedStringArray(["scenes", "scripts", "assets", "resources", "shaders", "tests"])
 		"custom", "full":
 			return PackedStringArray([
 				"scenes", "scripts", "assets/sprites", "assets/textures",
@@ -744,28 +833,74 @@ func _count_files_recursive(path: String, counts: Dictionary, depth: int, max_de
 	dir.list_dir_end()
 
 
+## Helper: Attempt to remove read-only attributes from a file/directory (Windows only).
+func _make_writable(filepath: String) -> void:
+	if OS.get_name() == "Windows":
+		# attrib -r removes the read-only flag
+		OS.execute("attrib", ["-r", filepath], [], false)
+
 ## Helper: Remove a directory and all its contents recursively.
+## Uses cmd /c rmdir /s /q on Windows for reliable deletion of read-only files (e.g. .git/objects).
+## Falls back to portable DirAccess approach on non-Windows or if rmdir fails.
 func _remove_directory_recursive(path: String) -> Error:
+	# On Windows, use rmdir /s /q which natively handles read-only files
+	if OS.get_name() == "Windows":
+		var output: Array = []
+		# Use the path directly with backslashes for cmd.exe compatibility.
+		# ProjectSettings.globalize_path() expects res:// paths; absolute paths
+		# may be returned verbatim but with forward slashes that cmd.exe rmdir rejects.
+		var win_path: String = path.replace("/", "\\")
+		var exit_code: int = OS.execute(
+			"cmd.exe",
+			["/c", "rmdir", "/s", "/q", win_path],
+			output,
+			true
+		)
+		if exit_code == 0:
+			return OK
+		# rmdir may report non-zero on delete-while-use or encoding issues,
+		# yet the directory may still be gone. Check before falling back.
+		if not DirAccess.dir_exists_absolute(path):
+			return OK
+
+	# Portable fallback: DirAccess with read-only attribute removal
+	return _remove_directory_recursive_portable(path)
+
+
+func _remove_directory_recursive_portable(path: String) -> Error:
 	var dir: DirAccess = DirAccess.open(path)
 	if dir == null:
-		return ERR_CANT_OPEN
+		_make_writable(path)
+		dir = DirAccess.open(path)
+		if dir == null:
+			return ERR_CANT_OPEN
 
+	var first_error: Error = OK
 	dir.list_dir_begin()
 	var entry: String = dir.get_next()
 	while entry != "":
-		if not entry.begins_with("."):
+		if entry != "." and entry != "..":
 			var full_path: String = path.path_join(entry)
 			if dir.current_is_dir():
-				var err: Error = _remove_directory_recursive(full_path)
-				if err != OK:
-					return err
-				DirAccess.remove_absolute(full_path)
+				var err: Error = _remove_directory_recursive_portable(full_path)
+				if err != OK and first_error == OK:
+					first_error = err
+				err = DirAccess.remove_absolute(full_path)
+				if err != OK and first_error == OK:
+					first_error = err
 			else:
-				DirAccess.remove_absolute(full_path)
+				_make_writable(full_path)
+				var err: Error = DirAccess.remove_absolute(full_path)
+				if err != OK and first_error == OK:
+					first_error = err
 		entry = dir.get_next()
 	dir.list_dir_end()
 
-	return DirAccess.remove_absolute(path)
+	_make_writable(path)
+	var err: Error = DirAccess.remove_absolute(path)
+	if err != OK and first_error == OK:
+		first_error = err
+	return first_error
 
 
 func _generate_readme(project_name: String, template: String) -> String:
@@ -985,3 +1120,12 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """ % Time.get_datetime_dict_from_system()["year"]
+
+
+## Helper — Unescape JSON string escape sequences in user-provided content.
+## When content is passed through a double-JSON-serialization layer
+## (e.g., MCP client → JSON → IPC file → JSON.parse → GDScript),
+## escape sequences like \n, \t, \r can arrive as literal backslash-character
+## pairs instead of actual control characters. This helper converts them.
+func _unescape_json_string(s: String) -> String:
+	return s.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r").replace("\\\"", "\"").replace("\\\\", "\\")

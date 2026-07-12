@@ -1,6 +1,7 @@
 ## Shared node factory for creating nodes by type name.
 ## Merges implementations from node_commands (38 types), scene_commands (36 types),
 ## and testing_commands (16 types) into a single authoritative source.
+@tool
 class_name MCPNodeFactory
 extends RefCounted
 

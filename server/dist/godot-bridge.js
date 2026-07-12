@@ -192,10 +192,13 @@ export class GodotBridge {
                 }
                 else if (isErrorResponse(response)) {
                     const err = response;
-                    const error = new Error(err.error.message);
+                    // Include JSON-RPC error code in the message for diagnostics.
+                    // The code is also preserved as a property for programmatic access.
+                    const message = `[${err.error.code}] ${err.error.message}`;
+                    const error = new Error(message);
                     error.code = err.error.code;
                     error.data = err.error.data;
-                    log('debug', `Response for ${pending.method}: error - ${err.error.message}`);
+                    log('debug', `Response for ${pending.method}: error ${message}`);
                     pending.reject(error);
                 }
                 return;
@@ -266,7 +269,7 @@ export class GodotBridge {
         // Reject all pending requests
         for (const [, pending] of this.pendingRequests) {
             clearTimeout(pending.timer);
-            pending.reject(new Error('Connection closed'));
+            pending.reject(new Error('Godot editor disconnected'));
         }
         this.pendingRequests.clear();
     }

@@ -1,5 +1,5 @@
 /**
- * Addon management tools - 5 tools for plugin/addon lifecycle management
+ * Addon management tools - 6 tools for plugin/addon lifecycle management
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -67,5 +67,17 @@ export function registerAddonManagementTools(server: McpServer, bridge: GodotBri
       },
     },
     async (args) => callGodot(bridge, 'configure_addon', args as Record<string, unknown>),
+  );
+
+  // 6. get_addon_config
+  server.registerTool(
+    'get_addon_config',
+    {
+      description: 'Read the current configuration of an installed addon. Returns config.json contents, project settings, and plugin.cfg metadata.',
+      inputSchema: {
+        name: Name.describe('Addon name to read config for'),
+      },
+    },
+    async (args) => callGodot(bridge, 'get_addon_config', args as Record<string, unknown>),
   );
 }

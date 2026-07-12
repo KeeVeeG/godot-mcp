@@ -1,5 +1,6 @@
 ## Input commands module - 8 tools.
 ## Handles keyboard, mouse, action simulation, and input mapping.
+@tool
 class_name MCPInputCommands
 extends RefCounted
 
@@ -38,8 +39,12 @@ func simulate_key(params: Dictionary) -> Dictionary:
 	if key_str.is_empty():
 		return {"error": "Key is required"}
 
+	# Type check: keycode must be a string
+	if not (key_str is String):
+		return {"error": "Keycode must be a string, got %s" % typeof(key_str)}
+
 	# Parse key name to keycode
-	var keycode: int = _parse_keycode(key_str)
+	var keycode: int = _parse_keycode(key_str as String)
 	if keycode == 0:
 		return {"error": "Unknown key: %s" % key_str}
 
@@ -151,7 +156,7 @@ func simulate_action(params: Dictionary) -> Dictionary:
 func simulate_sequence(params: Dictionary) -> Dictionary:
 	var steps: Array = params.get("events", params.get("steps", []))
 	if steps.is_empty():
-		return {"error": "Steps array is required"}
+		return {"result": "Sequence of 0 steps (empty events array, no-op)"}
 
 	if not _plugin.get_editor_interface().is_playing_scene():
 		return {"result": "Sequence event created (game not running, sequence not dispatched)"}
@@ -174,23 +179,18 @@ func simulate_sequence(params: Dictionary) -> Dictionary:
 	return {"result": "Sequence of %d steps sent to game" % steps.size()}
 
 
-## Get all input actions defined in project settings.
-func get_input_actions(params: Dictionary) -> Dictionary:
+## Get all input actions defined in the InputMap.
+## Returns ALL actions (built-in + custom) with their events and deadzones.
+func get_input_actions(_params: Dictionary) -> Dictionary:
 	var actions: Dictionary = {}
-	var action_list: Array = InputMap.get_actions()
-	for action_name_variant: Variant in action_list:
-		var action_name: StringName = action_name_variant as StringName
-		var action_str: String = str(action_name)
-		if action_str.begins_with("ui_"):
-			continue
-		# Filter to only project-defined actions (stored in input/ project settings)
-		var scope: String = params.get("scope", "game")
-		if scope == "game" and not ProjectSettings.has_setting("input/" + action_str):
-			continue
+	for action_name: String in InputMap.get_actions():
 		var events: Array = []
 		for event: InputEvent in InputMap.action_get_events(action_name):
 			events.append(MCPVariantCodec.serialize_input_event(event))
-		actions[action_str] = {"deadzone": InputMap.action_get_deadzone(action_name), "events": events}
+		actions[action_name] = {
+			"deadzone": snapped(InputMap.action_get_deadzone(action_name), 0.0001),
+			"events": events,
+		}
 	return {"result": {"actions": actions, "count": actions.size()}}
 
 
@@ -200,16 +200,24 @@ func get_input_actions(params: Dictionary) -> Dictionary:
 func set_input_action(params: Dictionary) -> Dictionary:
 	var action: String = params.get("action", "")
 	var events: Array = params.get("events", [])
-	var deadzone: float = params.get("deadzone", 0.2)
+	var deadzone: float = params.get("deadzone", 0.5)
 	if action.is_empty():
 		return {"error": "Action name is required"}
 
 	if InputMap.has_action(action):
 		# Update existing action in place — remove old events, add new ones
 		# This preserves the action itself so references in running code remain valid
-		for old_event: InputEvent in InputMap.action_get_events(action):
+		# NOTE: .duplicate() is critical — action_get_events() returns a live
+		# reference to the internal array, and action_erase_event() mutates it,
+		# which would cause the iterator to skip events.
+		var old_events: Array = InputMap.action_get_events(action).duplicate()
+		for old_event: InputEvent in old_events:
 			InputMap.action_erase_event(action, old_event)
-		InputMap.action_set_deadzone(action, deadzone)
+		# Preserve existing deadzone if not explicitly provided
+		if not params.has("deadzone"):
+			deadzone = InputMap.action_get_deadzone(action)
+		else:
+			InputMap.action_set_deadzone(action, deadzone)
 	else:
 		InputMap.add_action(action, deadzone)
 
@@ -217,15 +225,10 @@ func set_input_action(params: Dictionary) -> Dictionary:
 		var ev: Dictionary = event_variant as Dictionary
 		var ev_type: String = ev.get("type", "")
 		match ev_type:
-			"key", "mouse_button", "joypad_button":
+			"key", "mouse_button", "joypad_button", "joypad_motion":
 				var input_event: InputEvent = MCPVariantCodec.create_input_event(ev)
 				if input_event:
 					InputMap.action_add_event(action, input_event)
-			"joypad_motion":
-				var jm_ev: InputEventJoypadMotion = InputEventJoypadMotion.new()
-				jm_ev.axis = ev.get("axis", 0) as JoyAxis
-				jm_ev.axis_value = ev.get("value", 0.0) as float
-				InputMap.action_add_event(action, jm_ev)
 
 	# Save to project
 	var err: Error = ProjectSettings.save()
@@ -278,9 +281,12 @@ func _parse_keycode(key_str: String) -> int:
 		return upper.to_int()
 	# Try direct name lookup
 	var code: int = OS.find_keycode_from_string(upper)
+	if code == 0 and "_" in upper:
+		# Retry with spaces instead of underscores (for "KP_ENTER" → "Kp Enter")
+		code = OS.find_keycode_from_string(upper.replace("_", " "))
 	if code != 0:
 		return code
-	# Common aliases
+	# Common aliases that OS.find_keycode_from_string may not resolve
 	match upper:
 		"SPACE":
 			return KEY_SPACE
@@ -308,6 +314,29 @@ func _parse_keycode(key_str: String) -> int:
 			return KEY_CTRL
 		"ALT":
 			return KEY_ALT
+		# Numpad keys (OS.find_keycode_from_string may not resolve on non-English locales)
+		"KP_ENTER":
+			return KEY_KP_ENTER
+		"KP_ADD":
+			return KEY_KP_ADD
+		"KP_SUBTRACT":
+			return KEY_KP_SUBTRACT
+		"KP_MULTIPLY":
+			return KEY_KP_MULTIPLY
+		"KP_DIVIDE":
+			return KEY_KP_DIVIDE
+		"KP_PERIOD":
+			return KEY_KP_PERIOD
+		"KP_0": return KEY_KP_0
+		"KP_1": return KEY_KP_1
+		"KP_2": return KEY_KP_2
+		"KP_3": return KEY_KP_3
+		"KP_4": return KEY_KP_4
+		"KP_5": return KEY_KP_5
+		"KP_6": return KEY_KP_6
+		"KP_7": return KEY_KP_7
+		"KP_8": return KEY_KP_8
+		"KP_9": return KEY_KP_9
 		_:
 			if upper.length() == 1:
 				return upper.unicode_at(0)

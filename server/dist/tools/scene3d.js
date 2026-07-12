@@ -55,7 +55,7 @@ export function registerScene3dTools(server, bridge) {
     server.registerTool('setup_environment', {
         description: 'Configure the WorldEnvironment for the 3D scene',
         inputSchema: {
-            path: NodePath.describe('WorldEnvironment node path'),
+            path: NodePath.optional().default('').describe('WorldEnvironment node path (leave empty for auto-create/find)'),
             properties: Properties.describe('Environment properties (background_mode, background_color, ambient_light_color, fog_enabled, glow_enabled, etc.)'),
         },
     }, async (args) => callGodot(bridge, 'scene3d/setup_environment', args));

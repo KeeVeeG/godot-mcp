@@ -1,6 +1,7 @@
-﻿## Platform export commands module - 6 tools.
+## Platform export commands module - 6 tools.
 ## Provides platform-specific export, validation, template management,
 ## preset creation, preset deletion, and exported build execution.
+@tool
 class_name MCPPlatformExportCommands
 extends RefCounted
 
@@ -54,6 +55,16 @@ func export_for_platform(params: Dictionary) -> Dictionary:
 	var platform_name: String = PLATFORM_MAP.get(platform, "")
 	if platform_name.is_empty():
 		return {"error": "Unknown platform: %s. Supported: %s" % [platform, ", ".join(PLATFORM_MAP.keys())]}
+
+	# Pre-check: verify export templates are installed before attempting export.
+	# OS.execute() is blocking and will wait for the headless Godot process to finish,
+	# which can take 30+ seconds and time out if templates are missing.
+	# By returning early with a clear error, we avoid the timeout and give useful feedback.
+	var version_info: Dictionary = Engine.get_version_info()
+	var version_str: String = version_info.get("string", "unknown")
+	var templates_dir: String = OS.get_user_data_dir().path_join("export_templates").path_join(version_str)
+	if not DirAccess.dir_exists_absolute(templates_dir):
+		return {"error": "Export templates not installed for Godot %s. Install them via Editor > Manage Export Templates, then retry." % version_str}
 
 	# Check if preset exists, create if not
 	var preset_name: String = "%s Preset" % platform_name
@@ -133,6 +144,18 @@ func validate_export_for_platform(params: Dictionary) -> Dictionary:
 		return {"error": "platform is required"}
 
 	var issues: Array = []
+	# Reject unknown platforms early � only allow values in PLATFORM_MAP
+	if not PLATFORM_MAP.has(platform):
+		return {"result": {
+			"platform": platform,
+			"valid": false,
+			"errors": 1,
+			"warnings": 0,
+			"issues": [{"severity": "error", "type": "unknown_platform", "message": "Unknown platform: %s. Supported: %s" % [platform, ", ".join(PLATFORM_MAP.keys())]}],
+			"scenes_scanned": 0,
+			"scripts_scanned": 0,
+			"message": "Unknown platform: %s" % platform,
+		}}
 	var platform_name: String = PLATFORM_MAP.get(platform, platform)
 
 	# Check for export templates
@@ -182,7 +205,7 @@ func validate_export_for_platform(params: Dictionary) -> Dictionary:
 					"message": "Missing resource: %s (referenced by %s)" % [dep_path, scene_path],
 				})
 
-	# Check script errors — use load() which returns null on compile errors
+	# Check script errors � use load() which returns null on compile errors
 	# and returns cached valid GDScript for already-compiled scripts.
 	# Skip addons/ (third-party code) and empty files.
 	var script_files: Array = []
@@ -251,17 +274,31 @@ func get_export_templates(_params: Dictionary) -> Dictionary:
 	}}
 
 
+## Valid Godot export platform names (canonical).
+const VALID_PLATFORMS: PackedStringArray = [
+	"Windows Desktop",
+	"Linux",
+	"macOS",
+	"Android",
+	"iOS",
+	"Web",
+]
+
 ## Create a new export preset.
 func create_export_preset(params: Dictionary) -> Dictionary:
-	var platform: String = params.get("platform", "")
-	var name: String = params.get("name", "")
+	var platform: String = params.get("platform", "").strip_edges()
+	var name: String = params.get("name", "").strip_edges()
 	var settings: Dictionary = params.get("settings", {})
 
 	if platform.is_empty() or name.is_empty():
 		return {"error": "platform and name are required"}
 
-	# Map friendly name to Godot platform string
+	# Map friendly short name to canonical Godot platform string
 	var platform_str: String = PLATFORM_MAP.get(platform, platform)
+
+	# Validate that platform is a known Godot export platform
+	if platform_str not in VALID_PLATFORMS:
+		return {"error": "Unsupported platform: '%s'. Valid platforms: %s" % [platform_str, ", ".join(VALID_PLATFORMS)]}
 
 	var config_path: String = "res://export_presets.cfg"
 	var config: ConfigFile = ConfigFile.new()
@@ -269,10 +306,17 @@ func create_export_preset(params: Dictionary) -> Dictionary:
 	if FileAccess.file_exists(config_path):
 		config.load(config_path)
 
-	# Find next available preset index
+	# Find next available preset index AND check for duplicate names
 	var next_idx: int = 0
+	var duplicate_found: bool = false
 	while config.has_section("preset.%d" % next_idx):
+		var existing_name: String = config.get_value("preset.%d" % next_idx, "name", "")
+		if existing_name == name:
+			duplicate_found = true
 		next_idx += 1
+
+	if duplicate_found:
+		return {"error": "A preset named '%s' already exists. Delete it first or use a different name." % name}
 
 	var section: String = "preset.%d" % next_idx
 	config.set_value(section, "name", name)

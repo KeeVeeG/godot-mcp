@@ -1,5 +1,6 @@
 ## Build configuration commands module - 8 tools.
 ## Handles build settings, scripting backend, export filter, and debug options.
+@tool
 class_name MCPBuildConfigCommands
 extends RefCounted
 
@@ -61,20 +62,31 @@ func _get_settings() -> Dictionary:
 
 
 ## Set build configuration.
+## Each preset applies canonical debug_options defaults so that switching
+## configs (e.g. release → debug) also resets debug flags to sane values.
 func _set_configuration(params: Dictionary) -> Dictionary:
 	var config: String = params.get("config", "debug")
 	match config:
 		"debug":
 			ProjectSettings.set_setting("application/run/disable_stdout", false)
+			ProjectSettings.set_setting("godot_mcp/build_config/debug_build", true)
+			ProjectSettings.set_setting("godot_mcp/build_config/release_debug", false)
+			ProjectSettings.set_setting("godot_mcp/build_config/optimize", false)
 		"release":
 			ProjectSettings.set_setting("application/run/disable_stdout", true)
+			ProjectSettings.set_setting("godot_mcp/build_config/debug_build", false)
+			ProjectSettings.set_setting("godot_mcp/build_config/release_debug", false)
+			ProjectSettings.set_setting("godot_mcp/build_config/optimize", true)
 		"development":
 			ProjectSettings.set_setting("application/run/disable_stdout", false)
+			ProjectSettings.set_setting("godot_mcp/build_config/debug_build", false)
+			ProjectSettings.set_setting("godot_mcp/build_config/release_debug", true)
+			ProjectSettings.set_setting("godot_mcp/build_config/optimize", true)
 		_:
 			return {"success": false, "error": "Invalid config: %s (use: debug, release, development)" % config}
 	# Track configuration in custom key for reliable read-back
 	ProjectSettings.set_setting("godot_mcp/build_config/configuration", config)
-	return {"success": true, "configuration": config, "message": "Build config set to %s" % config}
+	return {"success": true, "configuration": config, "message": "Build config set to %s — debug options reset to %s defaults" % [config, config]}
 
 
 ## Set scripting backend.
@@ -138,34 +150,55 @@ func _set_debug_options(params: Dictionary) -> Dictionary:
 		if params.has("optimize"):
 			debug_options["optimize"] = params["optimize"] as bool
 			ProjectSettings.set_setting("godot_mcp/build_config/optimize", debug_options["optimize"])
-		return {"success": true, "debug_options": debug_options}
+		var result: Dictionary = {"success": true, "debug_options": debug_options}
+		if debug_options["debug_build"] and debug_options["release_debug"]:
+			result["warnings"] = ["debug_build and release_debug are both enabled — these options are typically mutually exclusive"]
+		return result
 	return {"success": false, "error": "No debug options provided"}
 
 
 ## Validate current build settings.
+## Only build-config-specific issues count as errors.
+## Project-health checks (main scene, viewport, autoloads) are warnings,
+## since they do not reflect build configuration correctness.
 func _validate() -> Dictionary:
 	var errors: Array = []
 	var warnings: Array = []
-	# Check main scene
+
+	# ── Build-config-specific checks ──
+	var config: String = ProjectSettings.get_setting("godot_mcp/build_config/configuration", "debug")
+	var db: bool = ProjectSettings.get_setting("godot_mcp/build_config/debug_build", true)
+	var rd: bool = ProjectSettings.get_setting("godot_mcp/build_config/release_debug", false)
+	var opt: bool = ProjectSettings.get_setting("godot_mcp/build_config/optimize", false)
+
+	if config == "release" and db:
+		errors.append("debug_build=true conflicts with release configuration — set debug_build=false or switch to debug config")
+	if config == "debug" and opt:
+		warnings.append("optimize=true under debug config — consider switching to release or development for optimized builds")
+	if db and rd:
+		warnings.append("debug_build and release_debug are both enabled — these options are typically mutually exclusive")
+
+	# ── Project-health checks (warnings, not build-config errors) ──
 	var main_scene: String = ProjectSettings.get_setting("application/run/main_scene", "") as String
 	if main_scene.is_empty():
-		errors.append("No main scene configured")
+		warnings.append("No main scene configured")
 	elif not FileAccess.file_exists(main_scene):
-		errors.append("Main scene not found: %s" % main_scene)
-	# Check viewport size
+		warnings.append("Main scene not found: %s" % main_scene)
+
 	var vw: int = ProjectSettings.get_setting("display/window/size/viewport_width", 1152)
 	var vh: int = ProjectSettings.get_setting("display/window/size/viewport_height", 648)
 	if vw <= 0 or vh <= 0:
-		errors.append("Invalid viewport size: %dx%d" % [vw, vh])
-	# Check autoloads — iterate all autoload/ entries via property list
-	var props: Array = ProjectSettings.get_property_list()
-	for prop: Dictionary in props:
+		warnings.append("Invalid viewport size: %dx%d" % [vw, vh])
+
+	var prop_list: Array = ProjectSettings.get_property_list()
+	for prop: Dictionary in prop_list:
 		var prop_name: String = prop.get("name", "")
 		if prop_name.begins_with("autoload/"):
 			var val: String = ProjectSettings.get_setting(prop_name, "") as String
 			var path: String = val.substr(1) if val.begins_with("*") else val
 			if not FileAccess.file_exists(path) and not ResourceLoader.exists(path):
 				warnings.append("Autoload resource not found: %s" % path)
+
 	return {"success": true, "valid": errors.is_empty(), "errors": errors, "warnings": warnings, "error_count": errors.size(), "warning_count": warnings.size()}
 
 
@@ -210,7 +243,7 @@ func _get_build_command(params: Dictionary) -> Dictionary:
 	
 	# Determine debug/release flag from stored configuration
 	var config: String = ProjectSettings.get_setting("godot_mcp/build_config/configuration", "debug")
-	var export_flag: String = "--export-release" if config == "release" else "--export-debug"
+	var export_flag: String = "--export-debug" if config == "debug" else "--export-release"
 	
 	var ext: String = ".exe" if platform == "windows" else (".html" if platform == "web" else ".apk" if platform == "android" else "")
 	var cmd: String = "godot --headless %s \"%s\" builds/%s%s" % [export_flag, preset_name, export_name, ext]

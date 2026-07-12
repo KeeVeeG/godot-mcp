@@ -80,6 +80,25 @@ export function registerRenderingConfigTools(server: McpServer, bridge: GodotBri
     async (args) => callGodot(bridge, 'rendering_config/set_gi_quality', args as Record<string, unknown>),
   );
 
+  // 7.5. set_post_processing
+  server.registerTool(
+    'set_post_processing',
+    {
+      description: 'Configure post-processing effects (bloom, SSAO, SSR, glow, DOF)',
+      inputSchema: {
+        bloom_intensity: z.number().min(0).max(2).optional().describe('Bloom intensity (0-2)'),
+        ssao_enabled: z.boolean().optional().describe('Enable Screen Space Ambient Occlusion'),
+        ssr_enabled: z.boolean().optional().describe('Enable Screen Space Reflections'),
+        glow_enabled: z.boolean().optional().describe('Enable glow effect'),
+        dof_enabled: z.boolean().optional().describe('Enable depth of field'),
+        msaa: z.enum(['disabled', '2x', '4x', '8x']).optional().describe('MSAA level'),
+        fxaa_enabled: z.boolean().optional().describe('Enable Fast Approximate Anti-Aliasing'),
+        taa_enabled: z.boolean().optional().describe('Enable Temporal Anti-Aliasing'),
+      },
+    },
+    async (args) => callGodot(bridge, 'rendering_config/set_post_processing', args as Record<string, unknown>),
+  );
+
   // 8. set_viewport_size
   server.registerTool(
     'set_viewport_size',

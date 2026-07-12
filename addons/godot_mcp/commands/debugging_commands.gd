@@ -1,18 +1,24 @@
 ## Debugging commands module - 8 tools.
 ## Provides breakpoint management, call stack inspection, expression evaluation,
 ## and step-through debugging control.
+##
+## Architecture: Uses MCPDebuggerPlugin (EditorDebuggerPlugin subclass) for
+## breakpoint sync, session management, and async debugger message capture.
+## Registered via plugin.gd's add_debugger_plugin() in _enter_tree().
+@tool
 class_name MCPDebuggingCommands
 extends RefCounted
 
 var _plugin: EditorPlugin
 
-## Stored breakpoints: { "script_path:line": {path, line, condition} }
-var _breakpoints: Dictionary = {}
+## Reference to the MCPDebuggerPlugin (EditorDebuggerPlugin subclass)
+## Set by plugin.gd after both are initialized.
+var _mcp_debugger_plugin: MCPDebuggerPlugin = null
 
-## Debug session state
-var _is_paused: bool = false
-var _last_call_stack: Array = []
-var _debugger_plugin: EditorDebuggerPlugin = null
+## Stored breakpoints: { "script_path:line": {path, line, condition} }
+## These are local bookkeeping; actual breakpoint sync is handled by
+## MCPDebuggerPlugin.queue_breakpoint() / session.set_breakpoint().
+var _breakpoints: Dictionary = {}
 
 ## Godot singletons that Expression's base_obj (Control node) cannot resolve.
 const _SINGLETON_NAMES: PackedStringArray = [
@@ -24,6 +30,11 @@ const _SINGLETON_NAMES: PackedStringArray = [
 
 func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
+
+
+func set_debugger_plugin(debugger_plugin: MCPDebuggerPlugin) -> void:
+	_mcp_debugger_plugin = debugger_plugin
+	print("[MCP DebugCmds] Debugger plugin wired")
 
 
 func get_commands() -> Dictionary:
@@ -43,6 +54,9 @@ func get_commands() -> Dictionary:
 ## Optionally attach a condition expression.
 func set_breakpoint(params: Dictionary) -> Dictionary:
 	var script_path: String = params.get("script_path", "")
+	# Normalize: replace backslashes with forward slashes for Windows paths
+	# and strip trailing whitespace.
+	script_path = script_path.replace("\\", "/").strip_edges()
 	var line: int = params.get("line", 0)
 	var condition: String = params.get("condition", "")
 
@@ -50,6 +64,10 @@ func set_breakpoint(params: Dictionary) -> Dictionary:
 		return {"error": "script_path is required"}
 	if line < 1:
 		return {"error": "line must be >= 1"}
+
+	# Reject empty-string condition — use omit instead
+	if "condition" in params and condition == "":
+		return {"error": "condition must not be empty. Omit the parameter instead of passing an empty string."}
 
 	# Verify the script file exists
 	var file_path: String = script_path
@@ -69,8 +87,9 @@ func set_breakpoint(params: Dictionary) -> Dictionary:
 	if line > line_count:
 		return {"error": "Line %d exceeds script length (%d lines)" % [line, line_count]}
 
-	# Store breakpoint
+	# Store breakpoint locally
 	var key: String = "%s:%d" % [script_path, line]
+	var is_overwrite: bool = _breakpoints.has(key)
 	_breakpoints[key] = {
 		"path": script_path,
 		"line": line,
@@ -78,27 +97,23 @@ func set_breakpoint(params: Dictionary) -> Dictionary:
 		"enabled": true,
 	}
 
-	# Use EditorDebuggerPlugin to set the breakpoint if debugger is available
-	var debugger_plugin: EditorDebuggerPlugin = _get_debugger_plugin()
-	if debugger_plugin != null:
-		# Set breakpoint via the engine's debugger interface
-		var session: EditorDebuggerSession = _get_active_session(debugger_plugin)
-		if session != null:
-			var msg: Array = [script_path, line, true]
-			session.send_message("scene:set_breakpoint", msg)
+	# Sync to the debugger plugin (queues for session or applies immediately)
+	if _mcp_debugger_plugin != null:
+		_mcp_debugger_plugin.queue_breakpoint(script_path, line, condition, true)
 
+	var overwrite_msg: String = " (overwritten)" if is_overwrite else ""
 	return {"result": {
 		"success": true,
 		"path": script_path,
 		"line": line,
 		"condition": condition,
-		"message": "Breakpoint set at %s:%d%s" % [script_path, line, " (conditional)" if condition != "" else ""],
+		"message": "Breakpoint set at %s:%d%s%s" % [script_path, line, " (conditional)" if condition != "" else "", overwrite_msg],
 	}}
 
 
 ## Remove a breakpoint from a GDScript file at a specific line.
 func remove_breakpoint(params: Dictionary) -> Dictionary:
-	var script_path: String = params.get("script_path", "")
+	var script_path: String = params.get("script_path", "").replace("\\", "/").strip_edges()
 	var line: int = params.get("line", 0)
 
 	if script_path.is_empty():
@@ -112,13 +127,9 @@ func remove_breakpoint(params: Dictionary) -> Dictionary:
 
 	_breakpoints.erase(key)
 
-	# Remove via debugger
-	var debugger_plugin: EditorDebuggerPlugin = _get_debugger_plugin()
-	if debugger_plugin != null:
-		var session: EditorDebuggerSession = _get_active_session(debugger_plugin)
-		if session != null:
-			var msg: Array = [script_path, line, false]
-			session.send_message("scene:set_breakpoint", msg)
+	# Remove from debugger plugin and active session
+	if _mcp_debugger_plugin != null:
+		_mcp_debugger_plugin.unqueue_breakpoint(script_path, line)
 
 	return {"result": {
 		"success": true,
@@ -148,37 +159,50 @@ func list_breakpoints(_params: Dictionary) -> Dictionary:
 
 ## Get the current call stack when paused at a breakpoint.
 ## Returns stack frames with local variables for each frame.
-## NOTE: The response from the debugger is asynchronous. If the game is paused
-## at a breakpoint, the first call may return empty. Call again after a brief
-## delay to get the actual stack data.
+## The call stack is populated by MCPDebuggerPlugin._capture()
+## when the game process responds to a stack_dump request.
+## Get the current call stack when paused at a breakpoint.
+## The built-in debugger handler automatically requests get_stack_dump when
+## the game hits a breakpoint. The response populates last_call_stack via
+## _on_editor_stack_dump() callback connected to ScriptEditorDebugger.stack_dump.
+## We just return whatever was captured.
 func get_call_stack(_params: Dictionary) -> Dictionary:
-	var debugger_plugin: EditorDebuggerPlugin = _get_debugger_plugin()
-	if debugger_plugin == null:
+	if _mcp_debugger_plugin == null:
 		return {"error": "Debugger plugin not available"}
 
-	var session: EditorDebuggerSession = _get_active_session(debugger_plugin)
+	var session: EditorDebuggerSession = _mcp_debugger_plugin.get_active_session()
 	if session == null:
 		return {"error": "No active debug session. Start the game with debugging enabled."}
 
+	if not session.is_active():
+		return {"error": "Debug session is not active. Start the game."}
+
 	# Request call stack from the running game (async message)
 	session.send_message("get_stack_dump", [])
-	# The response arrives asynchronously via _on_debugger_message callback.
+	# The response arrives asynchronously via MCPDebuggerPlugin._capture().
+	# It populates mcp_debugger_plugin.last_call_stack.
 	# Return last known state; caller should retry if empty.
-	if _last_call_stack.is_empty():
+	var frames: Array = _mcp_debugger_plugin.last_call_stack
+	var paused: bool = _mcp_debugger_plugin.is_paused
+
+	if frames.is_empty():
 		return {"result": {
-			"paused": _is_paused,
+			"paused": paused,
 			"frames": [],
 			"message": "No call stack available yet. The debugger response is async — if the game is paused at a breakpoint, call again after a short delay.",
 		}}
 
 	return {"result": {
-		"paused": _is_paused,
-		"frame_count": _last_call_stack.size(),
-		"frames": _last_call_stack,
+		"paused": paused,
+		"frame_count": frames.size(),
+		"frames": frames,
 	}}
 
 
 ## Evaluate a GDScript expression in the specified context.
+## - context="editor": Evaluates in the editor process (Expression class / EditorScript).
+## - context="game": Evaluates in the running game via debugger session (requires game
+##   to be paused at a breakpoint for access to stack frame variables).
 func evaluate_expression(params: Dictionary) -> Dictionary:
 	var expression: String = params.get("expression", "")
 	var context: String = params.get("context", "editor")
@@ -186,6 +210,11 @@ func evaluate_expression(params: Dictionary) -> Dictionary:
 	if expression.is_empty():
 		return {"error": "expression is required"}
 
+	# Game context: evaluate in the running game process
+	if context == "game":
+		return await _evaluate_in_game_context(expression)
+
+	# Editor context (default)
 	# Pre-process: rewrite $NodePath / $"path" to edited_scene_root.get_node(...)
 	expression = _rewrite_dollar_syntax(expression)
 
@@ -212,18 +241,49 @@ func evaluate_expression(params: Dictionary) -> Dictionary:
 	return {"result": {"expression": expression, "context": context, "value": result}}
 
 
-## Step over the current line when paused at a breakpoint.
-func step_over(_params: Dictionary) -> Dictionary:
-	var debugger_plugin: EditorDebuggerPlugin = _get_debugger_plugin()
-	if debugger_plugin == null:
+## Evaluate expression in the running game context via the debugger session.
+## Requires the game to be running AND paused at a breakpoint.
+func _evaluate_in_game_context(expression: String) -> Dictionary:
+	if _mcp_debugger_plugin == null:
 		return {"error": "Debugger plugin not available"}
 
-	var session: EditorDebuggerSession = _get_active_session(debugger_plugin)
-	if session == null:
-		return {"error": "No active debug session"}
+	var session: EditorDebuggerSession = _mcp_debugger_plugin.get_active_session()
+	if session == null or not session.is_active():
+		return {"error": "Game is not running. Start the scene first, then use context='game'."}
+
+	if not session.is_breaked():
+		return {"error": "Game is not paused at a breakpoint. Set a breakpoint and wait for it to trigger before using context='game' for expression evaluation."}
+
+	# Send evaluate request via the debugger protocol
+	session.send_message("evaluate", [expression, 0])
+
+	# Wait for the async response via signal (with timeout)
+	var start: float = Time.get_unix_time_from_system()
+	const TIMEOUT: float = 5.0
+	while _mcp_debugger_plugin._eval_result == null:
+		if Time.get_unix_time_from_system() - start > TIMEOUT:
+			return {"error": "Expression evaluation timed out (%.1fs)" % TIMEOUT}
+		await _plugin.get_tree().process_frame
+
+	var result: Variant = _mcp_debugger_plugin._eval_result
+	_mcp_debugger_plugin._eval_result = null
+
+	return {"result": {"expression": expression, "context": "game", "value": result}}
+
+
+## Step over the current line when paused at a breakpoint.
+func step_over(_params: Dictionary) -> Dictionary:
+	if _mcp_debugger_plugin == null:
+		return {"error": "Debugger plugin not available"}
+
+	var session: EditorDebuggerSession = _mcp_debugger_plugin.get_active_session()
+	if session == null or not session.is_active():
+		return {"error": "No active debug session. Start the game with debugging enabled."}
+
+	if not session.is_breaked():
+		return {"error": "Cannot step over — game is not paused at a breakpoint"}
 
 	session.send_message("next", [])
-	_is_paused = false
 
 	return {"result": {
 		"success": true,
@@ -234,16 +294,17 @@ func step_over(_params: Dictionary) -> Dictionary:
 
 ## Step into the current function call when paused.
 func step_into(_params: Dictionary) -> Dictionary:
-	var debugger_plugin: EditorDebuggerPlugin = _get_debugger_plugin()
-	if debugger_plugin == null:
+	if _mcp_debugger_plugin == null:
 		return {"error": "Debugger plugin not available"}
 
-	var session: EditorDebuggerSession = _get_active_session(debugger_plugin)
-	if session == null:
-		return {"error": "No active debug session"}
+	var session: EditorDebuggerSession = _mcp_debugger_plugin.get_active_session()
+	if session == null or not session.is_active():
+		return {"error": "No active debug session. Start the game with debugging enabled."}
+
+	if not session.is_breaked():
+		return {"error": "Cannot step into — game is not paused at a breakpoint"}
 
 	session.send_message("step", [])
-	_is_paused = false
 
 	return {"result": {
 		"success": true,
@@ -254,17 +315,17 @@ func step_into(_params: Dictionary) -> Dictionary:
 
 ## Continue execution when paused at a breakpoint.
 func continue_execution(_params: Dictionary) -> Dictionary:
-	var debugger_plugin: EditorDebuggerPlugin = _get_debugger_plugin()
-	if debugger_plugin == null:
+	if _mcp_debugger_plugin == null:
 		return {"error": "Debugger plugin not available"}
 
-	var session: EditorDebuggerSession = _get_active_session(debugger_plugin)
-	if session == null:
-		return {"error": "No active debug session"}
+	var session: EditorDebuggerSession = _mcp_debugger_plugin.get_active_session()
+	if session == null or not session.is_active():
+		return {"error": "No active debug session. Start the game with debugging enabled."}
+
+	if not session.is_breaked():
+		return {"error": "Cannot continue — game is not paused at a breakpoint"}
 
 	session.send_message("continue", [])
-	_is_paused = false
-	_last_call_stack.clear()
 
 	return {"result": {
 		"success": true,
@@ -273,25 +334,9 @@ func continue_execution(_params: Dictionary) -> Dictionary:
 	}}
 
 
-## Helper: Get the EditorDebuggerPlugin instance.
-func _get_debugger_plugin() -> EditorDebuggerPlugin:
-	if _plugin == null:
-		return null
-	if _debugger_plugin == null:
-		# Access the debugger through the editor interface
-		_debugger_plugin = EditorDebuggerPlugin.new()
-		_plugin.add_debugger_plugin(_debugger_plugin)
-	return _debugger_plugin
-
-
-## Helper: Get the active debugger session.
-func _get_active_session(debugger: EditorDebuggerPlugin) -> EditorDebuggerSession:
-	if debugger == null:
-		return null
-	var sessions: Array = debugger.get_sessions()
-	if sessions.is_empty():
-		return null
-	return sessions[0] as EditorDebuggerSession
+# ═══════════════════════════════════════════════════════════════════════
+# Helpers — preserved from original implementations
+# ═══════════════════════════════════════════════════════════════════════
 
 
 ## Helper: Check if expression references a Godot singleton as a bare word.
@@ -345,9 +390,6 @@ func _execute_in_editor(code: String) -> Variant:
 	var needs_preamble: bool = not _build_editor_script_preamble(code).is_empty()
 
 	# Step 1: Try EditorScript with result capture.
-	# This stores the last expression's value in _mcp_eval_result so it isn't discarded.
-	# Activated for multi-statement code OR single-statement code needing a preamble
-	# (e.g. edited_scene_root.name — single expression but needs preamble for resolution).
 	if _is_multistatement(code) or needs_preamble:
 		var capture_src: String = _build_capture_script(code)
 		if not capture_src.is_empty():
@@ -363,8 +405,7 @@ func _execute_in_editor(code: String) -> Variant:
 						return val
 					return "ok"
 
-	# Step 2: EditorScript void wrapper (only for statements — lines that don't return values).
-	# Single non-statement lines skip this step so Step 3 can capture their value.
+	# Step 2: EditorScript void wrapper
 	var lines: PackedStringArray = code.split("\n")
 	var last_nonempty: String = ""
 	for li in range(lines.size() - 1, -1, -1):
@@ -417,7 +458,6 @@ func _is_statement(line: String) -> bool:
 	var t: String = line.strip_edges()
 	if t.is_empty():
 		return true
-	# Keywords always followed by space/identifier/etc.
 	var prefixes: PackedStringArray = [
 		"var ", "const ", "for ", "while ", "if ", "elif ",
 		"func ", "class ", "match ", "signal ", "enum ",
@@ -426,29 +466,23 @@ func _is_statement(line: String) -> bool:
 	for p in prefixes:
 		if t.begins_with(p):
 			return true
-	# Standalone keywords or keywords followed by colon
 	if t == "pass" or t == "return" or t == "break" or t == "continue" or t == "else":
 		return true
 	if t.begins_with("else:"):
 		return true
-	# Keywords that can be standalone or followed by expression
 	for kw in ["return", "break", "continue", "pass", "assert"]:
 		if t.begins_with(kw) and t.length() > kw.length():
 			var next = t[kw.length()]
 			if next == " " or next == "\t":
 				return true
-			# Handle return(value) without space — statement, not property access
 			if next == "(":
 				return true
-	# Comments
 	if t.begins_with("#"):
 		return true
 	return false
 
 
 ## Helper: Build an EditorScript that captures the last expression's value.
-## Returns empty string if the last line is a statement (can't capture).
-## Uses sentinel "_MCP_NO_RESULT_" to distinguish null result from void.
 func _build_capture_script(code: String) -> String:
 	var lines: PackedStringArray = code.split("\n")
 	var last_nonempty_idx: int = -1
@@ -464,7 +498,6 @@ func _build_capture_script(code: String) -> String:
 	if _is_statement(last_line_stripped):
 		return ""
 
-	# Preserve leading whitespace of the original last line
 	var leading_ws: String = ""
 	for j in range(last_line_raw.length()):
 		var ch = last_line_raw[j]
@@ -473,7 +506,6 @@ func _build_capture_script(code: String) -> String:
 		else:
 			break
 
-	# Replace last line with capture assignment
 	lines[last_nonempty_idx] = leading_ws + "_mcp_eval_result = " + last_line_stripped
 	var modified_code: String = "\n".join(lines)
 
@@ -482,7 +514,6 @@ func _build_capture_script(code: String) -> String:
 
 
 ## Helper: Build preamble lines for EditorScript (e.g. edited_scene_root alias).
-## Checks for 'edited_scene_root' only in code portions (skips strings/comments).
 func _build_editor_script_preamble(code: String) -> String:
 	var in_tq: bool = false
 	var in_bc: bool = false
@@ -495,7 +526,6 @@ func _build_editor_script_preamble(code: String) -> String:
 			var seg_end: int = seg[1]
 			var code_part: String = line.substr(seg_start, seg_end - seg_start)
 			if "edited_scene_root" in code_part:
-				# Already declared by caller?
 				if not "var edited_scene_root" in code_part:
 					return "var edited_scene_root = EditorInterface.get_edited_scene_root()\n\t"
 	return ""
@@ -504,10 +534,8 @@ func _build_editor_script_preamble(code: String) -> String:
 ## Helper: Rewrite $NodePath / $"path" / $/absolute/path syntax to
 ## edited_scene_root.get_node(...). Skips $ inside string literals and comments.
 func _rewrite_dollar_syntax(code: String) -> String:
-	# $"path with spaces" pattern (quoted)
 	var regex_quoted: RegEx = RegEx.new()
 	regex_quoted.compile('\\$"([^"]+)"')
-	# $identifier/Path and $/absolute/path patterns (unquoted)
 	var regex_unquoted: RegEx = RegEx.new()
 	regex_unquoted.compile('\\$([A-Za-z_/][A-Za-z0-9_/.]*)')
 
@@ -525,15 +553,12 @@ func _rewrite_dollar_syntax(code: String) -> String:
 		for seg in parsed["segments"]:
 			var seg_start: int = seg[0]
 			var seg_end: int = seg[1]
-			# Add non-code portion (strings, comments) as-is
 			new_line += line.substr(prev_end, seg_start - prev_end)
-			# Apply regex to code portion
 			var code_part: String = line.substr(seg_start, seg_end - seg_start)
 			code_part = regex_quoted.sub(code_part, 'edited_scene_root.get_node("$1")', true)
 			code_part = regex_unquoted.sub(code_part, 'edited_scene_root.get_node("$1")', true)
 			new_line += code_part
 			prev_end = seg_end
-		# Add remaining non-code portion
 		new_line += line.substr(prev_end)
 		result_lines.append(new_line)
 
@@ -586,7 +611,6 @@ func _contains_await_keyword(code: String) -> bool:
 				continue
 			if line[i] == "#":
 				break
-			# Check for 'await' keyword at code position
 			if i + 5 <= line_len and line.substr(i, 5) == "await":
 				var after_ok: bool = (i + 5 >= line_len)
 				if not after_ok:
@@ -604,8 +628,6 @@ func _contains_await_keyword(code: String) -> bool:
 
 
 ## Helper: Find the end index of a string literal starting at line[pos].
-## Returns the index after the closing quote, or line.length() if unterminated.
-## pos must point at the opening quote character.
 func _find_string_end(line: String, pos: int) -> int:
 	var q = line[pos]
 	var i: int = pos + 1
@@ -621,8 +643,6 @@ func _find_string_end(line: String, pos: int) -> int:
 
 
 ## Helper: Find code segment boundaries in a line, skipping strings and comments.
-## Returns Dictionary with "segments" (Array of [start, end] pairs), "in_tq", "in_bc".
-## GDScript passes bools by value, so state must be returned explicitly.
 func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 	var segments: Array = []
 	var seg_start: int = -1
@@ -630,7 +650,6 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 	var line_len: int = line.length()
 
 	while i < line_len:
-		# Inside triple-quoted string - scan for closing """
 		if in_tq:
 			if i + 2 < line_len and line[i] == "\"" and line[i + 1] == "\"" and line[i + 2] == "\"":
 				in_tq = false
@@ -642,7 +661,6 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 			i += 1
 			continue
 
-		# Triple-quoted string """
 		if i + 2 < line_len and line[i] == "\"" and line[i + 1] == "\"" and line[i + 2] == "\"":
 			in_tq = true
 			if seg_start >= 0:
@@ -651,7 +669,6 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 			i += 3
 			continue
 
-		# Single/double-quoted string
 		if line[i] == "\"" or line[i] == "'":
 			if seg_start >= 0:
 				segments.append([seg_start, i])
@@ -659,13 +676,11 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 			i = _find_string_end(line, i)
 			continue
 
-		# Hash comment
 		if line[i] == "#":
 			if seg_start >= 0:
 				segments.append([seg_start, i])
 			return {"segments": segments, "in_tq": in_tq, "in_bc": in_bc}
 
-		# Regular code character
 		if seg_start < 0:
 			seg_start = i
 		i += 1
@@ -675,11 +690,9 @@ func _find_code_segments(line: String, in_tq: bool, in_bc: bool) -> Dictionary:
 	return {"segments": segments, "in_tq": in_tq, "in_bc": in_bc}
 
 
-## Helper: Normalize indentation — convert spaces/tabs to consistent tab-based indentation,
-## preserving relative indentation levels. Adds one extra tab for the _run() body context.
+## Helper: Normalize indentation — convert spaces/tabs to consistent tab-based indentation.
 func _strip_and_indent(code: String) -> String:
 	var lines: PackedStringArray = code.split("\n")
-	# First pass: determine minimum indentation (to strip common prefix)
 	var min_indent: int = 999
 	for line in lines:
 		if line.strip_edges().is_empty():
@@ -689,7 +702,7 @@ func _strip_and_indent(code: String) -> String:
 			if ch == " ":
 				leading += 1
 			elif ch == "\t":
-				leading += 4  # normalize tab to 4-space equivalent
+				leading += 4
 			else:
 				break
 		min_indent = min(min_indent, leading)
@@ -703,7 +716,6 @@ func _strip_and_indent(code: String) -> String:
 		if stripped.is_empty():
 			indented.append("")
 			continue
-		# Count leading whitespace and subtract common prefix
 		var leading: int = 0
 		for ch in line:
 			if ch == " ":
@@ -713,7 +725,6 @@ func _strip_and_indent(code: String) -> String:
 			else:
 				break
 		var relative: int = leading - min_indent
-		# Convert to tabs (4-space = 1 tab), plus one for _run() body
 		var tabs: int = relative / 4 + 1
 		var prefix: String = ""
 		for _t in range(tabs):

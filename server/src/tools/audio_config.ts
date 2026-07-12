@@ -26,30 +26,29 @@ export function registerAudioConfigTools(server: McpServer, bridge: GodotBridge)
       inputSchema: {
         buses: z
           .array(
-            z.preprocess(
-              (val: unknown) => {
-                if (val && typeof val === 'object' && !Array.isArray(val)) {
-                  const obj = val as Record<string, unknown>;
-                  if ('volume' in obj && !('volume_db' in obj)) {
-                    obj.volume_db = obj.volume;
-                    delete obj.volume;
-                  }
-                }
-                return val;
-              },
-              z.object({
-                name: z.string().describe('Bus name'),
-                volume: z.number().optional().describe('Volume in dB (alias for volume_db)'),
-                volume_db: z.number().optional().describe('Volume in dB'),
-                solo: z.boolean().optional().describe('Solo this bus'),
-                mute: z.boolean().optional().describe('Mute this bus'),
-              }),
-            ),
+            z.object({
+              name: z.string().describe('Bus name'),
+              volume: z.number().optional().describe('Volume in dB (alias for volume_db)'),
+              volume_db: z.number().optional().describe('Volume in dB'),
+              solo: z.boolean().optional().describe('Solo this bus'),
+              mute: z.boolean().optional().describe('Mute this bus'),
+              send: z.string().optional().describe('Bus name to send output to'),
+            }),
           )
           .describe("Ordered list of audio buses (first is always 'Master')"),
       },
     },
-    async (args) => callGodot(bridge, 'audio_config/set_bus_layout', args as Record<string, unknown>),
+    async (args) => {
+      // Resolve volume alias per-bus before sending to Godot (avoids confusing error paths)
+      const buses = (args.buses as any[]) || [];
+      for (const bus of buses) {
+        if ('volume' in bus && !('volume_db' in bus)) {
+          bus.volume_db = bus.volume;
+        }
+        delete bus.volume;
+      }
+      return callGodot(bridge, 'audio_config/set_bus_layout', args as Record<string, unknown>);
+    },
   );
 
   // 3. add_audio_bus_config
@@ -59,7 +58,7 @@ export function registerAudioConfigTools(server: McpServer, bridge: GodotBridge)
       description: 'Add a new audio bus at a specific position',
       inputSchema: {
         name: Name.describe('Bus name'),
-        index: z.number().int().min(0).optional().describe('Position in bus list (omit to append)'),
+        index: z.number().int().min(1).optional().describe('Position in bus list (omit to append at end, 1+ to insert after Master)'),
       },
     },
     async (args) => callGodot(bridge, 'audio_config/add_bus_config', args as Record<string, unknown>),
@@ -82,24 +81,29 @@ export function registerAudioConfigTools(server: McpServer, bridge: GodotBridge)
     'set_audio_bus_volume',
     {
       description: 'Set the volume of a specific audio bus. Use "volume" or "volume_db" key for the volume value.',
-      inputSchema: z.preprocess(
-        (val: unknown) => {
-          if (val && typeof val === 'object' && !Array.isArray(val)) {
-            const obj = val as Record<string, unknown>;
-            if ('volume' in obj && !('volume_db' in obj)) {
-              obj.volume_db = obj.volume;
-              delete obj.volume;
-            }
-          }
-          return val;
-        },
-        z.object({
-          bus: Name.describe("Bus name (e.g. 'Master', 'Music', 'SFX')"),
-          volume_db: z.number().describe('Volume in decibels (0 = normal, negative = quieter)'),
-        }),
-      ),
+      inputSchema: {
+        bus: Name.describe("Bus name (e.g. 'Master', 'Music', 'SFX')"),
+        volume: z.number().optional().describe('Volume in dB (alias for volume_db)'),
+        volume_db: z.number().optional().describe('Volume in decibels (0 = normal, negative = quieter)'),
+      },
     },
-    async (args) => callGodot(bridge, 'audio_config/set_bus_volume', args as Record<string, unknown>),
+    async (args) => {
+      const params = { ...args } as Record<string, unknown>;
+      // Resolve alias: volume → volume_db (volume_db takes precedence if both provided)
+      if ('volume' in params) {
+        if (!('volume_db' in params) || params.volume_db === undefined) {
+          params.volume_db = params.volume;
+        }
+        delete params.volume;
+      }
+      if (!('volume_db' in params) || params.volume_db === undefined) {
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ success: false, error: 'Either "volume" or "volume_db" parameter is required' }, null, 2) }],
+          isError: true,
+        };
+      }
+      return callGodot(bridge, 'audio_config/set_bus_volume', params);
+    },
   );
 
   // 6. get_audio_bus_effects

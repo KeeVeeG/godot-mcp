@@ -32,6 +32,7 @@ export function registerPlatformSpecificTools(server: McpServer, bridge: GodotBr
             team_id: z.string().optional().describe('Apple Developer Team ID'),
             signing: OptionalProperties.describe('Code signing configuration'),
           })
+          .strict()
           .describe('iOS settings to configure'),
       },
     },
@@ -50,6 +51,7 @@ export function registerPlatformSpecificTools(server: McpServer, bridge: GodotBr
             keystore: OptionalProperties.describe('Keystore configuration for signing'),
             permissions: z.array(z.string()).optional().describe('Android permissions to declare'),
           })
+          .strict()
           .describe('Android settings to configure'),
       },
     },
@@ -68,6 +70,7 @@ export function registerPlatformSpecificTools(server: McpServer, bridge: GodotBr
             threading: z.boolean().optional().describe('Enable SharedArrayBuffer threading support'),
             pwa: z.boolean().optional().describe('Enable Progressive Web App support'),
           })
+          .strict()
           .describe('Web platform settings to configure'),
       },
     },

@@ -16,11 +16,19 @@ var _status_panel: MCPStatusPanel
 ## Undo helper
 var _undo_helper: MCUndoHelper
 
+## Debugger plugin (EditorDebuggerPlugin — handles breakpoints, sessions, async capture)
+var _mcp_debugger_plugin: MCPDebuggerPlugin
+
 ## Config
 var _config: MCPConfig
 
 ## All command modules (for cleanup)
 var _command_modules: Array[RefCounted] = []
+
+## Failed module paths from last _register_all_commands() call
+var _diagnostics_failed_modules: Array[String] = []
+var _diagnostics_total_modules: int = 0
+var _diagnostics_load_errors: Array[Dictionary] = []
 
 ## Whether runtime autoload has been injected
 var _runtime_injected: bool = false
@@ -100,6 +108,18 @@ func _enter_tree() -> void:
 	# Connect to scene changed signal for autoload injection
 	# (Removed dead scene_changed handler — autoload injection handled in _ensure_runtime_autoload)
 
+	# Register MCP Debugger Plugin for breakpoint/stack-eval support.
+	# Must be created in _enter_tree() — EditorDebuggerPlugin auto-connects
+	# to EditorDebuggerNode signals during construction.
+	_mcp_debugger_plugin = MCPDebuggerPlugin.new()
+	add_debugger_plugin(_mcp_debugger_plugin)
+	# Wire it to the debugging commands module
+	for mod: RefCounted in _command_modules:
+		if mod is MCPDebuggingCommands:
+			(mod as MCPDebuggingCommands).set_debugger_plugin(_mcp_debugger_plugin)
+			break
+	print("[MCP] Debugger plugin registered")
+
 	# Register runtime autoload so it's available when game starts
 	_ensure_runtime_autoload()
 
@@ -127,6 +147,11 @@ func _exit_tree() -> void:
 		_status_panel.queue_free()
 		_status_panel = null
 
+	# Remove debugger plugin
+	if _mcp_debugger_plugin:
+		remove_debugger_plugin(_mcp_debugger_plugin)
+		_mcp_debugger_plugin = null
+
 	# Cleanup
 	_command_modules.clear()
 	_router = null
@@ -142,125 +167,54 @@ func _exit_tree() -> void:
 	print("[MCP] Plugin unloaded.")
 
 
-## Ensure the mcp_runtime autoload is registered in project.godot.
-## Uses direct FileAccess text I/O to bypass ConfigFile format/parsing issues.
+## Ensure the mcp_runtime autoload is registered via EditorPlugin API.
+## Using add_autoload_singleton() properly updates the in-memory ProjectSettings
+## AND persists to project.godot — avoiding the race condition where raw
+## FileAccess writes are overwritten by the editor's in-memory state.
+##
+## CRITICAL: add_autoload_singleton() updates in-memory ProjectSettings but
+## does NOT force a disk save.  The editor's run-flow (editor_run_bar.cpp)
+## also does NOT call ProjectSettings.save() before launching the game process.
+## Without an explicit save(), the autoload entry may not reach project.godot
+## on disk before the game process reads it — causing the runtime to never
+## instantiate.  We call ProjectSettings.save() explicitly to guarantee the
+## entry is on disk before any game run can start.
 func _ensure_runtime_autoload() -> void:
-	var autoload_line: String = "MCPRuntime=\"res://addons/godot_mcp/services/mcp_runtime.gd\""
-	var config_path: String = "res://project.godot"
+	var autoload_name: String = "MCPRuntime"
+	var autoload_path: String = "res://addons/godot_mcp/services/mcp_runtime.gd"
 
-	if not FileAccess.file_exists(config_path):
-		push_warning("[MCP] project.godot not found, cannot register autoload")
+	# Check if autoload already exists via ProjectSettings (in-memory state).
+	# The key format is "autoload/NAME" with value "*res://path" (singleton).
+	if ProjectSettings.has_setting("autoload/" + autoload_name):
+		return  # Already registered
+
+	# Verify the script file actually exists before registering.
+	if not ResourceLoader.exists(autoload_path):
+		push_error("[MCP] Cannot register runtime autoload — script not found: %s" % autoload_path)
 		if _status_panel:
-			_status_panel.log_activity("project.godot not found — cannot register autoload", "error")
+			_status_panel.log_activity("ERROR: Runtime autoload script not found: %s" % autoload_path, "error")
 		return
 
-	# Read project.godot as plain text
-	var read_file := FileAccess.open(config_path, FileAccess.READ)
-	if not read_file:
-		push_warning("[MCP] Failed to open project.godot for reading")
-		if _status_panel:
-			_status_panel.log_activity("Failed to open project.godot for reading", "error")
-		return
+	# Register via EditorPlugin API — this updates in-memory state.
+	add_autoload_singleton(autoload_name, autoload_path)
 
-	var content: String = read_file.get_as_text()
-	read_file.close()
+	# Force persist to disk immediately.  The editor's run flow
+	# (try_autosave → save_all_scenes → run) does NOT save project
+	# settings.  Without this, the game process reads stale project.godot
+	# that is missing the autoload entry.
+	var save_err: Error = ProjectSettings.save()
+	if save_err != OK:
+		push_warning("[MCP] ProjectSettings.save() returned error %d after registering autoload" % save_err)
 
-	# Normalize line endings (handle Windows CRLF)
-	content = content.replace("\r\n", "\n")
-
-	# Check if MCPRuntime is already registered.
-	# A leading `*` prefix means the autoload is DISABLED (e.g.
-	# `MCPRuntime="*res://..."`).  Godot's add_autoload_singleton()
-	# defaults to disabled, so the `*` can sneak in if the autoload
-	# was previously removed and re-added via the EditorPlugin API.
-	# We auto-correct it to ensure runtime tools work.
-	var disabled_line: String = "MCPRuntime=\"*" + autoload_line.substr(12)  # "MCPRuntime=\"*res://..."
-	if disabled_line in content:
-		print("[MCP] Detected disabled autoload (* prefix) — auto-correcting to enabled")
-		content = content.replace(disabled_line, autoload_line)
-		var fix_file := FileAccess.open(config_path, FileAccess.WRITE)
-		if fix_file:
-			fix_file.store_string(content)
-			fix_file.close()
-			print("[MCP] Corrected autoload line: %s" % autoload_line)
-		else:
-			push_warning("[MCP] Failed to write corrected autoload to project.godot")
-		return  # Corrected — do not insert a duplicate below
-	elif "MCPRuntime=" in content:
-		return  # Already registered (enabled)
-
-	# Find the [autoload] section and insert MCPRuntime
-	var autoload_idx: int = content.find("[autoload]")
-
-	if autoload_idx != -1:
-		# [autoload] section exists — insert MCPRuntime after section header
-		var header_end: int = content.find("\n", autoload_idx)
-		if header_end == -1:
-			header_end = content.length()
-		else:
-			header_end += 1  # include the newline
-		content = content.substr(0, header_end) + autoload_line + "\n" + content.substr(header_end)
-	else:
-		# [autoload] section does not exist — append at end
-		if not content.is_empty() and not content.ends_with("\n"):
-			content += "\n"
-		content += "[autoload]\n\n" + autoload_line + "\n"
-
-	# Write back
-	var write_file := FileAccess.open(config_path, FileAccess.WRITE)
-	if not write_file:
-		push_warning("[MCP] Failed to open project.godot for writing")
-		if _status_panel:
-			_status_panel.log_activity("Failed to open project.godot for writing", "error")
-		return
-
-	write_file.store_string(content)
-	write_file.close()
-
-	# Verify the write succeeded by re-reading the file
-	var verify_file := FileAccess.open(config_path, FileAccess.READ)
-	if verify_file:
-		var verify_content: String = verify_file.get_as_text()
-		verify_file.close()
-		if "MCPRuntime=" in verify_content:
-			print("[MCP] Registered runtime autoload MCPRuntime in project.godot")
-		else:
-			push_warning("[MCP] Write verification failed — MCPRuntime not found in project.godot after write")
-			if _status_panel:
-				_status_panel.log_activity("Write verification failed — MCPRuntime not found after write", "error")
-	else:
-		push_warning("[MCP] Failed to verify write to project.godot")
+	print("[MCP] Registered runtime autoload MCPRuntime via add_autoload_singleton() (save: %s)" % error_string(save_err))
+	if _status_panel:
+		_status_panel.log_activity("Runtime autoload MCPRuntime registered", "info")
 
 
-## Remove the mcp_runtime autoload from project.godot on plugin unload.
+## Remove the mcp_runtime autoload on plugin unload.
 func _remove_runtime_autoload() -> void:
-	var config_path: String = "res://project.godot"
-	if not FileAccess.file_exists(config_path):
-		return
-
-	var read_file := FileAccess.open(config_path, FileAccess.READ)
-	if not read_file:
-		return
-
-	var content: String = read_file.get_as_text()
-	read_file.close()
-
-	if "MCPRuntime=" not in content:
-		return  # Nothing to remove
-
-	# Normalize line endings and filter out the MCPRuntime line
-	content = content.replace("\r\n", "\n")
-	var lines: PackedStringArray = content.split("\n")
-	var filtered: Array[String] = []
-	for line in lines:
-		if "MCPRuntime=" not in line:
-			filtered.append(line)
-
-	var write_file := FileAccess.open(config_path, FileAccess.WRITE)
-	if write_file:
-		write_file.store_string("\n".join(filtered))
-		write_file.close()
-		print("[MCP] Removed autoload entry 'MCPRuntime' from project.godot")
+	remove_autoload_singleton("MCPRuntime")
+	print("[MCP] Removed runtime autoload MCPRuntime")
 
 
 ## Register all command modules.
@@ -288,7 +242,6 @@ func _register_all_commands() -> void:
 		"res://addons/godot_mcp/commands/testing_commands.gd",
 		"res://addons/godot_mcp/commands/profiling_commands.gd",
 		"res://addons/godot_mcp/commands/export_commands.gd",
-		# Extended modules (19)
 		"res://addons/godot_mcp/commands/addon_management_commands.gd",
 		"res://addons/godot_mcp/commands/audio_config_commands.gd",
 		"res://addons/godot_mcp/commands/build_config_commands.gd",
@@ -311,16 +264,29 @@ func _register_all_commands() -> void:
 	]
 
 	var failed_count: int = 0
+	var failed_modules: Array[String] = []
 	for path: String in module_paths:
-		var script: Script = load(path) as Script
+		# Use CACHE_MODE_REUSE to preserve UID-based class resolution (Godot 4.4+).
+		# CACHE_MODE_IGNORE loads scripts with fresh UIDs, breaking class_name dependencies
+		# between modules, causing can_instantiate() to return false for all scripts.
+		var script: Script = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REUSE) as Script
 		if script == null:
-			push_warning("[MCP] Failed to load module: %s — skipping" % path)
+			push_error("[MCP] Failed to load module (file not found or not a script): %s — skipping" % path)
 			failed_count += 1
+			failed_modules.append(path.get_file())
+			continue
+		# Guard: a script with parse errors loads as broken GDScript (not null).
+		# can_instantiate() returns false when compilation failed.
+		if not script.can_instantiate():
+			push_error("[MCP] Failed to load module (parse/compile error): %s — skipping. Check script for syntax errors." % path)
+			failed_count += 1
+			failed_modules.append(path.get_file())
 			continue
 		var module: RefCounted = script.new() as RefCounted
 		if module == null:
-			push_warning("[MCP] Failed to instantiate module: %s — skipping" % path)
+			push_error("[MCP] Failed to instantiate module: %s — skipping. script.new() returned null." % path)
 			failed_count += 1
+			failed_modules.append(path.get_file())
 			continue
 		# Inject plugin reference
 		if module.has_method("set_plugin"):
@@ -328,9 +294,26 @@ func _register_all_commands() -> void:
 		_router.register_module(module)
 		_command_modules.append(module)
 
-	if failed_count > 0:
-		push_warning("[MCP] %d module(s) failed to load" % failed_count)
-	print("[MCP] Registered %d command modules with %d tools" % [_command_modules.size(), _router.get_registered_methods().size()])
+	# Save diagnostics for the mcp/diagnostics bridge method
+	_diagnostics_failed_modules = failed_modules
+	_diagnostics_total_modules = module_paths.size()
+	_diagnostics_load_errors.clear()
+	for fm in failed_modules:
+		_diagnostics_load_errors.append({"file": fm, "reason": "failed to load — check Godot Output panel for parse errors"})
+
+	var handler_count: int = _router.get_registered_methods().size()
+	if _command_modules.size() == 0:
+		push_error("[MCP] CRITICAL: ALL %d command modules failed to load! No tools available. Check for GDScript errors above." % module_paths.size())
+		if _status_panel:
+			_status_panel.log_activity("CRITICAL: All %d modules failed to load! No tools registered." % module_paths.size(), "error")
+	elif failed_count > 0:
+		push_error("[MCP] %d/%d module(s) failed to load: %s" % [failed_count, module_paths.size(), ", ".join(failed_modules)])
+		if _status_panel:
+			_status_panel.log_activity("WARNING: %d/%d modules failed: %s" % [failed_count, module_paths.size(), ", ".join(failed_modules)], "warning")
+
+	print("[MCP] Registered %d command modules with %d handlers covering %d tools" % [_command_modules.size(), handler_count, handler_count])
+	if _status_panel:
+		_status_panel.log_activity("Registered %d modules, %d tools" % [_command_modules.size(), handler_count], "info")
 
 
 ## Called when WebSocket connects to a server.
@@ -370,8 +353,40 @@ func _on_ws_message(message: Dictionary) -> void:
 	if _status_panel:
 		_status_panel.log_activity("Tool: %s" % method_name, "info")
 
+	# Drain accumulated WebSocket frames BEFORE executing the handler.
+	# Pings/pongs from the Node.js server accumulate during previous
+	# synchronous operations (e.g., tilemap clear on large maps).
+	# Processing them now resets the heartbeat timer before we potentially
+	# block the main thread again.
+	if _ws_client and _ws_client.is_server_connected():
+		_ws_client.poll_deferred()
+
+	# === Diagnostic bridge — bypasses router, always available ===
+	# Responds to "mcp/diagnostics" even when zero command modules loaded.
+	if method_name == "mcp/diagnostics":
+		var diag: Dictionary = {
+			"status": "ok" if _command_modules.size() > 0 else "critical",
+			"modules_loaded": _command_modules.size(),
+			"modules_total": _diagnostics_total_modules,
+			"tools_registered": _router.get_registered_methods().size(),
+			"failed_modules": _diagnostics_failed_modules,
+			"load_errors": _diagnostics_load_errors,
+			"ws_connected": _ws_client != null and _ws_client.is_server_connected(),
+			"ws_port": _ws_client.get_connected_port() if _ws_client else -1,
+			"plugin_loaded": true,
+		}
+		_ws_client.send_response(msg_id, diag)
+		return
+	# =============================================================
+
 	# Route to handler (may be async for IPC-based runtime commands)
 	var result: Dictionary = await _router.route_request(method_name, params)
+
+	# Drain any queued WebSocket frames that accumulated during tool execution.
+	# Prevents poll() starvation that can cause heartbeat timeout disconnects
+	# when the main thread is blocked by synchronous operations (TileMap, UndoRedo, etc.).
+	if _ws_client and _ws_client.is_server_connected():
+		_ws_client.poll_deferred()
 
 	# Log result to status panel
 	if result.has("error"):
@@ -387,10 +402,19 @@ func _on_ws_message(message: Dictionary) -> void:
 			_status_panel.log_activity("OK: %s" % method_name, "success")
 
 	# Send response back as proper JSON-RPC response (with id).
-	# Always send as a success response — the result itself contains success: false for errors.
-	# This avoids raw-string errors that violate JSON-RPC spec and break client error parsing.
+	# Detect error responses from command handlers and send them as proper
+	# JSON-RPC errors so the Node.js bridge can reject the promise and
+	# callGodot() can set isError: true on the MCP ToolResult.
 	if _ws_client and _ws_client.is_server_connected():
-		_ws_client.send_response(msg_id, result.get("result", result))
+		if result.has("error") and not result.has("result"):
+			# Command handler returned a structured error (from router or directly)
+			var err_data: Variant = result["error"]
+			if err_data is Dictionary:
+				_ws_client.send_response(msg_id, null, err_data)
+			else:
+				_ws_client.send_response(msg_id, null, {"code": -1, "message": str(err_data)})
+		else:
+			_ws_client.send_response(msg_id, result.get("result", result))
 
 
 ## Check for and auto-dismiss blocking dialogs.
@@ -459,6 +483,12 @@ func _process(_delta: float) -> void:
 
 ## Called when game starts playing.
 func _on_game_started() -> void:
+	# Safety net: ensure runtime autoload is registered before the game starts.
+	# If the project was created programmatically or the plugin's _enter_tree()
+	# never ran, the autoload may be missing. This guarantees it exists for the
+	# NEXT game session (the current session is already launching).
+	_ensure_runtime_autoload()
+
 	print("[MCP] Game started - runtime IPC active")
 	_runtime_injected = true
 	if _dialog_timer:

@@ -1,5 +1,6 @@
 ## WebSocket client that connects to the MCP Node.js server.
 ## Extends Node so it can be added to the scene tree and receive _process.
+@tool
 class_name MCPWebSocketClient
 extends Node
 
@@ -288,7 +289,7 @@ func _connect_to_port(port: int) -> void:
 		_ws.close()
 	_ws = WebSocketPeer.new()
 	_ws.outbound_buffer_size = 8 * 1024 * 1024  # 8 MiB for large tool responses
-	_ws.inbound_buffer_size = 4 * 1024 * 1024   # 4 MiB for large requests
+	_ws.inbound_buffer_size = 8 * 1024 * 1024   # 8 MiB for large requests (matching outbound)
 	var url: String = "ws://localhost:%d" % port
 	var err: Error = _ws.connect_to_url(url)
 	if err != OK:
@@ -311,13 +312,18 @@ func _handle_disconnect() -> void:
 	var old_port: int = _connected_port
 	_connected_port = -1
 	_config.connected_port = -1
+
+	# Log WebSocket close diagnostics for debugging
+	var close_code: int = _ws.get_close_code()
+	var close_reason: String = _ws.get_close_reason()
+	print("[MCP] Disconnected from port %d — close_code=%d, close_reason='%s'" % [old_port, close_code, close_reason])
+
 	# Notify all pending request callers with a disconnect error
 	for req_id: int in _pending_requests:
 		var req: Dictionary = _pending_requests[req_id] as Dictionary
 		var callback: Callable = req["callback"] as Callable
-		callback.call({"error": {"code": -1, "message": "Disconnected from server"}})
+		callback.call({"error": {"code": -1, "message": "Disconnected from server (code=%d)" % close_code}})
 	_pending_requests.clear()
-	print("[MCP] Disconnected from port %d" % old_port)
 	disconnected.emit()
 
 
@@ -365,7 +371,18 @@ func send_response(id: Variant, result: Variant = null, error: Variant = null) -
 	else:
 		message["result"] = result
 	var json_text: String = JSON.stringify(message)
-	_ws.send_text(json_text)
+	
+	# Diagnostic: warn if outbound buffer is under pressure before sending
+	var buffered: int = _ws.get_current_outbound_buffered_amount()
+	if buffered > _ws.outbound_buffer_size * 0.8:
+		push_warning("[MCP] Outbound buffer 80%% full (%d / %d bytes) — may cause connection issues" % [buffered, _ws.outbound_buffer_size])
+	
+	# Check send_text() return value — if it fails, the connection is silently corrupted
+	# and all subsequent sends will also fail until reconnect.
+	var err: Error = _ws.send_text(json_text)
+	if err != OK:
+		push_error("[MCP] Failed to send %d-byte response: %s (code: %d). Forcing reconnect." % [json_text.length(), error_string(err), err])
+		_handle_disconnect()
 
 
 ## Send a JSON-RPC 2.0 notification (no id, no response expected).
@@ -378,7 +395,9 @@ func send_notification(method_name: String, params: Dictionary = {}) -> void:
 		"params": params,
 	}
 	var json_text: String = JSON.stringify(message)
-	_ws.send_text(json_text)
+	var err: Error = _ws.send_text(json_text)
+	if err != OK:
+		push_error("[MCP] Failed to send notification '%s': %s (code: %d)" % [method_name, error_string(err), err])
 
 
 ## Send a ping for keepalive.
@@ -398,6 +417,21 @@ func is_server_connected() -> bool:
 ## Get the port we are connected to.
 func get_connected_port() -> int:
 	return _connected_port
+
+
+## Drain queued WebSocket data after a tool handler completes.
+## Call this from the plugin after every RPC invocation to prevent
+## poll() starvation during synchronous main-thread operations.
+func poll_deferred() -> void:
+	if not _is_connected:
+		return
+	_ws.poll()
+	# Read any accumulated packets to prevent buffer buildup
+	while _ws.get_available_packet_count() > 0:
+		var packet: PackedByteArray = _ws.get_packet()
+		var text: String = packet.get_string_from_utf8()
+		_handle_message(text)
+		_ws.poll()
 
 
 ## Get the project path of the connected MCP server.

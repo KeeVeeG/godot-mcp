@@ -43,7 +43,7 @@ export function registerAudioTools(server: McpServer, bridge: GodotBridge): void
       description: 'Add a new audio bus to the audio bus layout',
       inputSchema: {
         name: Name.describe('Bus name'),
-        index: z.number().int().optional().describe('Position in bus list'),
+        index: z.number().int().min(1).optional().describe('Position in bus list (1-based, Master=0; omit to append at end)'),
       },
     },
     async (args) => callGodot(bridge, 'audio/add_bus', args as Record<string, unknown>),
@@ -63,11 +63,9 @@ export function registerAudioTools(server: McpServer, bridge: GodotBridge): void
             'chorus',
             'compressor',
             'distortion',
-            'eq',
             'limiter',
             'panner',
             'pitchshift',
-            'filter',
             'lowpass',
             'highpass',
             'bandpass',
@@ -80,7 +78,7 @@ export function registerAudioTools(server: McpServer, bridge: GodotBridge): void
             'eq21',
           ])
           .describe('Effect type'),
-        index: z.number().int().optional().describe('Effect insertion position on the bus'),
+        index: z.number().int().min(0).optional().describe('Effect insertion position on the bus'),
         properties: OptionalProperties.describe('Effect properties'),
       },
     },
@@ -111,7 +109,32 @@ export function registerAudioTools(server: McpServer, bridge: GodotBridge): void
     async () => callGodot(bridge, 'audio/get_bus_layout'),
   );
 
-  // 7. get_audio_info
+  // 6. remove_audio_bus_effect
+  server.registerTool(
+    'remove_audio_bus_effect',
+    {
+      description: 'Remove an effect from an audio bus by index',
+      inputSchema: {
+        bus_name: Name.describe('Audio bus name'),
+        effect_index: z.number().int().min(0).describe('0-based index of the effect to remove'),
+      },
+    },
+    async (args) => callGodot(bridge, 'audio/remove_bus_effect', args as Record<string, unknown>),
+  );
+
+  // 7. remove_audio_bus_by_name
+  server.registerTool(
+    'remove_audio_bus_by_name',
+    {
+      description: 'Remove an audio bus by name (cannot remove Master)',
+      inputSchema: {
+        name: Name.describe('Bus name to remove'),
+      },
+    },
+    async (args) => callGodot(bridge, 'audio/remove_bus', args as Record<string, unknown>),
+  );
+
+  // 8. get_audio_info
   server.registerTool(
     'get_audio_info',
     {

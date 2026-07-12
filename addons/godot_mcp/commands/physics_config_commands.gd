@@ -1,9 +1,18 @@
 ## Physics configuration commands module - 8 tools.
 ## Handles physics engine settings, gravity, FPS, layers, and damping.
+@tool
 class_name MCPPhysicsConfigCommands
 extends RefCounted
 
 var _plugin: EditorPlugin
+
+## Reverse map: Godot internal engine names → MCP enum values.
+## Ensures get_physics_settings output matches the values accepted by set_physics_engine.
+const _ENGINE_REVERSE_MAP: Dictionary = {
+	"DEFAULT": "default",
+	"GodotPhysics3D": "godot_physics",
+	"Jolt Physics": "jolt",
+}
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
@@ -60,8 +69,8 @@ func _get_settings() -> Dictionary:
 		"default_angular_damp_2d": ProjectSettings.get_setting("physics/2d/default_angular_damp", 1.0),
 		"default_linear_damp_3d": ProjectSettings.get_setting("physics/3d/default_linear_damp", 0.0),
 		"default_angular_damp_3d": ProjectSettings.get_setting("physics/3d/default_angular_damp", 0.0),
-		"physics_engine_2d": ProjectSettings.get_setting("physics/2d/physics_engine", "DEFAULT"),
-		"physics_engine_3d": ProjectSettings.get_setting("physics/3d/physics_engine", "DEFAULT"),
+		"physics_engine_2d": _normalize_engine_name(ProjectSettings.get_setting("physics/2d/physics_engine", "DEFAULT")),
+		"physics_engine_3d": _normalize_engine_name(ProjectSettings.get_setting("physics/3d/physics_engine", "DEFAULT")),
 		"collision_layers": _get_layer_names_internal(),
 	}
 	return {"success": true, "settings": settings}
@@ -120,7 +129,7 @@ func _set_engine(params: Dictionary) -> Dictionary:
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-	return {"success": true, "dimension": dimension, "engine": engine, "message": "Physics engine set to %s" % engine_name}
+	return {"success": true, "dimension": dimension, "engine": engine, "message": "Physics engine (%s) set to %s" % [dimension, engine]}
 
 
 ## Set a collision layer name.
@@ -142,7 +151,15 @@ func _set_layer_name(params: Dictionary) -> Dictionary:
 ## Get all collision layer names.
 func _get_layers() -> Dictionary:
 	var layers: Dictionary = _get_layer_names_internal()
-	return {"success": true, "layers": layers}
+	return {"success": true, "collision_layers": layers}
+
+
+## Format float without trailing ".0" for whole numbers.
+## INT64_MAX check prevents int() overflow for extreme float values.
+func _fmt_float(value: float) -> String:
+	if floor(value) == value and abs(value) <= 9223372036854775807:  # INT64_MAX
+		return "%d" % int(value)
+	return str(value)
 
 
 ## Set default gravity magnitude.
@@ -156,7 +173,7 @@ func _set_default_gravity(params: Dictionary) -> Dictionary:
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-	return {"success": true, "dimension": dimension, "value": value, "message": "Default gravity set to %f" % value}
+	return {"success": true, "dimension": dimension, "value": value, "message": "Default gravity set to %s" % _fmt_float(value)}
 
 
 ## Set default linear damping.
@@ -170,7 +187,15 @@ func _set_default_linear_damp(params: Dictionary) -> Dictionary:
 	var err: Error = ProjectSettings.save()
 	if err != OK:
 		return {"success": false, "error": "Failed to save: %s" % error_string(err)}
-	return {"success": true, "dimension": dimension, "value": value, "message": "Default linear damp set to %f" % value}
+	return {"success": true, "dimension": dimension, "value": value, "message": "Default linear damp set to %s" % _fmt_float(value)}
+
+
+## Normalize Godot's internal engine name to the MCP enum value.
+## e.g. "GodotPhysics3D" → "godot_physics", "Jolt Physics" → "jolt".
+func _normalize_engine_name(internal_name: String) -> String:
+	if _ENGINE_REVERSE_MAP.has(internal_name):
+		return _ENGINE_REVERSE_MAP[internal_name] as String
+	return internal_name
 
 
 ## Internal helper: get layer names dictionary.

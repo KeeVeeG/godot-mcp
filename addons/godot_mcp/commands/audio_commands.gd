@@ -1,5 +1,6 @@
 ## Audio commands module - 9 tools.
 ## Handles audio players, buses, and bus effects.
+@tool
 class_name MCPAudioCommands
 extends RefCounted
 
@@ -56,24 +57,23 @@ func add_audio_player(params: Dictionary) -> Dictionary:
 
 	player.name = node_name
 
-	# Load and assign stream if provided
-	if stream_path != "":
-		var stream: Resource = load(stream_path)
-		if stream == null:
-			return {"error": "Could not load stream: %s" % stream_path}
-		if stream is AudioStream:
-			player.stream = stream
-		else:
-			return {"error": "Resource is not an AudioStream: %s" % stream_path}
-
-	# Apply additional properties
+	# Apply additional properties (before adding to tree so properties are set at creation)
+	var unknown_props: Array[String] = []
+	var type_errors: Array[String] = []
 	for prop: String in properties:
 		if prop == "stream":
+			push_warning("[MCP] 'stream' in properties is ignored — use 'stream_path' parameter instead")
 			continue
 		if MCPCommandHelpers.has_property(player, prop):
 			var expected_type: int = MCPCommandHelpers.get_property_type(player, prop)
 			var val: Variant = MCPVariantCodec.parse_for_property(properties[prop], expected_type)
-			player.set(prop, val)
+			if val != null:
+				player.set(prop, val)
+			else:
+				push_warning("[MCP] Could not parse property '%s' = %s (expected type %d) — skipping" % [prop, str(properties[prop]), expected_type])
+				type_errors.append(prop)
+		else:
+			unknown_props.append(prop)
 
 	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
 	ur.create_action("MCP: Add audio player %s" % node_name)
@@ -82,7 +82,22 @@ func add_audio_player(params: Dictionary) -> Dictionary:
 	ur.add_undo_method(parent, "remove_child", player)
 	ur.commit_action()
 
-	return {"result": {"name": str(player.name), "path": MCPCommandHelpers.get_node_path(player, _plugin), "type": player_type}}
+	# Load and assign stream if provided (after node creation so node exists even if stream fails)
+	if stream_path != "":
+		var stream: Resource = load(stream_path)
+		if stream == null:
+			push_warning("[MCP] Could not load stream: %s — node created without stream" % stream_path)
+		elif stream is AudioStream:
+			player.stream = stream
+		else:
+			push_warning("[MCP] Resource is not an AudioStream: %s — node created without stream" % stream_path)
+
+	var result: Dictionary = {"name": str(player.name), "path": MCPCommandHelpers.get_node_path(player, _plugin), "type": player_type}
+	if not unknown_props.is_empty():
+		result["unknown_properties"] = unknown_props
+	if not type_errors.is_empty():
+		result["type_errors"] = type_errors
+	return {"result": result}
 
 
 ## Remove an audio player node from the scene.
@@ -134,7 +149,16 @@ func add_audio_bus(params: Dictionary) -> Dictionary:
 			return {"error": "Bus already exists: %s" % bus_name}
 
 	var bus_count_before: int = AudioServer.bus_count
-	if at_index >= 0 and at_index < bus_count_before:
+
+	# Validate at_index: -1 (append), 1..bus_count_before (insert), disallow 0 (Master)
+	if at_index == 0:
+		return {"error": "Cannot insert at index 0 — Master bus occupies position 0. Use index >= 1 or omit to append."}
+	if at_index > bus_count_before:
+		return {"error": "Index %d out of range (bus count: %d, valid range: 1-%d)" % [at_index, bus_count_before, bus_count_before]}
+	if at_index < -1:
+		return {"error": "Index must be -1 (append) or >= 1. Got: %d" % at_index}
+
+	if at_index >= 1 and at_index <= bus_count_before:
 		AudioServer.add_bus(at_index)
 		AudioServer.set_bus_name(at_index, bus_name)
 		return {"result": {"name": bus_name, "index": at_index, "total_buses": AudioServer.bus_count}}
@@ -185,11 +209,24 @@ func add_audio_bus_effect(params: Dictionary) -> Dictionary:
 		return {"error": "Unknown effect type: %s" % effect_type}
 
 	# Apply properties
+	var unknown_props: Array[String] = []
+	var type_errors: Array[String] = []
 	for prop: String in properties:
 		if MCPCommandHelpers.has_property(effect, prop):
 			var expected_type: int = MCPCommandHelpers.get_property_type(effect, prop)
 			var val: Variant = MCPVariantCodec.parse_for_property(properties[prop], expected_type)
-			effect.set(prop, val)
+			if val != null:
+				effect.set(prop, val)
+			else:
+				push_warning("[MCP] Could not parse property '%s' = %s (expected type %d) — skipping" % [prop, str(properties[prop]), expected_type])
+				type_errors.append(prop)
+		else:
+			unknown_props.append(prop)
+
+	# Validate at_index is within range
+	var effect_count_before: int = AudioServer.get_bus_effect_count(bus_idx)
+	if at_index >= 0 and at_index > effect_count_before:
+		return {"error": "Effect index %d out of range (bus has %d effects, valid range: 0-%d)" % [at_index, effect_count_before, effect_count_before]}
 
 	if at_index >= 0:
 		AudioServer.add_bus_effect(bus_idx, effect, at_index)
@@ -197,7 +234,13 @@ func add_audio_bus_effect(params: Dictionary) -> Dictionary:
 		AudioServer.add_bus_effect(bus_idx, effect)
 
 	var effect_count: int = AudioServer.get_bus_effect_count(bus_idx)
-	return {"result": {"bus": bus_name, "effect_type": effect_type, "effect_index": effect_count - 1, "total_effects": effect_count}}
+	var actual_index: int = at_index if (at_index >= 0 and at_index <= effect_count_before) else (effect_count - 1)
+	var result_dict: Dictionary = {"result": {"bus": bus_name, "effect_type": effect_type, "effect_index": actual_index, "total_effects": effect_count}}
+	if not unknown_props.is_empty():
+		result_dict["result"]["unknown_properties"] = unknown_props
+	if not type_errors.is_empty():
+		result_dict["result"]["type_errors"] = type_errors
+	return result_dict
 
 
 ## Remove an effect from an audio bus by index.
@@ -222,7 +265,7 @@ func remove_audio_bus_effect(params: Dictionary) -> Dictionary:
 	return {"result": {"bus": bus_name, "removed_effect_index": effect_index, "total_effects": AudioServer.get_bus_effect_count(bus_idx)}}
 
 
-## Set bus properties: volume_db, solo, mute, bypass_effects.
+## Set bus properties: volume_db, solo, mute, bypass_effects (alias: bypass).
 func set_audio_bus(params: Dictionary) -> Dictionary:
 	var bus_name: String = params.get("bus_name", params.get("bus", ""))
 	if bus_name.is_empty():
@@ -240,7 +283,10 @@ func set_audio_bus(params: Dictionary) -> Dictionary:
 		props = params["properties"] as Dictionary
 
 	if props.has("volume_db"):
-		var vol: float = props["volume_db"] as float
+		var vol_val: Variant = props["volume_db"]
+		if not (typeof(vol_val) == TYPE_FLOAT or typeof(vol_val) == TYPE_INT):
+			return {"error": "volume_db must be a number. Got: %s (type: %s)" % [str(vol_val), type_string(typeof(vol_val))]}
+		var vol: float = vol_val as float
 		AudioServer.set_bus_volume_db(bus_idx, vol)
 		changed["volume_db"] = vol
 
@@ -254,8 +300,10 @@ func set_audio_bus(params: Dictionary) -> Dictionary:
 		AudioServer.set_bus_mute(bus_idx, mute)
 		changed["mute"] = mute
 
-	if props.has("bypass_effects"):
-		var bypass: bool = props["bypass_effects"] as bool
+	# Accept both "bypass_effects" (Godot name) and "bypass" (user-friendly alias)
+	if props.has("bypass_effects") or props.has("bypass"):
+		var bypass_val = props.get("bypass_effects", props.get("bypass", false))
+		var bypass: bool = bypass_val as bool
 		AudioServer.set_bus_bypass_effects(bus_idx, bypass)
 		changed["bypass_effects"] = bypass
 
@@ -268,7 +316,16 @@ func set_audio_bus(params: Dictionary) -> Dictionary:
 		changed["send"] = send_bus
 
 	if changed.is_empty():
-		return {"error": "No valid properties provided (volume_db, solo, mute, bypass_effects, send)"}
+		# Collect unrecognized keys for better error message
+		var recognized := ["volume_db", "solo", "mute", "bypass_effects", "bypass", "send"]
+		var unknowns: Array[String] = []
+		for key in props.keys():
+			if key is String and not (key as String) in recognized:
+				unknowns.append(key as String)
+		if unknowns.is_empty():
+			return {"result": {"bus": bus_name, "changed": changed, "note": "No properties to change — nothing was modified."}}
+		else:
+			return {"error": "Unrecognized property keys: %s. Valid properties: volume_db, solo, mute, bypass_effects, bypass, send" % ", ".join(unknowns)}
 
 	return {"result": {"bus": bus_name, "changed": changed}}
 

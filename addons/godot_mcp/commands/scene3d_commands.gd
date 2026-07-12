@@ -1,5 +1,6 @@
 ## 3D Scene commands module - 12 tools.
 ## Handles 3D meshes, cameras, lighting, environment, and materials.
+@tool
 class_name MCPScene3DCommands
 extends RefCounted
 
@@ -36,6 +37,15 @@ func add_mesh_instance(params: Dictionary) -> Dictionary:
 	var mesh_type: String = params.get("mesh_type", "cube")
 	var properties: Dictionary = params.get("properties", {})
 
+	# Merge nested "mesh" sub-object into flat properties for convenience.
+	# This lets users pass properties={"mesh": {"radius": 1.5, "height": 3.0}}
+	# instead of having to flatten them: properties={"radius": 1.5, "height": 3.0}
+	var mesh_data: Dictionary = properties.duplicate()
+	if properties.has("mesh") and properties["mesh"] is Dictionary:
+		var sub: Dictionary = properties["mesh"] as Dictionary
+		for key in sub:
+			mesh_data[key] = sub[key]
+
 	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if parent_path != "":
 		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
@@ -46,8 +56,8 @@ func add_mesh_instance(params: Dictionary) -> Dictionary:
 	match mesh_type:
 		"BoxMesh", "cube":
 			var bm: BoxMesh = BoxMesh.new()
-			if properties.has("size"):
-				var s: Variant = properties["size"]
+			if mesh_data.has("size"):
+				var s: Variant = mesh_data["size"]
 				if s is Dictionary:
 					bm.size = Vector3((s as Dictionary).get("x", 1.0) as float, (s as Dictionary).get("y", 1.0) as float, (s as Dictionary).get("z", 1.0) as float)
 				else:
@@ -55,34 +65,34 @@ func add_mesh_instance(params: Dictionary) -> Dictionary:
 			mesh = bm
 		"SphereMesh", "sphere":
 			var sm: SphereMesh = SphereMesh.new()
-			sm.radius = properties.get("radius", 0.5) as float
-			sm.height = properties.get("height", 1.0) as float
+			sm.radius = mesh_data.get("radius", 0.5) as float
+			sm.height = mesh_data.get("height", 1.0) as float
 			mesh = sm
 		"CylinderMesh", "cylinder":
 			var cm: CylinderMesh = CylinderMesh.new()
-			cm.top_radius = properties.get("top_radius", 0.5) as float
-			cm.bottom_radius = properties.get("bottom_radius", 0.5) as float
-			cm.height = properties.get("height", 1.0) as float
+			cm.top_radius = mesh_data.get("top_radius", 0.5) as float
+			cm.bottom_radius = mesh_data.get("bottom_radius", 0.5) as float
+			cm.height = mesh_data.get("height", 1.0) as float
 			mesh = cm
 		"CapsuleMesh", "capsule":
 			var cm2: CapsuleMesh = CapsuleMesh.new()
-			cm2.radius = properties.get("radius", 0.5) as float
-			cm2.height = properties.get("height", 1.0) as float
+			cm2.radius = mesh_data.get("radius", 0.5) as float
+			cm2.height = mesh_data.get("height", 1.0) as float
 			mesh = cm2
 		"PlaneMesh", "plane":
 			var pm: PlaneMesh = PlaneMesh.new()
-			var ps: Dictionary = properties.get("size", {})
+			var ps: Dictionary = mesh_data.get("size", {})
 			pm.size = Vector2(ps.get("x", 1.0) as float, ps.get("y", 1.0) as float)
 			mesh = pm
 		"TorusMesh", "torus":
 			var tm: TorusMesh = TorusMesh.new()
-			tm.inner_radius = properties.get("inner_radius", 0.25) as float
-			tm.outer_radius = properties.get("outer_radius", 0.5) as float
+			tm.inner_radius = mesh_data.get("inner_radius", 0.25) as float
+			tm.outer_radius = mesh_data.get("outer_radius", 0.5) as float
 			mesh = tm
 		"PrismMesh", "prism":
 			var prm: PrismMesh = PrismMesh.new()
-			prm.left_to_right = properties.get("left_to_right", 0.5) as float
-			prm.size = Vector3(properties.get("width", 1.0) as float, properties.get("height", 1.0) as float, properties.get("depth", 1.0) as float)
+			prm.left_to_right = mesh_data.get("left_to_right", 0.5) as float
+			prm.size = Vector3(mesh_data.get("width", 1.0) as float, mesh_data.get("height", 1.0) as float, mesh_data.get("depth", 1.0) as float)
 			mesh = prm
 		_:
 			mesh = BoxMesh.new()
@@ -202,7 +212,8 @@ func setup_camera_3d(params: Dictionary) -> Dictionary:
 	if properties.has("far"):
 		cam.far = properties["far"] as float
 	if properties.has("projection"):
-		cam.projection = properties["projection"] as int
+		cam.projection = _parse_enum_str(properties["projection"],
+			{"perspective": 0, "orthogonal": 1, "frustum": 2})
 	if properties.has("current") or properties.has("make_current"):
 		cam.current = properties.get("current", properties.get("make_current", false)) as bool
 	if properties.has("position"):
@@ -211,8 +222,10 @@ func setup_camera_3d(params: Dictionary) -> Dictionary:
 		cam.look_at_from_position(cam.position, MCPVariantCodec._parse_vector3(properties["look_at"]))
 	if properties.has("rotation"):
 		cam.rotation = MCPVariantCodec._parse_vector3(properties["rotation"])
+	if properties.has("size"):
+		cam.size = properties["size"] as float
 
-	return {"result": "Camera3D configured: %s" % path}
+	return {"result": "Camera3D configured: %s" % MCPCommandHelpers.get_node_path(cam, _plugin)}
 
 
 ## Get Camera3D properties.
@@ -419,13 +432,15 @@ func _env_to_dict(env: Environment, node_path: String) -> Dictionary:
 
 func _apply_environment_props(env: Environment, props: Dictionary) -> void:
 	if props.has("background_mode"):
-		env.background_mode = props["background_mode"] as int
+		env.background_mode = _parse_enum_str(props["background_mode"],
+			{"clear_color": 0, "color": 1, "sky": 2, "canvas": 3, "keep": 4, "camera_feed": 5})
 	if props.has("ambient_light_color"):
 		env.ambient_light_color = MCPVariantCodec._parse_color(props["ambient_light_color"])
 	if props.has("ambient_light_energy"):
 		env.ambient_light_energy = props["ambient_light_energy"] as float
 	if props.has("tonemap_mode"):
-		env.tonemap_mode = props["tonemap_mode"] as int
+		env.tonemap_mode = _parse_enum_str(props["tonemap_mode"],
+			{"linear": 0, "reinhard": 1, "filmic": 2, "aces": 3})
 	if props.has("ssao_enabled"):
 		env.ssao_enabled = props["ssao_enabled"] as bool
 	if props.has("glow_enabled"):
@@ -459,7 +474,18 @@ func add_gridmap(params: Dictionary) -> Dictionary:
 	gridmap.name = properties.get("name", "GridMap")
 
 	if properties.has("cell_size"):
-		gridmap.cell_size = MCPVariantCodec._parse_vector3(properties["cell_size"])
+		var cs: Vector3 = MCPVariantCodec._parse_vector3(properties["cell_size"])
+		if cs.x <= 0 or cs.y <= 0 or cs.z <= 0:
+			return {"error": "cell_size components must be positive (got %s)" % str(cs)}
+		gridmap.cell_size = cs
+	if properties.has("cell_octant_size"):
+		gridmap.cell_octant_size = properties["cell_octant_size"] as int
+	if properties.has("cell_center_x"):
+		gridmap.cell_center_x = properties["cell_center_x"] as bool
+	if properties.has("cell_center_y"):
+		gridmap.cell_center_y = properties["cell_center_y"] as bool
+	if properties.has("cell_center_z"):
+		gridmap.cell_center_z = properties["cell_center_z"] as bool
 	if properties.has("mesh_library_path") or properties.has("mesh_library"):
 		var mesh_lib_path: String = properties.get("mesh_library_path", properties.get("mesh_library", "")) as String
 		var lib: MeshLibrary = ResourceLoader.load(mesh_lib_path) as MeshLibrary
@@ -494,6 +520,12 @@ func get_gridmap(params: Dictionary) -> Dictionary:
 		"path": MCPCommandHelpers.get_node_path(gm, _plugin),
 		"name": gm.name,
 		"cell_size": {"x": gm.cell_size.x, "y": gm.cell_size.y, "z": gm.cell_size.z},
+		"cell_octant_size": gm.cell_octant_size,
+		"cell_center_x": gm.cell_center_x,
+		"cell_center_y": gm.cell_center_y,
+		"cell_center_z": gm.cell_center_z,
+		"cell_scale": gm.cell_scale,
+		"collision_layer": gm.collision_layer,
 	}
 	if gm.mesh_library:
 		result["mesh_library"] = gm.mesh_library.resource_path
@@ -540,6 +572,30 @@ func set_material_3d(params: Dictionary) -> Dictionary:
 			sm.emission = MCPVariantCodec._parse_color(properties["emission_color"])
 		if properties.has("emission_energy_multiplier"):
 			sm.emission_energy_multiplier = properties["emission_energy_multiplier"] as float
+		if properties.has("transparency"):
+			sm.transparency = _parse_enum_str(properties["transparency"],
+				{"disabled": 0, "alpha": 1, "alpha_depth_prepass": 2, "alpha_hash": 3})
+		if properties.has("blend_mode"):
+			sm.blend_mode = _parse_enum_str(properties["blend_mode"],
+				{"mix": 0, "add": 1, "sub": 2, "mul": 3})
+		if properties.has("shading_mode"):
+			sm.shading_mode = _parse_enum_str(properties["shading_mode"],
+				{"per_vertex": 0, "unshaded": 0, "per_pixel": 1, "max": 2})
+		if properties.has("cull_mode"):
+			sm.cull_mode = _parse_enum_str(properties["cull_mode"],
+				{"back": 0, "front": 1, "disabled": 2})
+		if properties.has("depth_draw_mode"):
+			sm.depth_draw_mode = _parse_enum_str(properties["depth_draw_mode"],
+				{"opaque_only": 0, "always": 1, "disabled": 2})
+		if properties.has("no_depth_test"):
+			sm.no_depth_test = properties["no_depth_test"] as bool
+		if properties.has("billboard_mode"):
+			sm.billboard_mode = _parse_enum_str(properties["billboard_mode"],
+				{"disabled": 0, "enabled": 1, "fixed_y": 2, "particles": 3})
+		if properties.has("proximity_fade_enabled"):
+			sm.proximity_fade_enabled = properties["proximity_fade_enabled"] as bool
+		if properties.has("proximity_fade_distance"):
+			sm.proximity_fade_distance = properties["proximity_fade_distance"] as float
 		mat = sm
 
 	if node is MeshInstance3D:
@@ -547,11 +603,11 @@ func set_material_3d(params: Dictionary) -> Dictionary:
 			_undo_helper.set_property_with_undo(node, "material_override", mat)
 		else:
 			(node as MeshInstance3D).material_override = mat
-	elif node is VisualInstance3D:
+	elif node is GeometryInstance3D:
 		if _undo_helper:
 			_undo_helper.set_property_with_undo(node, "material_override", mat)
 		else:
-			(node as VisualInstance3D).material_override = mat
+			(node as GeometryInstance3D).material_override = mat
 	else:
 		return {"error": "Node does not support materials: %s" % node.get_class()}
 
@@ -571,8 +627,8 @@ func get_material_3d(params: Dictionary) -> Dictionary:
 	var mat: Material = null
 	if node is MeshInstance3D:
 		mat = (node as MeshInstance3D).material_override
-	elif node is VisualInstance3D:
-		mat = (node as VisualInstance3D).material_override
+	elif node is GeometryInstance3D:
+		mat = (node as GeometryInstance3D).material_override
 	else:
 		return {"error": "Node does not support materials: %s" % node.get_class()}
 
@@ -591,4 +647,25 @@ func get_material_3d(params: Dictionary) -> Dictionary:
 		result["emission_enabled"] = sm.emission_enabled
 		result["emission"] = {"r": sm.emission.r, "g": sm.emission.g, "b": sm.emission.b, "a": sm.emission.a}
 		result["emission_energy_multiplier"] = sm.emission_energy_multiplier
+		result["transparency"] = sm.transparency
+		result["blend_mode"] = sm.blend_mode
+		result["shading_mode"] = sm.shading_mode
+		result["cull_mode"] = sm.cull_mode
+		result["depth_draw_mode"] = sm.depth_draw_mode
+		result["no_depth_test"] = sm.no_depth_test
 	return {"result": result}
+
+
+## Parse a value as an integer enum. Supports numeric values (int/float) and
+## string names mapped through the provided dictionary (lowercase keys → int values).
+## Falls back to default_val if the string is not recognized.
+static func _parse_enum_str(value: Variant, mapping: Dictionary, default_val: int = 0) -> int:
+	if value is int:
+		return value
+	if value is float:
+		return int(value)
+	if value is String:
+		var s: String = (value as String).to_lower().replace(" ", "_")
+		if mapping.has(s):
+			return mapping[s] as int
+	return default_val

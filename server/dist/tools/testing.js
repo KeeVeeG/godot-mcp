@@ -1,5 +1,5 @@
 /**
- * Testing tools - 5 tools for game testing
+ * Testing tools - 6 tools for game testing
  */
 import { callGodot } from '../server.js';
 import { z, NodePath, PropertyName, PropertyValue } from './shared-types.js';
@@ -16,6 +16,7 @@ export function registerTestingTools(server, bridge) {
                 params: z.record(z.unknown()).optional().describe('Parameters for this step'),
             })
                 .catchall(z.unknown()))
+                .min(1, 'Steps array must have at least one step')
                 .describe('Ordered test steps'),
         },
     }, async (args) => callGodot(bridge, 'testing/run_scenario', args));
@@ -42,7 +43,7 @@ export function registerTestingTools(server, bridge) {
         description: 'Run a stress test on the game (spawn entities, measure performance)',
         inputSchema: {
             type: z.string().optional().default('Node2D').describe('Node type to spawn (default: Node2D)'),
-            count: z.number().int().optional().default(100).describe('Number of entities to spawn (default: 100)'),
+            count: z.number().int().min(0, 'Count must be non-negative').optional().default(100).describe('Number of entities to spawn (default: 100)'),
             parent_path: z.string().optional().describe('Parent node path for spawned entities'),
             properties: z.record(z.unknown()).optional().describe('Properties to set on each spawned entity'),
         },
@@ -52,5 +53,10 @@ export function registerTestingTools(server, bridge) {
         description: 'Get aggregated results of all test runs in this session',
         inputSchema: {},
     }, async () => callGodot(bridge, 'testing/get_report'));
+    // 6. clear_test_report
+    server.registerTool('clear_test_report', {
+        description: 'Clear all accumulated test results and reset session state',
+        inputSchema: {},
+    }, async () => callGodot(bridge, 'testing/clear_report'));
 }
 //# sourceMappingURL=testing.js.map

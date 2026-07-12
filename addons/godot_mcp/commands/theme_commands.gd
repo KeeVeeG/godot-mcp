@@ -1,5 +1,6 @@
 ## Theme commands module - 11 tools.
 ## Handles theme creation, deletion, colors, constants, fonts, and styleboxes.
+@tool
 class_name MCPThemeCommands
 extends RefCounted
 
@@ -46,6 +47,14 @@ func _is_valid_theme_color_name(name_str: String) -> bool:
 	var regex: RegEx = RegEx.new()
 	regex.compile("^[a-z][a-z0-9_]*$")
 	return regex.search(name_str) != null
+
+
+## Convert a Color to uppercase hex, omitting alpha when fully opaque.
+func _color_to_hex(c: Color) -> String:
+	if is_equal_approx(c.a, 1.0):
+		return "#" + c.to_html(false).to_upper()
+	else:
+		return "#" + c.to_html(true).to_upper()
 
 
 func get_commands() -> Dictionary:
@@ -155,10 +164,9 @@ func set_theme_color(params: Dictionary) -> Dictionary:
 	if theme == null:
 		return {"error": "Theme not found: %s" % path}
 
-	# Warn on non-standard color names (non-ASCII chars may be silently dropped by Godot)
-	var _warning: String = ""
+	# Non-standard color names (non-ASCII chars) are silently dropped by Godot — reject them
 	if not _is_valid_theme_color_name(name_str):
-		_warning = "Warning: '%s' is a non-standard color name. Use standard names like 'font_color', 'font_hover_color', etc. Non-standard names may be silently dropped by Godot." % name_str
+		return {"error": "Invalid color name: '%s'. Use standard names like 'font_color', 'font_hover_color', etc. Non-standard names are silently rejected by Godot." % name_str}
 
 	var parsed_color: Color = MCPVariantCodec._parse_color(color)
 	theme.set_color(name_str, theme_type, parsed_color)
@@ -166,10 +174,7 @@ func set_theme_color(params: Dictionary) -> Dictionary:
 	var err: Error = ResourceSaver.save(theme, path)
 	if err != OK:
 		return {"error": "Failed to save theme: %s" % error_string(err)}
-	var msg: String = "Color '%s' set for '%s' in theme" % [name_str, theme_type]
-	if not _warning.is_empty():
-		msg += ". " + _warning
-	return {"result": msg}
+	return {"result": "Color '%s' set for '%s' in theme" % [name_str, theme_type]}
 
 
 ## Set a constant in a theme.
@@ -262,7 +267,7 @@ func set_theme_stylebox(params: Dictionary) -> Dictionary:
 		"border_width_left", "border_width_right", "border_width_top", "border_width_bottom",
 		"corner_radius_top_left", "corner_radius_top_right", "corner_radius_bottom_left", "corner_radius_bottom_right",
 		"content_margin_left", "content_margin_top", "content_margin_right", "content_margin_bottom",
-		"draw_center", "anti_aliased",
+		"draw_center", "anti_aliasing",
 		"shadow_size", "shadow_offset", "shadow_color",
 		"expand_margin_left", "expand_margin_right", "expand_margin_top", "expand_margin_bottom",
 		"aa_size", "aa_on",
@@ -321,6 +326,31 @@ func set_theme_stylebox(params: Dictionary) -> Dictionary:
 				flat.content_margin_right = properties["content_margin_right"] as float
 			if properties.has("content_margin_bottom"):
 				flat.content_margin_bottom = properties["content_margin_bottom"] as float
+			if properties.has("draw_center"):
+				flat.draw_center = properties["draw_center"] as bool
+			if properties.has("anti_aliasing"):
+				flat.anti_aliasing = properties["anti_aliasing"] as bool
+			if properties.has("shadow_size"):
+				flat.shadow_size = properties["shadow_size"] as int
+			if properties.has("shadow_offset"):
+				var so_arr: Array = properties["shadow_offset"] as Array
+				if so_arr and so_arr.size() >= 2:
+					flat.shadow_offset = Vector2(so_arr[0] as float, so_arr[1] as float)
+			if properties.has("shadow_color"):
+				var sc_str: String = properties["shadow_color"] as String
+				if not MCPVariantCodec.is_valid_color_string(sc_str):
+					return {"error": "Invalid shadow_color: '%s'" % sc_str}
+				flat.shadow_color = MCPVariantCodec._parse_color(properties["shadow_color"])
+			if properties.has("expand_margin_left"):
+				flat.expand_margin_left = properties["expand_margin_left"] as float
+			if properties.has("expand_margin_top"):
+				flat.expand_margin_top = properties["expand_margin_top"] as float
+			if properties.has("expand_margin_right"):
+				flat.expand_margin_right = properties["expand_margin_right"] as float
+			if properties.has("expand_margin_bottom"):
+				flat.expand_margin_bottom = properties["expand_margin_bottom"] as float
+			if properties.has("aa_size"):
+				flat.anti_aliasing_size = properties["aa_size"] as float
 			stylebox = flat
 		"Line":
 			var line: StyleBoxLine = StyleBoxLine.new()
@@ -412,7 +442,12 @@ func get_theme_color(params: Dictionary) -> Dictionary:
 		return {"error": "Color '%s' not found for type '%s'" % [name_str, theme_type]}
 
 	var color: Color = theme.get_color(name_str, theme_type)
-	return {"result": {"name": name_str, "theme_type": theme_type, "color": "#" + color.to_html()}}
+	var hex: String
+	if is_equal_approx(color.a, 1.0):
+		hex = "#" + color.to_html(false).to_upper()
+	else:
+		hex = "#" + color.to_html(true).to_upper()
+	return {"result": {"name": name_str, "theme_type": theme_type, "color": hex}}
 
 
 ## Get a specific constant value from a theme.
@@ -490,24 +525,59 @@ func get_theme_stylebox(params: Dictionary) -> Dictionary:
 	var props: Dictionary = {}
 
 	if stylebox is StyleBoxFlat:
+		var default_flat: StyleBoxFlat = StyleBoxFlat.new()
 		props["type"] = "Flat"
-		props["bg_color"] = "#" + stylebox.bg_color.to_html()
-		props["border_color"] = "#" + stylebox.border_color.to_html()
-		props["border_width_left"] = stylebox.border_width_left
-		props["border_width_right"] = stylebox.border_width_right
-		props["border_width_top"] = stylebox.border_width_top
-		props["border_width_bottom"] = stylebox.border_width_bottom
-		props["corner_radius_top_left"] = stylebox.corner_radius_top_left
-		props["corner_radius_top_right"] = stylebox.corner_radius_top_right
-		props["corner_radius_bottom_left"] = stylebox.corner_radius_bottom_left
-		props["corner_radius_bottom_right"] = stylebox.corner_radius_bottom_right
-		props["content_margin_left"] = stylebox.content_margin_left
-		props["content_margin_top"] = stylebox.content_margin_top
-		props["content_margin_right"] = stylebox.content_margin_right
-		props["content_margin_bottom"] = stylebox.content_margin_bottom
+		if stylebox.bg_color != default_flat.bg_color:
+			props["bg_color"] = _color_to_hex(stylebox.bg_color)
+		if stylebox.border_color != default_flat.border_color:
+			props["border_color"] = _color_to_hex(stylebox.border_color)
+		if stylebox.border_width_left != default_flat.border_width_left:
+			props["border_width_left"] = stylebox.border_width_left
+		if stylebox.border_width_right != default_flat.border_width_right:
+			props["border_width_right"] = stylebox.border_width_right
+		if stylebox.border_width_top != default_flat.border_width_top:
+			props["border_width_top"] = stylebox.border_width_top
+		if stylebox.border_width_bottom != default_flat.border_width_bottom:
+			props["border_width_bottom"] = stylebox.border_width_bottom
+		if stylebox.corner_radius_top_left != default_flat.corner_radius_top_left:
+			props["corner_radius_top_left"] = stylebox.corner_radius_top_left
+		if stylebox.corner_radius_top_right != default_flat.corner_radius_top_right:
+			props["corner_radius_top_right"] = stylebox.corner_radius_top_right
+		if stylebox.corner_radius_bottom_left != default_flat.corner_radius_bottom_left:
+			props["corner_radius_bottom_left"] = stylebox.corner_radius_bottom_left
+		if stylebox.corner_radius_bottom_right != default_flat.corner_radius_bottom_right:
+			props["corner_radius_bottom_right"] = stylebox.corner_radius_bottom_right
+		if stylebox.content_margin_left != default_flat.content_margin_left:
+			props["content_margin_left"] = stylebox.content_margin_left
+		if stylebox.content_margin_top != default_flat.content_margin_top:
+			props["content_margin_top"] = stylebox.content_margin_top
+		if stylebox.content_margin_right != default_flat.content_margin_right:
+			props["content_margin_right"] = stylebox.content_margin_right
+		if stylebox.content_margin_bottom != default_flat.content_margin_bottom:
+			props["content_margin_bottom"] = stylebox.content_margin_bottom
+		if stylebox.draw_center != default_flat.draw_center:
+			props["draw_center"] = stylebox.draw_center
+		if stylebox.anti_aliasing != default_flat.anti_aliasing:
+			props["anti_aliasing"] = stylebox.anti_aliasing
+		if stylebox.shadow_size != default_flat.shadow_size:
+			props["shadow_size"] = stylebox.shadow_size
+		if stylebox.shadow_offset != default_flat.shadow_offset:
+			props["shadow_offset"] = [stylebox.shadow_offset.x, stylebox.shadow_offset.y]
+		if not stylebox.shadow_color.is_equal_approx(default_flat.shadow_color):
+			props["shadow_color"] = _color_to_hex(stylebox.shadow_color)
+		if stylebox.expand_margin_left != default_flat.expand_margin_left:
+			props["expand_margin_left"] = stylebox.expand_margin_left
+		if stylebox.expand_margin_top != default_flat.expand_margin_top:
+			props["expand_margin_top"] = stylebox.expand_margin_top
+		if stylebox.expand_margin_right != default_flat.expand_margin_right:
+			props["expand_margin_right"] = stylebox.expand_margin_right
+		if stylebox.expand_margin_bottom != default_flat.expand_margin_bottom:
+			props["expand_margin_bottom"] = stylebox.expand_margin_bottom
+		if stylebox.anti_aliasing_size != default_flat.anti_aliasing_size:
+			props["aa_size"] = stylebox.anti_aliasing_size
 	elif stylebox is StyleBoxLine:
 		props["type"] = "Line"
-		props["color"] = "#" + stylebox.color.to_html()
+		props["color"] = _color_to_hex(stylebox.color)
 		props["thickness"] = stylebox.thickness
 	elif stylebox is StyleBoxEmpty:
 		props["type"] = "Empty"

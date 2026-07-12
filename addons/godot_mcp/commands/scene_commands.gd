@@ -1,5 +1,6 @@
 ## Scene commands module - 13 tools.
 ## Handles scene tree, file operations, play/stop, and instancing.
+@tool
 class_name MCPSceneCommands
 extends RefCounted
 
@@ -102,6 +103,17 @@ func _get_scene_file_content(params: Dictionary) -> Dictionary:
 		return {"error": "Path is required — empty string is not a valid scene path"}
 	if not FileAccess.file_exists(path):
 		return {"error": "Scene file not found: %s" % path}
+
+	# Binary .scn files contain non-human-readable binary data.
+	# Reading them as text yields garbage (e.g. just "RSRC" header bytes).
+	if path.get_extension().to_lower() == "scn":
+		var bin_file: FileAccess = FileAccess.open(path, FileAccess.READ)
+		if bin_file == null:
+			return {"error": "Cannot read scene file: %s" % path}
+		var size: int = bin_file.get_length()
+		bin_file.close()
+		return {"result": {"path": path, "format": "binary", "size_bytes": size, "message": "Binary .scn scene files contain compiled data and cannot be displayed as text. Use a .tscn (text) file for readable scene content."}}
+
 	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		return {"error": "Cannot read scene file: %s" % path}
@@ -240,6 +252,14 @@ func _add_scene_instance(params: Dictionary) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {"error": "Scene file not found: %s" % path}
 
+	# Prevent self-referencing: a scene cannot be instantiated into itself.
+	var edited_root: Node = MCPCommandHelpers.get_edited_scene_root(_plugin)
+	if edited_root != null:
+		var current_scene_path: String = MCPCommandHelpers.normalize_scene_path(edited_root.scene_file_path)
+		var target_scene_path: String = MCPCommandHelpers.normalize_scene_path(path)
+		if current_scene_path != "" and current_scene_path == target_scene_path:
+			return {"error": "Cannot instantiate a scene into itself (self-reference detected): %s" % path}
+
 	var scene_res: PackedScene = ResourceLoader.load(path) as PackedScene
 	if scene_res == null:
 		return {"error": "Failed to load scene: %s" % path}
@@ -294,6 +314,8 @@ func _play_scene(params: Dictionary) -> Dictionary:
 
 ## Stop the running scene.
 func _stop_scene() -> Dictionary:
+	if _plugin.get_editor_interface().get_playing_scene().is_empty():
+		return {"result": {"message": "No scene was playing"}}
 	_plugin.get_editor_interface().stop_playing_scene()
 	return {"result": {"message": "Scene stopped"}}
 
@@ -312,12 +334,17 @@ func _save_scene(params: Dictionary) -> Dictionary:
 	# Reject save-as if target path differs from original and not explicitly allowed
 	var original_path: String = root.scene_file_path
 	if original_path != "" and original_path != path and not params.get("save_as", false):
-		return {"error": "Cannot save to a different path (%s). Scene was loaded from %s. Use save_as=true to save a copy." % [path, original_path]}
+		var open_scenes: PackedStringArray = _plugin.get_editor_interface().get_open_scenes()
+		if path in open_scenes:
+			return {"error": "Target path (%s) belongs to a different loaded scene. Open it first with open_scene, then call save_scene without a path parameter." % path}
+		return {"error": "No loaded scene at path (%s). To save the current scene (%s) to a new location, use save_as=true." % [path, original_path]}
 
 	var scene: PackedScene = PackedScene.new()
 	var err: Error = scene.pack(root)
 	if err != OK:
 		return {"error": "Failed to pack scene: %s" % error_string(err)}
+	# Ensure parent directory exists before saving (matching create_scene behavior)
+	MCPCommandHelpers.ensure_dir(path.get_base_dir())
 	err = ResourceSaver.save(scene, path)
 	if err != OK:
 		return {"error": "Failed to save scene: %s" % error_string(err)}
@@ -342,8 +369,10 @@ func _get_loaded_scenes() -> Dictionary:
 	if root != null and root.scene_file_path != "":
 		var current_path: String = root.scene_file_path
 		var already_listed: bool = false
-		for s: Dictionary in scenes:
+		for i: int in scenes.size():
+			var s: Dictionary = scenes[i]
 			if s["path"] == current_path:
+				s["active"] = true
 				already_listed = true
 				break
 		if not already_listed:

@@ -23,7 +23,8 @@ export function registerResourceTools(server, bridge) {
     server.registerTool('create_resource', {
         description: 'Create a new Godot resource',
         inputSchema: {
-            type: z.string().describe("Resource type (e.g. 'StyleBoxFlat', 'Gradient', 'Curve')"),
+            type: z.string().optional().describe("Resource type (e.g. 'StyleBoxFlat', 'Gradient', 'Curve') — primary param"),
+            resource_type: z.string().optional().describe("Resource type (fallback alias for 'type')"),
             path: ResourcePath,
             properties: OptionalProperties,
         },

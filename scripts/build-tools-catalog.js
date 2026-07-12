@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Build tools catalog: tool_id → description, ts_file, gd_file, gd_function, test_file, category
+// Build tools catalog: tool_id → description, ts_file, gd_file, gd_function, category
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,7 +10,6 @@ const __dirname = path.dirname(__filename);
 const ROOT = path.join(__dirname, '..');
 const TS_DIR = path.join(ROOT, 'server', 'src', 'tools');
 const GD_DIR = path.join(ROOT, 'addons', 'godot_mcp', 'commands');
-const TEST_DIR = path.join(ROOT, 'tests', 'cases');
 
 const GD_FILE_MAP = {
   project: 'project_commands.gd',
@@ -99,18 +98,6 @@ function parseGdCommands(gdPath) {
   return map;
 }
 
-// Find test file containing a tool
-function findTestFile(toolId) {
-  const files = fs.readdirSync(TEST_DIR).filter((f) => f.endsWith('.js'));
-  for (const f of files) {
-    const content = fs.readFileSync(path.join(TEST_DIR, f), 'utf-8');
-    if (content.includes(`tool: '${toolId}'`) || content.includes(`tool: "${toolId}"`)) {
-      return `tests/cases/${f}`;
-    }
-  }
-  return null;
-}
-
 function main() {
   const catalog = [];
   const tsFiles = fs.readdirSync(TS_DIR).filter((f) => f.endsWith('.ts') && f !== 'shared-types.ts' && f !== 'index.ts');
@@ -134,7 +121,6 @@ function main() {
 
     for (const { tool_id, description, godot_command } of tools) {
       const gdFunction = gdMap[godot_command] || tool_id;
-      const testFile = findTestFile(tool_id);
       catalog.push({
         tool_id,
         description,
@@ -142,7 +128,6 @@ function main() {
         gd_file: `addons/godot_mcp/commands/${gdFile}`,
         gd_function: gdFunction,
         ts_file: `server/src/tools/${tsFile}`,
-        test_file: testFile,
         category,
       });
     }
@@ -156,13 +141,9 @@ function main() {
   fs.writeFileSync(webJsPath, jsContent);
   console.log(`Wrote ${catalog.length} tools to ${webJsPath}`);
 
-  // Stats
-  const withTests = catalog.filter((t) => t.test_file).length;
-  const withoutTests = catalog.filter((t) => !t.test_file).length;
   const withDesc = catalog.filter((t) => t.description).length;
-  console.log(`  With test: ${withTests}, without test: ${withoutTests}, with description: ${withDesc}`);
+  console.log(`  With description: ${withDesc}`);
 
-  // Per-category
   const byCat = {};
   catalog.forEach((t) => {
     byCat[t.category] = (byCat[t.category] || 0) + 1;

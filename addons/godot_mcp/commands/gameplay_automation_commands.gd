@@ -1,6 +1,7 @@
 ## Gameplay automation commands module - 8 tools.
 ## Provides automated gameplay scenarios, recording/replay,
 ## character creation and navigation, state assertions, and event waiting.
+@tool
 class_name MCPGameplayAutomationCommands
 extends RefCounted
 
@@ -39,7 +40,7 @@ func get_commands() -> Dictionary:
 func simulate_gameplay_scenario(params: Dictionary) -> Dictionary:
 	var scenario: Array = params.get("scenario", [])
 	if scenario.is_empty():
-		return {"error": "scenario array is required"}
+		return {"result": {"total_steps": 0, "passed": 0, "failed": 0, "steps": [], "success": true, "message": "Empty scenario — nothing to do"}}
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
@@ -61,17 +62,20 @@ func simulate_gameplay_scenario(params: Dictionary) -> Dictionary:
 			"input":
 				result = _action_input(action_params)
 			"wait":
-				result = _action_wait(action_params)
+				result = await _action_wait(action_params)
 			"move":
-				result = _action_move(root, action_params)
+				result = _action_move(_plugin, action_params)
 			"click":
 				result = _action_click(action_params)
 			"assert":
-				result = _action_assert(root, action_params)
+				result = _action_assert(_plugin, action_params)
 			_:
 				result = {"error": "Unknown action: %s" % action}
 
 		var step_passed: bool = not result.has("error")
+		# For assert actions, also check the inner "passed" flag
+		if action == "assert" and result.has("passed") and not result["passed"]:
+			step_passed = false
 		step_results.append({"step": i, "action": action, "passed": step_passed, "result": result})
 		if step_passed:
 			passed += 1
@@ -99,9 +103,18 @@ func record_gameplay(params: Dictionary) -> Dictionary:
 	var include_input: bool = params.get("include_input", true)
 	var include_state: bool = params.get("include_state", false)
 
+	# Guard: recording requires the game to be running in Play mode.
+	# In editor-only mode, _non_blocking_wait / process_frame polling
+	# has no game state to capture and returns {}.
+	if not _plugin.get_editor_interface().is_playing_scene():
+		return {"error": "Game must be running to record gameplay"}
+
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
+
+	if _is_recording:
+		return {"error": "A recording session is already in progress"}
 
 	_is_recording = true
 	_recording_start = Time.get_unix_time_from_system()
@@ -194,7 +207,14 @@ func replay_gameplay(params: Dictionary) -> Dictionary:
 	var recording: Dictionary = json.data as Dictionary
 	var events: Array = recording.get("events", [])
 	if events.is_empty():
-		return {"error": "Recording contains no events"}
+		return {"result": {
+			"success": true,
+			"events_replayed": 0,
+			"speed": speed,
+			"duration_ms": 0,
+			"original_duration": recording.get("duration", 0.0),
+			"message": "Recording contains no events — nothing to replay",
+		}}
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
@@ -288,7 +308,7 @@ func delete_test_character(params: Dictionary) -> Dictionary:
 
 	# If specific path given, delete only that character
 	if not character_path.is_empty():
-		var node: Node = root.get_node_or_null(character_path)
+		var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, character_path)
 		if node == null:
 			return {"error": "Character not found: %s" % character_path}
 
@@ -319,7 +339,7 @@ func delete_test_character(params: Dictionary) -> Dictionary:
 	var deleted: Array = []
 	var not_found: Array = []
 	for path_str: String in _test_characters.duplicate():
-		var node: Node = root.get_node_or_null(path_str)
+		var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path_str)
 		if node != null:
 			node.queue_free()
 			deleted.append(path_str)
@@ -343,14 +363,30 @@ func navigate_character(params: Dictionary) -> Dictionary:
 	var target: Array = params.get("target", [0, 0, 0])
 	var method: String = params.get("method", "direct")
 
-	if character_path.is_empty():
-		return {"error": "character_path is required"}
+	if character_path == "":
+		# Empty string = scene root per NodePath convention
+		var root_node: Node = MCPCommandHelpers.get_scene_root(_plugin)
+		if root_node == null:
+			return {"error": "No scene open"}
+		if root_node is Node3D:
+			(root_node as Node3D).position = Vector3(target[0], target[1], target[2])
+		elif root_node is Node2D:
+			(root_node as Node2D).position = Vector2(target[0], target[1])
+		else:
+			return {"error": "Scene root is not a Node2D or Node3D — cannot navigate"}
+		return {"result": {
+			"success": true,
+			"method": method,
+			"character": "<root>",
+			"target": target,
+			"message": "Moved scene root directly to %s" % str(target),
+		}}
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
-	var character: Node = root.get_node_or_null(character_path)
+	var character: Node = MCPCommandHelpers.resolve_node_path(_plugin, character_path)
 	if character == null:
 		return {"error": "Character not found: %s" % character_path}
 
@@ -403,7 +439,7 @@ func navigate_character(params: Dictionary) -> Dictionary:
 func assert_game_state(params: Dictionary) -> Dictionary:
 	var conditions: Array = params.get("conditions", [])
 	if conditions.is_empty():
-		return {"error": "conditions array is required"}
+		return {"result": {"passed": true, "total_conditions": 0, "passed_count": 0, "failed_count": 0, "results": [], "message": "Empty conditions — vacuously true"}}
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
@@ -418,13 +454,13 @@ func assert_game_state(params: Dictionary) -> Dictionary:
 		var expected: Variant = condition.get("expected")
 		var operator: String = condition.get("operator", "==")
 
-		var node: Node = root.get_node_or_null(path)
+		var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
 		if node == null:
 			results.append({"path": path, "passed": false, "error": "Node not found"})
 			all_passed = false
 			continue
 
-		var actual: Variant = node.get(property)
+		var actual: Variant = MCPCommandHelpers.get_nested_property(node, property)
 		var passed: bool = MCPCommandHelpers.compare_values(actual, expected, operator)
 		results.append({
 			"path": path,
@@ -470,27 +506,56 @@ func wait_for_game_event(params: Dictionary) -> Dictionary:
 
 		var node_path: String = parts[0]
 		var signal_name: String = parts[1]
-		var node: Node = root.get_node_or_null(node_path)
+		var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, node_path)
 		if node == null:
 			return {"error": "Node not found: %s" % node_path}
 
 		if not node.has_signal(signal_name):
 			return {"error": "Signal '%s' not found on %s" % [signal_name, node_path]}
 
-		# Poll-based waiting (editor can't truly await signals)
+		# Poll-based waiting: check a shared flag that signal-connected callbacks can set.
+		# Since editor can't truly await signals, we use a simple polling loop with a flag.
+		var signal_fired: bool = false
+		var _on_signal_fired = func(
+			_arg1 = null, _arg2 = null, _arg3 = null, _arg4 = null,
+			_arg5 = null, _arg6 = null, _arg7 = null, _arg8 = null,
+			_arg9 = null, _arg10 = null,
+		) -> void:
+			signal_fired = true
+
+		# Connect with MANY binds to handle signals of various arities (0-10 args)
+		node.connect(signal_name, _on_signal_fired, CONNECT_ONE_SHOT)
+
+		while Time.get_ticks_msec() < target_end:
+			if signal_fired:
+				return {"result": {
+					"event": event,
+					"node": node_path,
+					"signal": signal_name,
+					"fired": true,
+					"waited_ms": Time.get_ticks_msec() - start_time,
+					"message": "Signal %s.%s fired" % [node_path, signal_name],
+				}}
+			await _non_blocking_wait(16)
+
+		# Timeout — disconnect the callback
+		if node.is_connected(signal_name, _on_signal_fired):
+			node.disconnect(signal_name, _on_signal_fired)
+
 		return {"result": {
 			"event": event,
 			"node": node_path,
 			"signal": signal_name,
-			"message": "Signal listener registered for %s.%s. The signal will be captured when emitted." % [node_path, signal_name],
+			"fired": false,
 			"timeout": timeout,
+			"message": "Timed out waiting for signal %s.%s (%dms)" % [node_path, signal_name, timeout],
 		}}
 
 	elif event.begins_with("node:"):
 		# Wait for a node to appear: "node:NodePath"
 		var node_path: String = event.substr(5)
 		while Time.get_ticks_msec() < target_end:
-			var node: Node = root.get_node_or_null(node_path)
+			var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, node_path)
 			if node != null:
 				return {"result": {
 					"event": event,
@@ -499,7 +564,7 @@ func wait_for_game_event(params: Dictionary) -> Dictionary:
 					"waited_ms": Time.get_ticks_msec() - start_time,
 					"message": "Node found: %s" % node_path,
 				}}
-			_non_blocking_wait(100)
+			await _non_blocking_wait(100)
 
 		return {"result": {
 			"event": event,
@@ -520,17 +585,17 @@ func wait_for_game_event(params: Dictionary) -> Dictionary:
 		var expected_val: String = parts[2]
 
 		while Time.get_ticks_msec() < target_end:
-			var node: Node = root.get_node_or_null(node_path)
+			var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, node_path)
 			if node != null:
-				var actual: Variant = node.get(prop_name)
-				if str(actual) == expected_val:
+				var actual: Variant = MCPCommandHelpers.get_nested_property(node, prop_name)
+				if MCPCommandHelpers.compare_values(actual, expected_val, "=="):
 					return {"result": {
 						"event": event,
 						"matched": true,
 						"waited_ms": Time.get_ticks_msec() - start_time,
 						"message": "Property %s.%s == %s" % [node_path, prop_name, expected_val],
 					}}
-			_non_blocking_wait(100)
+			await _non_blocking_wait(100)
 
 		return {"result": {
 			"event": event,
@@ -582,28 +647,32 @@ func _replay_input(data: Dictionary) -> void:
 
 ## Helper: Step handler - input.
 func _action_input(params: Dictionary) -> Dictionary:
-	var key: String = params.get("key", "")
+	var key: String = params.get("key", params.get("keycode", ""))
 	var action_name: String = params.get("action", "")
 	if key.is_empty() and action_name.is_empty():
-		return {"error": "Either 'key' or 'action' is required"}
+		return {"error": "Either 'key' (or 'keycode') or 'action' is required"}
 	return {"result": "Input action recorded: %s" % (key if not key.is_empty() else action_name)}
 
 
 ## Helper: Step handler - wait.
 func _action_wait(params: Dictionary) -> Dictionary:
-	var seconds: float = params.get("seconds", 1.0)
-	_non_blocking_wait(int(seconds * 1000.0))
+	var seconds: float = params.get("duration", params.get("seconds", 1.0))
+	if seconds < 0:
+		return {"error": "Wait duration cannot be negative: %.1fs" % seconds}
+	if seconds == 0:
+		return {"result": "Waited 0.0s (instant)"}
+	await _non_blocking_wait(int(seconds * 1000.0))
 	return {"result": "Waited %.1fs" % seconds}
 
 
 ## Helper: Step handler - move.
-func _action_move(root: Node, params: Dictionary) -> Dictionary:
+func _action_move(plugin: EditorPlugin, params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var position: Array = params.get("position", [])
 	if path.is_empty() or position.is_empty():
 		return {"error": "path and position are required"}
 
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
@@ -640,17 +709,17 @@ func _action_click(params: Dictionary) -> Dictionary:
 
 
 ## Helper: Step handler - assert.
-func _action_assert(root: Node, params: Dictionary) -> Dictionary:
+func _action_assert(plugin: EditorPlugin, params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var property: String = params.get("property", "")
 	var expected: Variant = params.get("expected")
 	var operator: String = params.get("operator", "==")
 
-	var node: Node = root.get_node_or_null(path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(plugin, path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
-	var actual: Variant = node.get(property)
+	var actual: Variant = MCPCommandHelpers.get_nested_property(node, property)
 	var passed: bool = MCPCommandHelpers.compare_values(actual, expected, operator)
 	return {
 		"passed": passed,
@@ -669,10 +738,21 @@ func _find_buttons_recursive(node: Node, text: String, results: Array) -> void:
 		_find_buttons_recursive(child, text, results)
 
 
-## Helper: Non-blocking wait using scene tree timer.
-## Keeps the editor fully responsive during the wait instead of freezing.
+## Helper: Non-blocking wait using Engine.get_main_loop().process_frame.
+## Uses frame-based waiting that works in both editor mode and play mode.
+## _plugin.get_tree().create_timer() can fail during Play mode because
+## Godot launches the game in a separate process — the editor's SceneTree
+## still runs but its timer processing may be throttled or suspended.
+## process_frame fires every frame on the main loop regardless of mode.
 func _non_blocking_wait(total_ms: int) -> void:
 	if total_ms <= 0:
 		return
-	var seconds: float = total_ms / 1000.0
-	await _plugin.get_tree().create_timer(seconds).timeout
+	var end_time: int = Time.get_ticks_msec() + total_ms
+	var ml: MainLoop = Engine.get_main_loop()
+	if ml is SceneTree:
+		while Time.get_ticks_msec() < end_time:
+			await (ml as SceneTree).process_frame
+	else:
+		# Fallback: block the thread in small chunks (editor already paused)
+		while Time.get_ticks_msec() < end_time:
+			OS.delay_msec(16)

@@ -1,5 +1,6 @@
 ## Script commands module - 10 tools.
 ## Handles script CRUD, validation, and search.
+@tool
 class_name MCPScriptCommands
 extends RefCounted
 
@@ -98,15 +99,14 @@ func _create_script(params: Dictionary) -> Dictionary:
 				has_extends = true
 				break
 	
-	if not has_extends and base_class != "RefCounted":
-		content = "extends %s\n%s" % [base_class, content]
-	
 	if content.is_empty():
 		var lifecycle_method: String = "_ready"
 		# Use _init() for non-Node classes (RefCounted, Resource, etc.)
 		if base_class != "Node" and not ClassDB.is_parent_class(base_class, "Node"):
 			lifecycle_method = "_init"
 		content = "extends %s\n\nfunc %s() -> void:\n\tpass\n" % [base_class, lifecycle_method]
+	elif not has_extends and base_class != "RefCounted":
+		content = "extends %s\n%s" % [base_class, content]
 
 	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	if file == null:

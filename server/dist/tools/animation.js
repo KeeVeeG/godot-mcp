@@ -2,7 +2,7 @@
  * Animation tools — 16 tools for animation management
  */
 import { callGodot } from '../server.js';
-import { z, NodePath, PositiveNumber, PropertyValue } from './shared-types.js';
+import { z, NodePath, PropertyValue } from './shared-types.js';
 export function registerAnimationTools(server, bridge) {
     // 1. list_animations — {player_path: string} -> animation names
     server.registerTool('list_animations', {
@@ -16,24 +16,25 @@ export function registerAnimationTools(server, bridge) {
         description: 'Create a new animation on an AnimationPlayer',
         inputSchema: {
             player_path: NodePath.describe('AnimationPlayer node path'),
-            animation: z.string().describe('Animation name'),
-            length: PositiveNumber.optional().default(1.0).describe('Animation length in seconds (default: 1.0)'),
+            animation: z.string().min(1).describe('Animation name'),
+            length: z.number().min(0).optional().default(1.0).describe('Animation length in seconds (default: 1.0)'),
             library: z.string().optional().describe('Animation library name (empty for default)'),
             loop_mode: z.enum(['none', 'loop', 'pingpong']).optional().default('none').describe('Animation loop mode'),
         },
     }, async (args) => callGodot(bridge, 'animation/create', args));
     // 3. add_animation_track — {player_path, animation, track_type, property} -> track index
     server.registerTool('add_animation_track', {
-        description: 'Add a track to an animation. property is REQUIRED for all track types — specifies NodePath to target node (+ sub-property for value/bezier/blend_shape).',
+        description: 'Add a track to an animation. property is REQUIRED for value/bezier/blend_shape track types — specifies NodePath to target node (+ sub-property). Optional for position/rotation/scale/method/audio/animation.',
         inputSchema: {
             player_path: NodePath.describe('AnimationPlayer node path'),
-            animation: z.string().describe('Animation name'),
+            animation: z.string().optional().describe('Animation name (optional — can be omitted; handler falls back to anim_name param)'),
             track_type: z
                 .enum(['value', 'position', 'position_3d', 'rotation', 'rotation_3d', 'scale', 'scale_3d', 'blend_shape', 'method', 'bezier', 'audio', 'animation'])
                 .describe('Type of track to add (position/rotation/scale are aliases for position_3d/rotation_3d/scale_3d)'),
             property: z
                 .string()
-                .describe('NodePath to target node. REQUIRED for all track types. ' +
+                .optional()
+                .describe('NodePath to target node. Required for value/bezier/blend_shape tracks. ' +
                 "Format: 'NodePath:sub_property' for value/bezier/blend_shape, " +
                 "or 'NodePath' for position/rotation/scale/method/audio/animation."),
             library: z.string().optional().describe('Animation library name (empty for default)'),
@@ -110,6 +111,7 @@ export function registerAnimationTools(server, bridge) {
             path: NodePath.describe('AnimationTree node path'),
             state_name: z.string().describe('Name for the new state'),
             animation: z.string().optional().describe('Animation name to assign to this state'),
+            position: z.record(z.string(), z.number()).optional().describe('State position in graph (e.g. {"x": 200, "y": 0})'),
         },
     }, async (args) => callGodot(bridge, 'animation/add_state', args));
     // 12. remove_state_machine_state — {path, state_name} -> success
@@ -165,5 +167,20 @@ export function registerAnimationTools(server, bridge) {
             library: z.string().optional().describe('Animation library name (empty for default)'),
         },
     }, async (args) => callGodot(bridge, 'animation/remove_keyframe', args));
+    // 17. remove_animation_tree — {path: string} -> success
+    server.registerTool('remove_animation_tree', {
+        description: 'Remove an AnimationTree node from the scene',
+        inputSchema: {
+            path: NodePath.describe('AnimationTree node path'),
+        },
+    }, async (args) => callGodot(bridge, 'animation/remove_tree', args));
+    // 18. get_tree_parameter — {path: string, parameter: string} -> {parameter: string, value: any}
+    server.registerTool('get_tree_parameter', {
+        description: 'Get the current value of a parameter on an AnimationTree',
+        inputSchema: {
+            path: NodePath.describe('AnimationTree node path'),
+            parameter: z.string().describe("Parameter path (e.g. 'parameters/blend_position')"),
+        },
+    }, async (args) => callGodot(bridge, 'animation/get_tree_parameter', args));
 }
 //# sourceMappingURL=animation.js.map

@@ -5,7 +5,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { GodotBridge } from '../godot-bridge.js';
 import { callGodot } from '../server.js';
-import { z, Name, FilePath, OptionalProperties } from './shared-types.js';
+import { z, Name, AbsoluteFilePath, OptionalProperties } from './shared-types.js';
 
 export function registerPlatformExportTools(server: McpServer, bridge: GodotBridge): void {
   // 1. export_for_platform
@@ -27,7 +27,7 @@ export function registerPlatformExportTools(server: McpServer, bridge: GodotBrid
     {
       description: 'Validate the project for export on a specific platform, checking for issues',
       inputSchema: {
-        platform: z.string().describe('Platform to validate for'),
+        platform: z.enum(['windows', 'linux', 'macos', 'android', 'ios', 'web']).describe('Platform to validate for'),
       },
     },
     async (args) => callGodot(bridge, 'validate_platform_export', args as Record<string, unknown>),
@@ -49,7 +49,7 @@ export function registerPlatformExportTools(server: McpServer, bridge: GodotBrid
     {
       description: 'Create a new export preset for a specific platform with optional custom settings',
       inputSchema: {
-        platform: z.string().describe("Target platform (e.g. 'Windows Desktop', 'Linux', 'Android', 'Web')"),
+        platform: z.enum(['windows', 'linux', 'macos', 'android', 'ios', 'web']).describe('Target platform'),
         name: Name.describe('Preset name'),
         settings: OptionalProperties,
       },
@@ -63,7 +63,7 @@ export function registerPlatformExportTools(server: McpServer, bridge: GodotBrid
     {
       description: 'Run an exported build and capture its output',
       inputSchema: {
-        path: FilePath.describe('Path to the exported executable'),
+        path: AbsoluteFilePath.describe('Path to the exported executable'),
         args: z.array(z.string()).optional().describe('Command-line arguments for the build'),
       },
     },
@@ -74,9 +74,9 @@ export function registerPlatformExportTools(server: McpServer, bridge: GodotBrid
   server.registerTool(
     'validate_export_for_platform',
     {
-      description: 'Validate the project for export on a specific platform with detailed checks',
+      description: 'Validate the project for export on a specific platform',
       inputSchema: {
-        platform: z.string().describe('Platform to validate for'),
+        platform: z.enum(['windows', 'linux', 'macos', 'android', 'ios', 'web']).describe('Platform to validate for'),
       },
     },
     async (args) => callGodot(bridge, 'export/validate_platform', args as Record<string, unknown>),

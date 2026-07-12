@@ -1,5 +1,6 @@
 ## Rendering configuration commands module - 10 tools.
 ## Handles rendering settings, quality presets, viewport, and window config.
+@tool
 class_name MCPRenderingConfigCommands
 extends RefCounted
 
@@ -81,29 +82,34 @@ func _get_settings() -> Dictionary:
 func _set_quality(params: Dictionary) -> Dictionary:
 	var quality: String = params.get("quality", "medium")
 	var shadow_size: int = 2048
+	var pos_shadow_size: int = 1024
 	var gi_half_res: bool = true
 	var msaa: int = 0
 	var fxaa: bool = false
 	match quality:
 		"low":
 			shadow_size = 1024
+			pos_shadow_size = 512
 			msaa = 0
 			fxaa = false
 		"medium":
 			shadow_size = 2048
+			pos_shadow_size = 1024
 			msaa = 0
 			fxaa = true
 		"high":
 			shadow_size = 4096
+			pos_shadow_size = 2048
 			msaa = 2
 			fxaa = true
 		"ultra":
 			shadow_size = 8192
+			pos_shadow_size = 4096
 			msaa = 4
 			fxaa = true
 			gi_half_res = false
 	ProjectSettings.set_setting("rendering/lights_and_shadows/directional_shadow/size", shadow_size)
-	ProjectSettings.set_setting("rendering/lights_and_shadows/positional_shadow/atlas_size", shadow_size)
+	ProjectSettings.set_setting("rendering/lights_and_shadows/positional_shadow/atlas_size", pos_shadow_size)
 	ProjectSettings.set_setting("rendering/anti_aliasing/quality/msaa_3d", msaa)
 	ProjectSettings.set_setting("rendering/anti_aliasing/quality/screen_space_aa", 1 if fxaa else 0)
 	ProjectSettings.set_setting("rendering/global_illumination/gi/use_half_resolution", gi_half_res)
@@ -231,9 +237,13 @@ func _set_window_settings(params: Dictionary) -> Dictionary:
 	if params.has("size"):
 		var size: Array = params["size"] as Array
 		if size.size() >= 2:
-			ProjectSettings.set_setting("display/window/size/window_width_override", size[0])
-			ProjectSettings.set_setting("display/window/size/window_height_override", size[1])
-			changed["size"] = size
+			var w: int = int(size[0])
+			var h: int = int(size[1])
+			if w <= 0 or h <= 0:
+				return {"success": false, "error": "Window dimensions must be positive (got %dx%d)" % [w, h]}
+			ProjectSettings.set_setting("display/window/size/window_width_override", w)
+			ProjectSettings.set_setting("display/window/size/window_height_override", h)
+			changed["size"] = [w, h]
 	if params.has("mode"):
 		var mode: String = params["mode"] as String
 		var mode_val: int = 0

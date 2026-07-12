@@ -5,7 +5,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { GodotBridge } from '../godot-bridge.js';
 import { callGodot } from '../server.js';
-import { z, Name, FilePath, PropertyValue } from './shared-types.js';
+import { z, Name, FilePath } from './shared-types.js';
 
 export function registerProjectConfigTools(server: McpServer, bridge: GodotBridge): void {
   // 1. get_project_setting
@@ -27,7 +27,10 @@ export function registerProjectConfigTools(server: McpServer, bridge: GodotBridg
       description: 'Set a project setting value and save project.godot',
       inputSchema: {
         key: z.string().describe('Project setting key path'),
-        value: PropertyValue,
+        value: z
+          .unknown()
+          .refine((v): v is Exclude<unknown, undefined> => v !== undefined, { message: 'value is required' })
+          .describe('Property value'),
       },
     },
     async (args) => callGodot(bridge, 'project_config/set_setting_config', args as Record<string, unknown>),
@@ -40,6 +43,7 @@ export function registerProjectConfigTools(server: McpServer, bridge: GodotBridg
       description: 'Get all project settings, optionally filtered by prefix',
       inputSchema: {
         filter: z.string().optional().describe("Prefix filter (e.g. 'display/', 'input/')"),
+        max_results: z.number().int().min(0).optional().default(0).describe('Maximum number of settings to return (default: 0 = no limit). Use filter to narrow results.'),
       },
     },
     async (args) => callGodot(bridge, 'project_config/get_all_settings', args as Record<string, unknown>),
@@ -71,7 +75,8 @@ export function registerProjectConfigTools(server: McpServer, bridge: GodotBridg
   server.registerTool(
     'set_input_map',
     {
-      description: 'Replace the entire input map with the given actions and events',
+      description:
+        'Replace or merge the input map. When merge=false (default), erases ALL existing actions first (full replacement). When merge=true, only adds/updates the provided actions, preserving existing ones.',
       inputSchema: {
         actions: z
           .record(
@@ -84,6 +89,7 @@ export function registerProjectConfigTools(server: McpServer, bridge: GodotBridg
             ]),
           )
           .describe('Map of action name to array of input events, or {deadzone, events} object (from get_input_map)'),
+        merge: z.boolean().describe('When true, merges with existing actions instead of replacing all. When false, erases all existing first.'),
       },
     },
     async (args) => callGodot(bridge, 'project_config/set_input_map', args as Record<string, unknown>),
@@ -105,7 +111,7 @@ export function registerProjectConfigTools(server: McpServer, bridge: GodotBridg
 
   // 8. remove_input_action
   server.registerTool(
-    'remove_input_action',
+    'project_config_remove_input_action',
     {
       description: 'Remove an input action from the InputMap',
       inputSchema: {

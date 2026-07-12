@@ -5,7 +5,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { GodotBridge } from '../godot-bridge.js';
 import { callGodot } from '../server.js';
-import { z, Name, FilePath } from './shared-types.js';
+import { z, Name, AbsoluteFilePath } from './shared-types.js';
 
 export function registerProjectCreationTools(server: McpServer, bridge: GodotBridge): void {
   // 1. create_project
@@ -14,10 +14,10 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: 'Create a complete Godot project from scratch with proper structure and configuration',
       inputSchema: {
-        path: FilePath.describe('Directory path where the project will be created'),
+        path: AbsoluteFilePath.describe('Directory path where the project will be created'),
         name: Name.describe('Project name'),
         template: z.enum(['empty', '2d', '3d', 'ui', 'custom']).optional().describe('Project template type'),
-        godot_version: z.string().optional().describe("Target Godot version (e.g. '4.3')"),
+        godot_version: z.string().optional().describe("Feature tag added to config/features for conditional compilation (e.g. '4.3'). Does NOT change the engine config_version."),
         renderer: z.enum(['forward_plus', 'mobile', 'gl_compatibility']).optional().describe('Rendering engine'),
         overwrite: z.boolean().optional().describe('Allow overwriting an existing project.godot (default: false)'),
       },
@@ -31,8 +31,8 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: 'Create a new Godot project from an existing template project',
       inputSchema: {
-        path: FilePath.describe('Directory path where the project will be created'),
-        template_path: FilePath.describe('Path to the template project directory'),
+        path: AbsoluteFilePath.describe('Directory path where the project will be created'),
+        template_path: AbsoluteFilePath.describe('Path to the template project directory'),
         name: Name.optional().describe('Override project name'),
       },
     },
@@ -45,7 +45,7 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: 'Create a standard folder structure for a Godot project',
       inputSchema: {
-        project_path: FilePath.describe('Path to the Godot project root'),
+        project_path: AbsoluteFilePath.describe('Path to the Godot project root'),
         structure: z.enum(['standard', 'minimal', 'full']).optional().describe('Folder structure preset'),
       },
     },
@@ -58,14 +58,17 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: 'Create a new Godot project and import specified assets into it',
       inputSchema: {
-        path: FilePath.describe('Directory path where the project will be created'),
+        path: AbsoluteFilePath.describe('Directory path where the project will be created'),
         name: Name.describe('Project name'),
         assets: z
           .array(
             z.object({
               type: z.string().describe("Asset type (e.g. 'texture', 'audio', 'scene', 'script')"),
               source: z.string().describe('Source file path to import from'),
-              destination: z.string().describe('Destination path within the project (res://...)'),
+              destination: z
+                .string()
+                .describe('Destination path within the project (must start with res://)')
+                .refine((s) => s.startsWith('res://'), 'Destination must start with res:// (e.g. res://assets/textures/icon.png)'),
             }),
           )
           .describe('List of assets to import into the project'),
@@ -80,7 +83,7 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: 'Initialize a Git repository in the project directory with a proper .gitignore',
       inputSchema: {
-        project_path: FilePath.describe('Path to the Godot project root'),
+        project_path: AbsoluteFilePath.describe('Path to the Godot project root'),
         include_gitignore: z.boolean().optional().describe('Whether to create a Godot-specific .gitignore'),
       },
     },
@@ -93,7 +96,7 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: 'Generate a README.md file for the project',
       inputSchema: {
-        project_path: FilePath.describe('Path to the Godot project root'),
+        project_path: AbsoluteFilePath.describe('Path to the Godot project root'),
         content: z.string().optional().describe('Custom README content (overrides template)'),
         template: z.enum(['basic', 'detailed', 'game']).optional().describe('README template style'),
       },
@@ -107,7 +110,7 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: 'Create a LICENSE file for the project',
       inputSchema: {
-        project_path: FilePath.describe('Path to the Godot project root'),
+        project_path: AbsoluteFilePath.describe('Path to the Godot project root'),
         license: z.enum(['MIT', 'Apache-2.0', 'GPL-3.0', 'BSD-3-Clause', 'custom']).describe('License type'),
         custom_text: z.string().optional().describe("Custom license text (required when license is 'custom')"),
       },
@@ -121,12 +124,12 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: 'Install and configure project addons/dependencies',
       inputSchema: {
-        project_path: FilePath.describe('Path to the Godot project root'),
+        project_path: AbsoluteFilePath.describe('Path to the Godot project root'),
         addons: z
           .array(
             z.object({
               name: z.string().describe('Addon name'),
-              source: z.enum(['asset_lib', 'git', 'local']).describe('Where to get the addon from'),
+              source: z.enum(['asset_lib', 'git', 'local']).optional().default('local').describe('Where to get the addon from'),
               url: z.string().optional().describe('Git URL or local path (required for git/local sources)'),
             }),
           )
@@ -142,7 +145,7 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: "Validate a Godot project's folder structure and configuration for correctness",
       inputSchema: {
-        project_path: FilePath.describe('Path to the Godot project root'),
+        project_path: AbsoluteFilePath.describe('Path to the Godot project root'),
       },
     },
     async (args) => callGodot(bridge, 'project_creation/validate_structure', args as Record<string, unknown>),
@@ -164,7 +167,7 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: 'Delete a Godot project entirely from disk. Requires confirmation to prevent accidental data loss.',
       inputSchema: {
-        project_path: FilePath.describe('Path to the Godot project root'),
+        project_path: AbsoluteFilePath.describe('Path to the Godot project root'),
         confirm: z.boolean().optional().default(false).describe('Set to true to confirm deletion (required for safety)'),
       },
     },
@@ -177,8 +180,11 @@ export function registerProjectCreationTools(server: McpServer, bridge: GodotBri
     {
       description: 'Remove installed addon dependencies from a Godot project',
       inputSchema: {
-        project_path: FilePath.describe('Path to the Godot project root'),
-        addons: z.array(z.string()).describe('List of addon names to remove'),
+        project_path: AbsoluteFilePath.describe('Path to the Godot project root'),
+        addons: z
+          .array(z.union([z.string(), z.object({ name: z.string() })]))
+          .min(1, 'addons array is required and must not be empty')
+          .describe('List of addon names to remove (strings or {name: string} objects)'),
       },
     },
     async (args) => callGodot(bridge, 'project_creation/remove_dependencies', args as Record<string, unknown>),

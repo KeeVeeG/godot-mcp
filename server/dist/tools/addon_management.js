@@ -1,5 +1,5 @@
 /**
- * Addon management tools - 5 tools for plugin/addon lifecycle management
+ * Addon management tools - 6 tools for plugin/addon lifecycle management
  */
 import { callGodot } from '../server.js';
 import { z, Name, Properties } from './shared-types.js';
@@ -40,5 +40,12 @@ export function registerAddonManagementTools(server, bridge) {
             settings: Properties.describe('Configuration key-value pairs to set'),
         },
     }, async (args) => callGodot(bridge, 'configure_addon', args));
+    // 6. get_addon_config
+    server.registerTool('get_addon_config', {
+        description: 'Read the current configuration of an installed addon. Returns config.json contents, project settings, and plugin.cfg metadata.',
+        inputSchema: {
+            name: Name.describe('Addon name to read config for'),
+        },
+    }, async (args) => callGodot(bridge, 'get_addon_config', args));
 }
 //# sourceMappingURL=addon_management.js.map

@@ -31,6 +31,10 @@ var _signal_watchers: Dictionary = {}
 ## Connected watcher callables: {node_path: {signal_name: callable}} for cleanup
 var _signal_watcher_callables: Dictionary = {}
 
+## Generation counter per path — prevents old timer callbacks from
+## erasing watcher data set up by a newer watch_signals call for the same path.
+var _signal_watcher_gen: Dictionary = {}
+
 ## Active signal watcher cleanup timers — stored so they can be cancelled on exit
 var _signal_watcher_timers: Array[SceneTreeTimer] = []
 
@@ -68,10 +72,18 @@ const ASYNC_METHODS: Array[String] = [
 	"simulate_sequence",
 	"click_button_by_text",
 	"wait_for_node",
+	"monitor_properties",
+	"watch_signals",
 ]
 
 
 func _ready() -> void:
+	# DIAGNOSTIC: print immediately to confirm this autoload was instantiated.
+	# If this message does NOT appear in the game output log, the autoload
+	# was never loaded — check "Failed to instantiate an autoload" errors
+	# and verify application/run/main_scene is set in Project Settings.
+	print("[MCP Runtime] _ready() ENTERED — autoload instantiated successfully")
+	
 	# Resolve user:// to an absolute OS path so both editor and game process
 	# agree on the IPC file locations (avoids project-name divergence).
 	var base_dir: String = ProjectSettings.globalize_path("user://")
@@ -99,6 +111,8 @@ func _ready() -> void:
 		push_warning("[MCP Runtime] Failed to write ready handshake file to: %s (error: %d)" % [_ready_path, FileAccess.get_open_error()])
 
 
+
+
 func _exit_tree() -> void:
 	# Cancel all pending signal watcher cleanup timers to avoid freed-memory access
 	_signal_watcher_timers.clear()
@@ -113,6 +127,7 @@ func _exit_tree() -> void:
 					n.disconnect(sig_name, c)
 	_signal_watcher_callables.clear()
 	_signal_watchers.clear()
+	_signal_watcher_gen.clear()
 	# Clean up ready handshake file so the editor doesn't see a stale signal
 	if FileAccess.file_exists(_ready_path):
 		DirAccess.remove_absolute(_ready_path)
@@ -216,15 +231,13 @@ func _poll_ipc() -> void:
 func _handle_sync_request(method: String, params: Dictionary) -> Dictionary:
 	match method:
 		"get_game_scene_tree":
-			return _get_game_scene_tree()
+			return _get_game_scene_tree(params.get("max_depth", 10), params.get("max_nodes", 500))
 		"get_game_node_properties":
 			return _get_game_node_properties(params.get("path", ""), params.get("properties", []))
 		"set_game_node_property":
 			return _set_game_node_property(params.get("path", ""), params.get("property", ""), params.get("value"))
 		"execute_game_script":
 			return _execute_game_script(params.get("code", ""))
-		"monitor_properties":
-			return _monitor_properties(params.get("path", ""), params.get("properties", []), params.get("duration", 5.0))
 		"start_recording":
 			return _start_recording()
 		"stop_recording":
@@ -242,11 +255,17 @@ func _handle_sync_request(method: String, params: Dictionary) -> Dictionary:
 		"find_nearby_nodes":
 			return _find_nearby_nodes(params.get("position", {}), params.get("radius", 100.0))
 		"navigate_to":
-			return _navigate_to(params.get("path", ""), params.get("target", ""))
+			return _navigate_to(params.get("path", ""), params.get("target", {}))
 		"move_to":
 			return _move_to(params.get("path", ""), params.get("target", {}))
-		"watch_signals":
-			return _watch_signals(params.get("path", ""), params.get("signals", []), params.get("duration", 5.0))
+		"unwatch_signals":
+			return _unwatch_signals(params.get("path", ""), params.get("signals", []))
+		"delete_captured_frames":
+			return _delete_captured_frames(params.get("paths", []))
+		"stop_monitoring":
+			return _stop_monitoring(params.get("path", ""))
+		"batch_set_properties":
+			return _batch_set_properties(params.get("nodes", []))
 		"simulate_input":
 			return _simulate_input(params)
 		"get_monitor_results":
@@ -270,6 +289,10 @@ func _handle_async_request(method: String, params: Dictionary) -> Dictionary:
 			return await _wait_for_node(params.get("path", ""), params.get("timeout", 5.0))
 		"simulate_sequence":
 			return await _simulate_sequence(params)
+		"monitor_properties":
+			return await _monitor_properties(params.get("path", ""), params.get("properties", []), params.get("duration", 5.0))
+		"watch_signals":
+			return await _watch_signals(params.get("path", ""), params.get("signals", []), params.get("duration", 5.0))
 		_:
 			return {"error": "Unknown async runtime method: %s" % method}
 
@@ -330,24 +353,88 @@ func _serialize_node(node: Node, depth: int = 0, max_depth: int = 10, max_nodes:
 	return result
 
 
+## Resolve a node path that may be relative (e.g. "Player") to an absolute Node.
+## Uses recursive search from current_scene → root when the direct lookup fails.
+func _resolve_node(path: String) -> Node:
+	# "." and "" both mean "current scene root" — prevent get_node_or_null(".")
+	# from returning the MCPRuntime autoload (the caller's `self`) instead of
+	# the actual scene tree root.
+	if path == "." or path == "":
+		var scene: Node = get_tree().current_scene
+		if scene != null:
+			return scene
+		return get_tree().root
+
+	var node: Node = get_node_or_null(path)
+	if node != null:
+		return node
+
+	# Try as a relative path from current scene root
+	var scene_root: Node = get_tree().current_scene
+	if scene_root == null:
+		scene_root = get_tree().root
+
+	# Try with current scene prefix
+	var scene_prefix: String = str(scene_root.get_path())
+	if not scene_prefix.ends_with("/"):
+		scene_prefix += "/"
+	node = get_node_or_null(scene_prefix + path)
+	if node != null:
+		return node
+
+	# Fallback: recursive name-based search from root
+	return _find_node_by_name(get_tree().root, path)
+
+
+## Recursive name-based node search (last resort for relative paths).
+func _find_node_by_name(root_node: Node, target_path: String) -> Node:
+	# Split path for hierarchical relative paths like "Player/Camera3D"
+	var parts: PackedStringArray = target_path.split("/", false)
+	if parts.size() == 0:
+		return null
+
+	# Direct name match (single-level path)
+	if parts.size() == 1:
+		var target_name: String = parts[0]
+		for child: Node in root_node.get_children():
+			if child.name == target_name:
+				return child
+			var found: Node = _find_node_by_name(child, target_name)
+			if found != null:
+				return found
+		return null
+
+	# Multi-level path: find first part, then descend
+	var first_name: String = parts[0]
+	var remaining: String = "/".join(PackedStringArray(parts.slice(1)))
+	for child: Node in root_node.get_children():
+		if child.name == first_name:
+			var found: Node = _find_node_by_name(child, remaining)
+			if found != null:
+				return found
+	return null
+
+
 ## Get the game scene tree.
-func _get_game_scene_tree() -> Dictionary:
+func _get_game_scene_tree(max_depth: int = 10, max_nodes: int = 500) -> Dictionary:
 	var root: Node = get_tree().current_scene
 	if root == null:
 		root = get_tree().root
-	return {"result": _serialize_node(root)}
+	return {"result": _serialize_node(root, 0, max_depth, max_nodes, [])}
 
 
 ## Get properties of a game node.
 func _get_game_node_properties(path: String, filter_props: Array = []) -> Dictionary:
-	var node: Node = get_node_or_null(path)
+	var node: Node = _resolve_node(path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 	var props: Dictionary = {}
 	if filter_props.size() > 0:
 		# Only return requested properties
 		for prop_name: String in filter_props:
-			if node.get(prop_name) != null or prop_name in ["position", "visible", "name", "type"]:
+			if prop_name == "type":
+				props["type"] = node.get_class()
+			elif node.get(prop_name) != null or prop_name in ["position", "visible", "name"]:
 				props[prop_name] = MCPVariantCodec.serialize_value(node.get(prop_name))
 	else:
 		# Return common properties only (not ALL 300+ properties)
@@ -358,43 +445,73 @@ func _get_game_node_properties(path: String, filter_props: Array = []) -> Dictio
 		for prop_name: String in common_props:
 			if prop_name in node:
 				props[prop_name] = MCPVariantCodec.serialize_value(node.get(prop_name))
+		# Always include type as the node class
+		props["type"] = node.get_class()
 	return {"result": props}
 
 
 ## Set a property on a game node.
 func _set_game_node_property(path: String, property: String, value: Variant) -> Dictionary:
-	var node: Node = get_node_or_null(path)
+	var node: Node = _resolve_node(path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 	var prop_list: Array = node.get_property_list()
 	for p: Dictionary in prop_list:
 		if p["name"] as String == property:
+			# Reject read-only properties (usage flags include PROPERTY_USAGE_READ_ONLY)
+			var usage: int = p.get("usage", 0) as int
+			if usage & PROPERTY_USAGE_READ_ONLY:
+				return {"error": "Property '%s' on %s is read-only" % [property, path]}
 			var parsed: Variant = MCPVariantCodec.parse_for_property(value, p["type"] as int)
 			node.set(property, parsed)
 			return {"result": "Property %s set successfully" % property}
-	node.set(property, value)
-	return {"result": "Property %s set (untyped)" % property}
+	return {"error": "Property '%s' does not exist on node '%s'" % [property, path]}
 
 
 ## Execute GDScript code in game context.
 func _execute_game_script(code: String) -> Dictionary:
-	var source: String = "extends Node\n\nfunc _run(root: Node, scene: Node) -> Variant:\n"
-	var lines: PackedStringArray = code.split("\n")
-	for line: String in lines:
-		source += "    " + line + "\n"
+	var source: String
+	var trimmed: String = code.strip_edges()
 
-	# Write to temp file — GDScript compilation via ResourceLoader is reliable
-	var temp_path: String = "user://_mcp_temp_script.gd"
+	# If user provides their own _run() function, use it directly.
+	# Otherwise, wrap the code inside a _run() template.
+	if trimmed.begins_with("func _run"):
+		source = "extends Node\n\n" + code
+	else:
+		source = "extends Node\n\nfunc _run(root: Node, scene: Node):\n"
+		var lines: PackedStringArray = code.split("\n")
+
+		# Auto-wrap with return if the code does not contain its own return statement.
+		# Single-line expressions like "2 + 2" need a "return " prefix; multi-line scripts
+		# that already contain "return" are left as-is.
+		if lines.size() == 1 and not code.contains("return") and not code.contains("var "):
+			# Don't auto-prepend 'return' for void-returning functions (print, push_warning, etc.).
+			# 'return print(...)' is a GDScript compile error because print() returns void.
+			if trimmed.begins_with("print(") or trimmed.begins_with("push_warning(") or trimmed.begins_with("push_error(") or trimmed.begins_with("assert("):
+				source += "    " + lines[0] + "\n"
+			else:
+				source += "    return " + lines[0] + "\n"
+		else:
+			for line: String in lines:
+				source += "    " + line + "\n"
+
+	# Use absolute path via globalize_path — ResourceLoader.load() does NOT
+	# support user:// paths in the game process and can hang indefinitely.
+	var base_dir: String = ProjectSettings.globalize_path("user://")
+	if not base_dir.ends_with("/"):
+		base_dir += "/"
+	var temp_path: String = base_dir + "_mcp_temp_script.gd"
+
 	var file: FileAccess = FileAccess.open(temp_path, FileAccess.WRITE)
 	if file == null:
-		return {"error": "Failed to write temp script file"}
+		return {"error": "Failed to write temp script file to %s (error: %d)" % [temp_path, FileAccess.get_open_error()]}
 	file.store_string(source)
 	file.close()
 
-	var script: GDScript = ResourceLoader.load(temp_path) as GDScript
+	var script: GDScript = ResourceLoader.load(temp_path, "", ResourceLoader.CACHE_MODE_IGNORE) as GDScript
 	if script == null:
 		DirAccess.remove_absolute(temp_path)
-		return {"error": "Script compilation failed: ResourceLoader.load returned null"}
+		return {"error": "Script compilation failed — ResourceLoader.load returned null for: %s" % temp_path}
 
 	var temp_node: Node = Node.new()
 	temp_node.set_script(script)
@@ -404,9 +521,25 @@ func _execute_game_script(code: String) -> Dictionary:
 	if not temp_node.has_method("_run"):
 		temp_node.queue_free()
 		DirAccess.remove_absolute(temp_path)
-		return {"error": "Script compiled but does not define a _run(root, scene) method"}
+		return {"error": "Script loaded but _run() method is not callable — possible parse/compilation error in the code. Raw source:\n%s" % source}
 
-	var result: Variant = temp_node.call("_run", get_tree().root, get_tree().current_scene)
+	# Detect how many arguments the user's _run() expects.
+	# GDScript's call() with extra args fails silently on 0-arg functions,
+	# returning an empty dict which produces no result/error in the response.
+	var run_arg_count: int = 2  # default: root + scene
+	var method_list: Array = temp_node.get_method_list()
+	for m: Dictionary in method_list:
+		if m.get("name", "") == "_run":
+			run_arg_count = (m.get("args", []) as Array).size()
+			break
+
+	var result: Variant
+	if run_arg_count == 0:
+		result = temp_node.call("_run")
+	elif run_arg_count == 1:
+		result = temp_node.call("_run", get_tree().root)
+	else:
+		result = temp_node.call("_run", get_tree().root, get_tree().current_scene)
 	temp_node.queue_free()
 
 	# Clean up temp file
@@ -440,8 +573,16 @@ func _capture_screenshot(path: String) -> Dictionary:
 	return {"result": {"success": true, "path": path, "width": image.get_width(), "height": image.get_height()}}
 
 
-## Start monitoring properties over time.
+## Start monitoring properties over time and await the full duration.
+## Returns collected data once monitoring completes.
 func _monitor_properties(path: String, props: Array, duration: float) -> Dictionary:
+	var node: Node = _resolve_node(path)
+	if node == null:
+		return {"error": "Node not found: %s" % path}
+	if props.is_empty():
+		return {"error": "At least one property must be specified for monitoring"}
+	if duration < 0.0:
+		return {"error": "Duration must be non-negative (got %.1f)" % duration}
 	var monitor_id: int = _next_monitor_id
 	_next_monitor_id += 1
 	_monitors[monitor_id] = {
@@ -451,7 +592,25 @@ func _monitor_properties(path: String, props: Array, duration: float) -> Diction
 		"start_time": Time.get_unix_time_from_system(),
 		"duration": duration,
 	}
-	return {"result": {"monitor_id": monitor_id, "message": "Monitoring started for %.1f seconds" % duration}}
+	# Wait for the full monitoring duration.  _update_monitors() collects
+	# samples every frame in _process(), so all data has been gathered by
+	# the time this timer fires.
+	await get_tree().create_timer(duration).timeout
+	if not _monitors.has(monitor_id):
+		return {"error": "Monitor was cleaned up before results could be retrieved"}
+	var monitor: Dictionary = _monitors[monitor_id]
+	var data: Array = monitor["data"] as Array
+	# Mark as completed instead of erasing — get_monitor_results needs it.
+	# Auto-cleanup in _update_monitors() removes stale entries after 60s.
+	monitor["completed"] = true
+	monitor["completion_time"] = Time.get_unix_time_from_system()
+	return {"result": {
+		"monitor_id": monitor_id,
+		"path": path,
+		"properties": props,
+		"data": data,
+		"sample_count": data.size(),
+	}}
 
 
 ## Update active monitors.
@@ -464,7 +623,7 @@ func _update_monitors(_delta: float) -> void:
 		if elapsed >= monitor["duration"] as float:
 			completed.append(monitor_id)
 			continue
-		var node: Node = get_node_or_null(monitor["path"] as String)
+		var node: Node = _resolve_node(monitor["path"] as String)
 		if node == null:
 			continue
 		var entry: Dictionary = {"time": elapsed}
@@ -507,6 +666,8 @@ func _get_monitor_results(monitor_id: int) -> Dictionary:
 
 ## Start recording input events.
 func _start_recording() -> Dictionary:
+	if _recording:
+		return {"error": "Already recording. Stop recording before starting a new one."}
 	_recording = true
 	_recorded_events.clear()
 	_record_start_time = Time.get_unix_time_from_system()
@@ -515,8 +676,11 @@ func _start_recording() -> Dictionary:
 
 ## Stop recording input events.
 func _stop_recording() -> Dictionary:
+	if not _recording:
+		return {"error": "Not currently recording. Start recording first."}
 	_recording = false
-	return {"result": {"events": _recorded_events, "count": _recorded_events.size()}}
+	var events: Array = _recorded_events.duplicate()
+	return {"result": {"events": events, "count": events.size()}}
 
 
 ## Record input events for the current frame.
@@ -588,7 +752,8 @@ func _find_nodes_by_script(script_path: String) -> Dictionary:
 
 
 func _find_nodes_recursive(node: Node, script_res: Resource, found: Array) -> void:
-	if node.get_script() == script_res:
+	var node_script: Script = node.get_script()
+	if node_script != null and node_script.resource_path == script_res.resource_path:
 		found.append(str(node.get_path()))
 	for child: Node in node.get_children():
 		_find_nodes_recursive(child, script_res, found)
@@ -596,6 +761,8 @@ func _find_nodes_recursive(node: Node, script_res: Resource, found: Array) -> vo
 
 ## Get autoload node info.
 func _get_autoload(name: String) -> Dictionary:
+	if name.is_empty():
+		return {"error": "Autoload name is required (got empty string)"}
 	var node: Node = get_node_or_null("/root/" + name)
 	if node == null:
 		# Try case-insensitive search among autoloads
@@ -618,14 +785,17 @@ func _batch_get_properties(paths: Array, properties: Array) -> Dictionary:
 	var results: Dictionary = {}
 	for path_variant: Variant in paths:
 		var path_str: String = path_variant as String
-		var node: Node = get_node_or_null(path_str)
+		var node: Node = _resolve_node(path_str)
 		if node == null:
 			results[path_str] = {"error": "Node not found"}
 			continue
 		var node_props: Dictionary = {}
 		for prop_variant: Variant in properties:
 			var prop_name: String = prop_variant as String
-			node_props[prop_name] = MCPVariantCodec.serialize_value(node.get(prop_name))
+			if prop_name == "type":
+				node_props["type"] = node.get_class()
+			else:
+				node_props[prop_name] = MCPVariantCodec.serialize_value(node.get(prop_name))
 		results[path_str] = node_props
 	return {"result": results}
 
@@ -645,11 +815,19 @@ func _find_ui_recursive(node: Node, filter: Dictionary, found: Array) -> void:
 			match_type = ctrl.is_class(filter["type"] as String)
 		var match_text: bool = true
 		if filter.has("text"):
+			# Default to false — only Button and Label have meaningful text.
+			# Without this, bare Control nodes (Container, Panel, etc.) would
+			# always match a text filter because match_text stays true.
+			match_text = false
 			if ctrl is Button:
 				match_text = (ctrl as Button).text.find(filter["text"] as String) != -1
 			elif ctrl is Label:
 				match_text = (ctrl as Label).text.find(filter["text"] as String) != -1
-		if match_type and match_text:
+		var match_name: bool = true
+		if filter.has("name"):
+			var search_name: String = filter["name"] as String
+			match_name = ctrl.name.find(search_name) != -1
+		if match_type and match_text and match_name:
 			found.append({
 				"path": str(ctrl.get_path()),
 				"type": ctrl.get_class(),
@@ -675,6 +853,8 @@ func _get_node_text(node: Node) -> String:
 
 ## Click a button by its text content.
 func _click_button_by_text(text: String, timeout: float) -> Dictionary:
+	if text.is_empty():
+		return {"error": "Button text must not be empty"}
 	var start_time: float = Time.get_unix_time_from_system()
 	while true:
 		var buttons: Array = []
@@ -703,9 +883,11 @@ func _find_buttons_recursive(node: Node, text: String, found: Array) -> void:
 
 ## Wait for a node to appear.
 func _wait_for_node(path: String, timeout: float) -> Dictionary:
+	if path.is_empty():
+		return {"error": "Path must not be empty"}
 	var start_time: float = Time.get_unix_time_from_system()
 	while true:
-		var node: Node = get_node_or_null(path)
+		var node: Node = _resolve_node(path)
 		if node != null:
 			var elapsed: float = Time.get_unix_time_from_system() - start_time
 			return {"result": {"found": true, "path": path, "time": elapsed}}
@@ -717,7 +899,7 @@ func _wait_for_node(path: String, timeout: float) -> Dictionary:
 
 ## Find nodes near a position.
 ## NOTE: 2D positions are converted to Vector3 (z=0) for uniform distance calculation.
-## Both 2D and 3D nodes are included in results with distances in 3D space.
+## 2D, 3D, and Control (UI) nodes are included in results with distances in 3D space.
 func _find_nearby_nodes(pos: Variant, radius: float) -> Dictionary:
 	var center: Vector3
 	if pos is Array:
@@ -753,13 +935,26 @@ func _find_nearby_recursive(node: Node, center: Vector3, radius: float, found: A
 				"type": n2d.get_class(),
 				"distance": dist,
 			})
+	elif node is Control:
+		var ctrl: Control = node as Control
+		var pos_3d: Vector3 = Vector3(ctrl.global_position.x, ctrl.global_position.y, 0.0)
+		var dist: float = pos_3d.distance_to(center)
+		if dist <= radius:
+			found.append({
+				"path": str(ctrl.get_path()),
+				"name": str(ctrl.name),
+				"type": ctrl.get_class(),
+				"distance": dist,
+			})
 	for child: Node in node.get_children():
 		_find_nearby_recursive(child, center, radius, found)
 
 
 ## Navigate a node to a target (for NavAgent-based nodes).
 func _navigate_to(path: String, target: Variant) -> Dictionary:
-	var node: Node = get_node_or_null(path)
+	if path.is_empty():
+		return {"error": "Path must not be empty"}
+	var node: Node = _resolve_node(path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 	# Convert target to Vector3
@@ -779,16 +974,32 @@ func _navigate_to(path: String, target: Variant) -> Dictionary:
 			return {"error": "Target node is not a Node2D or Node3D: %s" % target}
 	elif target is Dictionary:
 		target_pos = Vector3(target.get("x", 0.0) as float, target.get("y", 0.0) as float, target.get("z", 0.0) as float)
-	# Check for NavigationAgent
+	# Check for NavigationAgent on the node itself.
+	# NavigationAgent2D.set_target_position() expects Vector2, while
+	# NavigationAgent3D expects Vector3.  Passing Vector3 to a 2D agent
+	# causes a silent GDScript type-mismatch crash.
 	if node.has_method("set_target_position"):
-		node.set_target_position(target_pos)
+		if node is NavigationAgent2D:
+			(node as NavigationAgent2D).set_target_position(Vector2(target_pos.x, target_pos.y))
+		else:
+			node.set_target_position(target_pos)
 		return {"result": "Navigation target set to (%f, %f, %f)" % [target_pos.x, target_pos.y, target_pos.z]}
-	return {"error": "Node does not support navigation (no set_target_position method)"}
+	# Fallback: search immediate children for a NavigationAgent
+	for child: Node in node.get_children():
+		if child.has_method("set_target_position"):
+			if child is NavigationAgent2D:
+				(child as NavigationAgent2D).set_target_position(Vector2(target_pos.x, target_pos.y))
+			else:
+				child.set_target_position(target_pos)
+			return {"result": "Navigation target set via child '%s' to (%f, %f, %f)" % [child.name, target_pos.x, target_pos.y, target_pos.z]}
+	return {"error": "Node does not support navigation (no set_target_position method found on node or its children)"}
 
 
 ## Move a node to a position.
 func _move_to(path: String, target: Variant) -> Dictionary:
-	var node: Node = get_node_or_null(path)
+	if path.is_empty():
+		return {"error": "Path must not be empty"}
+	var node: Node = _resolve_node(path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 	if node is Node3D:
@@ -814,47 +1025,251 @@ func _move_to(path: String, target: Variant) -> Dictionary:
 	return {"error": "Node is not a Node2D or Node3D"}
 
 
-## Watch signals on a node.
+## Watch signals on a node for the given duration and return all captured events.
+## Uses cancel-aware generation counters so overlapping calls for the same path
+## don't interfere with each other.
 func _watch_signals(path: String, signals: Array, duration: float) -> Dictionary:
-	var node: Node = get_node_or_null(path)
+	var node: Node = _resolve_node(path)
 	if node == null:
 		return {"error": "Node not found: %s" % path}
-	if not _signal_watchers.has(path):
-		_signal_watchers[path] = {}
-	if not _signal_watcher_callables.has(path):
-		_signal_watcher_callables[path] = {}
+	if signals.is_empty():
+		return {"error": "At least one signal must be specified to watch"}
+	if duration < 0.0:
+		return {"error": "Duration must be non-negative (got %.1f)" % duration}
+	var canonical_path: String = str(node.get_path())
+	print("[MCP Runtime] _watch_signals: registering watchers for path=%s (canonical=%s) signals=%s duration=%.1f" % [path, canonical_path, str(signals), duration])
+	if not _signal_watchers.has(canonical_path):
+		_signal_watchers[canonical_path] = {}
+	if not _signal_watcher_callables.has(canonical_path):
+		_signal_watcher_callables[canonical_path] = {}
+	var connected: Array[String] = []
 	for sig_variant: Variant in signals:
 		var sig_name: String = sig_variant as String
-		if not _signal_watchers[path].has(sig_name):
-			_signal_watchers[path][sig_name] = []
-		var callback: Callable = func(args: Array, sn: String = sig_name, np: String = path) -> void:
+		var sig_param_count: int = 0
+		for s in node.get_signal_list():
+			if s["name"] == sig_name:
+				sig_param_count = (s["args"] as Array).size()
+				break
+		if not node.has_signal(sig_name):
+			push_warning("[MCP Runtime] _watch_signals: signal '%s' not found on node '%s'" % [sig_name, canonical_path])
+			continue
+		# Only create watcher entry when signal actually exists on the node
+		if not _signal_watchers[canonical_path].has(sig_name):
+			_signal_watchers[canonical_path][sig_name] = []
+		var callback: Callable = func(p0 = null, p1 = null, p2 = null, p3 = null, p4 = null, p5 = null, p6 = null, p7 = null, sn: String = sig_name, np: String = canonical_path) -> void:
 			if _signal_watchers.has(np) and _signal_watchers[np].has(sn):
+				var args: Array = []
+				var all_args: Array = [p0, p1, p2, p3, p4, p5, p6, p7]
+				for i in range(sig_param_count):
+					args.append(all_args[i])
 				_signal_watchers[np][sn].append({
 					"time": Time.get_unix_time_from_system(),
 					"args": MCPVariantCodec.serialize_value(args),
 				})
-		if node.has_signal(sig_name):
-			node.connect(sig_name, callback)
-			_signal_watcher_callables[path][sig_name] = {"callable": callback, "node": node}
-	# Schedule cleanup with stored timer ref so it can be cancelled in _exit_tree
-	var timer: SceneTreeTimer = get_tree().create_timer(duration)
-	_signal_watcher_timers.append(timer)
-	timer.timeout.connect(func() -> void:
-		_signal_watcher_timers.erase(timer)
-		if not is_instance_valid(self):
-			return
-		# Disconnect all tracked callables before erasing watcher data
-		if _signal_watcher_callables.has(path):
-			for sig_name: String in _signal_watcher_callables[path]:
-				var entry: Dictionary = _signal_watcher_callables[path][sig_name]
-				var n: Node = entry["node"] as Node
-				var c: Callable = entry["callable"] as Callable
-				if is_instance_valid(n) and n.has_signal(sig_name) and n.is_connected(sig_name, c):
-					n.disconnect(sig_name, c)
-			_signal_watcher_callables.erase(path)
-		_signal_watchers.erase(path)
-	)
-	return {"result": "Watching signals %s on %s for %.1f seconds" % [str(signals), path, duration]}
+		node.connect(sig_name, callback)
+		_signal_watcher_callables[canonical_path][sig_name] = {"callable": callback, "node": node}
+		connected.append(sig_name)
+	if connected.is_empty():
+		# Clean up empty dict entries we created above
+		_signal_watcher_callables.erase(canonical_path)
+		_signal_watchers.erase(canonical_path)
+		return {"error": "None of the requested signals exist on node '%s'" % canonical_path}
+
+	# Wait for the full duration
+	await get_tree().create_timer(duration).timeout
+
+	# Collect all captured data and clean up
+	var result_data: Dictionary = {}
+	if _signal_watchers.has(canonical_path):
+		for sig_name: String in _signal_watchers[canonical_path]:
+			result_data[sig_name] = _signal_watchers[canonical_path][sig_name].duplicate()
+		_signal_watchers.erase(canonical_path)
+	# Disconnect all tracked callables
+	if _signal_watcher_callables.has(canonical_path):
+		for sig_name: String in _signal_watcher_callables[canonical_path]:
+			var entry: Dictionary = _signal_watcher_callables[canonical_path][sig_name]
+			var n: Node = entry["node"] as Node
+			var c: Callable = entry["callable"] as Callable
+			if is_instance_valid(n) and n.has_signal(sig_name) and n.is_connected(sig_name, c):
+				n.disconnect(sig_name, c)
+		_signal_watcher_callables.erase(canonical_path)
+
+	return {"result": {"path": path, "watched_signals": signals, "data": result_data, "duration": duration}}
+
+
+## Stop watching signals on a node and return collected data.
+## If signals array is empty/all, disconnects all watchers for the path.
+## If specific signal names are provided, only those are disconnected.
+func _unwatch_signals(path: String, signals: Array) -> Dictionary:
+	# Resolve node to get canonical path — must match what _watch_signals stored.
+	var node: Node = _resolve_node(path)
+	if node == null:
+		return {"error": "No active signal watchers for path: %s (node not found)" % path}
+	var canonical_path: String = str(node.get_path())
+	print("[MCP Runtime] _unwatch_signals: path=%s canonical=%s _signal_watchers.has=%s _signal_watcher_callables.has=%s keys=%s" % [path, canonical_path, _signal_watchers.has(canonical_path), _signal_watcher_callables.has(canonical_path), str(_signal_watchers.keys())])
+	if not _signal_watchers.has(canonical_path) and not _signal_watcher_callables.has(canonical_path):
+		return {"error": "No active signal watchers for path: %s (canonical: %s)" % [path, canonical_path]}
+
+	var result_data: Dictionary = {}
+	var signals_to_remove: Array = []
+	if signals.is_empty():
+		# Remove all signals for this path
+		signals_to_remove = _signal_watchers[canonical_path].keys()
+	else:
+		signals_to_remove = signals
+
+	for sig_name: String in signals_to_remove:
+		if _signal_watcher_callables.has(canonical_path) and _signal_watcher_callables[canonical_path].has(sig_name):
+			var entry: Dictionary = _signal_watcher_callables[canonical_path][sig_name]
+			var n: Node = entry.get("node") as Node
+			var c: Callable = entry.get("callable") as Callable
+			if is_instance_valid(n) and n.has_signal(sig_name) and n.is_connected(sig_name, c):
+				n.disconnect(sig_name, c)
+			_signal_watcher_callables[canonical_path].erase(sig_name)
+		# Collect any events captured so far
+		if _signal_watchers[canonical_path].has(sig_name):
+			result_data[sig_name] = _signal_watchers[canonical_path][sig_name].duplicate()
+			_signal_watchers[canonical_path].erase(sig_name)
+
+	# Clean up empty entries
+	if _signal_watchers[canonical_path].is_empty():
+		_signal_watchers.erase(canonical_path)
+	if _signal_watcher_callables.has(canonical_path) and _signal_watcher_callables[canonical_path].is_empty():
+		_signal_watcher_callables.erase(canonical_path)
+
+	return {"result": {"path": path, "stopped_signals": signals_to_remove, "data": result_data}}
+
+
+## Delete captured frame PNG files from disk.
+## If paths array is empty, deletes all mcp_frame_*.png files in user://.
+func _delete_captured_frames(paths: Array) -> Dictionary:
+	var deleted: Array = []
+	var errors: Array = []
+	var base_dir: String = ProjectSettings.globalize_path("user://")
+	if not base_dir.ends_with("/"):
+		base_dir += "/"
+
+	if paths.is_empty():
+		# Delete all captured frames in user://
+		var dir := DirAccess.open(base_dir)
+		if dir == null:
+			return {"error": "Failed to open user directory: %s (error: %d)" % [base_dir, DirAccess.get_open_error()]}
+		dir.list_dir_begin()
+		var file_name: String = dir.get_next()
+		while not file_name.is_empty():
+			if file_name.begins_with("mcp_frame_") and file_name.ends_with(".png"):
+				var full_path: String = base_dir + file_name
+				var err: Error = DirAccess.remove_absolute(full_path)
+				if err == OK:
+					deleted.append(full_path)
+				else:
+					errors.append({"path": full_path, "error": error_string(err)})
+			file_name = dir.get_next()
+		dir.list_dir_end()
+	else:
+		for p: Variant in paths:
+			var file_path: String = p as String
+			if FileAccess.file_exists(file_path):
+				var err: Error = DirAccess.remove_absolute(file_path)
+				if err == OK:
+					deleted.append(file_path)
+				else:
+					errors.append({"path": file_path, "error": error_string(err)})
+			else:
+				errors.append({"path": file_path, "error": "File not found"})
+
+	var result_dict: Dictionary = {"deleted": deleted, "count": deleted.size()}
+	if not errors.is_empty():
+		result_dict["errors"] = errors
+	return {"result": result_dict}
+
+
+## Stop an active property monitoring session by path and return collected data.
+func _stop_monitoring(path: String) -> Dictionary:
+	var found_id: int = -1
+	for monitor_id: int in _monitors:
+		var m: Dictionary = _monitors[monitor_id]
+		if m.get("path", "") as String == path and not m.get("completed", false):
+			found_id = monitor_id
+			break
+
+	if found_id == -1:
+		# Check if there's a completed monitor for this path
+		for monitor_id: int in _monitors:
+			var m: Dictionary = _monitors[monitor_id]
+			if m.get("path", "") as String == path:
+				return {"result": {"path": path, "data": m["data"], "sample_count": (m["data"] as Array).size(), "message": "Monitor already completed"}}
+		return {"error": "No active monitor found for path: %s" % path}
+
+	var monitor: Dictionary = _monitors[found_id]
+	var now: float = Time.get_unix_time_from_system()
+	# Do one last sample before stopping
+	var node: Node = _resolve_node(path)
+	if node != null:
+		var elapsed: float = now - (monitor["start_time"] as float)
+		var entry: Dictionary = {"time": elapsed}
+		for prop: Variant in monitor["props"] as Array:
+			var prop_name: String = prop as String
+			entry[prop_name] = MCPVariantCodec.serialize_value(node.get(prop_name))
+		(monitor["data"] as Array).append(entry)
+
+	monitor["completed"] = true
+	monitor["completion_time"] = now
+
+	return {"result": {
+		"path": path,
+		"properties": monitor["props"],
+		"data": monitor["data"],
+		"sample_count": (monitor["data"] as Array).size(),
+		"duration": monitor["duration"],
+		"stopped_early": true,
+	}}
+
+
+## Batch set properties on multiple nodes.
+## nodes: [{path: String, properties: {prop_name: value, ...}}, ...]
+func _batch_set_properties(nodes: Array) -> Dictionary:
+	if nodes.is_empty():
+		return {"error": "Nodes array must not be empty"}
+
+	var results: Array = []
+	var success_count: int = 0
+	var error_count: int = 0
+
+	for item: Variant in nodes:
+		if not item is Dictionary:
+			error_count += 1
+			results.append({"error": "Invalid node descriptor: expected object"})
+			continue
+
+		var node_desc: Dictionary = item as Dictionary
+		var node_path: String = node_desc.get("path", "")
+		var props: Dictionary = node_desc.get("properties", {})
+
+		if node_path.is_empty():
+			error_count += 1
+			results.append({"error": "Node descriptor missing 'path' field"})
+			continue
+
+		if props.is_empty():
+			error_count += 1
+			results.append({"path": node_path, "error": "Node descriptor missing 'properties' field"})
+			continue
+
+		var node_results: Dictionary = {"path": node_path, "properties": {}}
+		for prop_name: String in props:
+			var prop_value: Variant = props[prop_name]
+			var result: Dictionary = _set_game_node_property(node_path, prop_name, prop_value)
+			if result.has("error"):
+				node_results["properties"][prop_name] = result["error"]
+				error_count += 1
+			else:
+				node_results["properties"][prop_name] = "ok"
+				success_count += 1
+
+		results.append(node_results)
+
+	return {"result": {"results": results, "success_count": success_count, "error_count": error_count}}
 
 
 ## Simulate a single input event (key, mouse, or action) in the running game.

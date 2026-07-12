@@ -1,5 +1,6 @@
-﻿## Runtime commands module - 23 tools.
+## Runtime commands module - 23 tools.
 ## Handles game runtime inspection via file-based IPC.
+@tool
 class_name MCPRuntimeCommands
 extends RefCounted
 
@@ -12,7 +13,7 @@ const IPC_TIMEOUT: float = 30.0
 
 ## IPC paths are computed FRESH on every call via ProjectSettings.globalize_path("user://")
 ## instead of being cached at set_plugin() time.  Reason: set_plugin() runs during plugin
-## init, before ProjectSettings may be fully loaded — globalize_path() can return an empty
+## init, before ProjectSettings may be fully loaded � globalize_path() can return an empty
 ## or wrong path.  The game process calls it in _ready() (much later), so paths diverge.
 ## Recomputing on every access guarantees both processes see the same absolute directory.
 func _ipc_base() -> String:
@@ -32,7 +33,7 @@ func _get_ready_path() -> String:
 
 var _next_request_id: int = 1
 
-## Task queue for serialized IPC — prevents concurrent file overwrite
+## Task queue for serialized IPC � prevents concurrent file overwrite
 var _ipc_queue: Array[Dictionary] = []
 var _ipc_processing: bool = false
 var _ipc_results: Dictionary = {}  # int -> Dictionary
@@ -69,6 +70,7 @@ func get_commands() -> Dictionary:
 		"runtime/unwatch_signals": unwatch_signals,
 		"runtime/delete_captured_frames": delete_captured_frames,
 		"runtime/stop_monitoring": stop_monitoring,
+		"runtime/get_monitor_results": get_monitor_results,
 		"runtime/batch_set_properties": batch_set_properties,
 	}
 
@@ -150,7 +152,7 @@ func _wait_for_runtime_ready(timeout: float = IPC_TIMEOUT) -> bool:
 			return false
 		poll_count += 1
 		await _plugin.get_tree().process_frame
-	print("[MCP RuntimeCmd] Runtime NOT ready after %.1fs — file not found at: %s" % [timeout, _get_ready_path()])
+	print("[MCP RuntimeCmd] Runtime NOT ready after %.1fs � file not found at: %s" % [timeout, _get_ready_path()])
 	return false
 
 
@@ -164,7 +166,7 @@ func _do_ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	# for responses while the game process is still initializing, causing
 	# 30-second timeouts on slow project loads.
 	if not await _wait_for_runtime_ready():
-		return {"error": "Runtime autoload not ready after %.1fs — game may still be initializing or has crashed" % IPC_TIMEOUT}
+		return {"error": "Runtime autoload not ready after %.1fs � game may still be initializing or has crashed" % IPC_TIMEOUT}
 
 	# Clean stale response files from previous requests
 	if FileAccess.file_exists(_get_response_path()):
@@ -188,7 +190,7 @@ func _do_ipc_request(method: String, params: Dictionary = {}) -> Dictionary:
 	if rename_err != OK:
 		return {"error": "Failed to rename IPC request file: %s (code %d)" % [error_string(rename_err), rename_err]}
 
-	print("[MCP RuntimeCmd] Request written — method: %s, id: %s, req: %s, resp: %s" % [method, request_id, _get_request_path(), _get_response_path()])
+	print("[MCP RuntimeCmd] Request written � method: %s, id: %s, req: %s, resp: %s" % [method, request_id, _get_request_path(), _get_response_path()])
 	var start: float = Time.get_unix_time_from_system()
 	var last_log_elapsed: float = 0.0
 	while Time.get_unix_time_from_system() - start < IPC_TIMEOUT:
@@ -326,6 +328,11 @@ func delete_captured_frames(params: Dictionary) -> Dictionary:
 ## Stop an active property monitoring session.
 func stop_monitoring(params: Dictionary) -> Dictionary:
 	return await _ipc_request("stop_monitoring", params)
+
+
+## Get results for a completed monitor by its monitor_id.
+func get_monitor_results(params: Dictionary) -> Dictionary:
+	return await _ipc_request("get_monitor_results", params)
 
 
 ## Batch set properties on multiple nodes.

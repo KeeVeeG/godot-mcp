@@ -1,6 +1,7 @@
-﻿## Analysis commands module - 4 tools.
+## Analysis commands module - 4 tools.
 ## Provides scene complexity analysis, signal flow mapping,
 ## unused resource detection, and project statistics.
+@tool
 class_name MCPAnalysisCommands
 extends RefCounted
 
@@ -116,7 +117,7 @@ func analyze_signal_flow(_params: Dictionary) -> Dictionary:
 	}
 	if truncated:
 		result_dict["truncated"] = true
-		result_dict["warning"] = "Results truncated at %d nodes / %d edges. Large scenes may have more connections." % [nodes.size(), edges.size()]
+		result_dict["warning"] = "Results truncated at 25 nodes / 50 edges. Large scenes may have more connections."
 
 	return {"result": result_dict}
 
@@ -184,10 +185,10 @@ func _analyze_signals_recursive(node: Node, nodes: Array, edges: Array, node_set
 ## Find resources that exist in the project but are not referenced
 ## by any .tscn or .gd file.
 ## Uses regex-based reference extraction (O(N+M)) instead of
-## per-resource substring matching (O(N×M)).
+## per-resource substring matching (O(N?M)).
 func find_unused_resources(_params: Dictionary) -> Dictionary:
 	var resource_files: Array = []
-	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["png", "jpg", "jpeg", "svg", "webp", "wav", "ogg", "mp3", "ttf", "otf", "obj", "fbx", "glb", "gltf", "material", "shader"]), func(path, _name): resource_files.append(ProjectSettings.localize_path(path)))
+	MCPCommandHelpers.walk_directory("res://", PackedStringArray(["png", "jpg", "jpeg", "svg", "webp", "wav", "ogg", "mp3", "ttf", "otf", "obj", "fbx", "glb", "gltf", "material", "tres", "shader"]), func(path, _name): resource_files.append(ProjectSettings.localize_path(path)))
 
 	# Collect all code files (.tscn, .gd, .tres) that might reference resources
 	var code_files: Array = []
@@ -198,7 +199,7 @@ func find_unused_resources(_params: Dictionary) -> Dictionary:
 	# Single-pass: extract all res:// paths from all code files into a set
 	var all_references: Dictionary = {}
 	var regex: RegEx = RegEx.new()
-	regex.compile("res://[a-zA-Z0-9_/.\\-]+")
+	regex.compile('res://[^"\'\n\r]+')
 
 	for file_path_variant: Variant in code_files:
 		var file_path: String = file_path_variant as String

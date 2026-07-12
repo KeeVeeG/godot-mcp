@@ -1,5 +1,6 @@
 ## Node commands module - 18 tools.
 ## Handles node CRUD, properties, signals, groups, and selection.
+@tool
 class_name MCPNodeCommands
 extends RefCounted
 
@@ -66,6 +67,8 @@ func _add_node(params: Dictionary) -> Dictionary:
 	var parent_path: String = params.get("parent_path", "")
 	var type_name: String = params.get("type", "Node")
 	var node_name: String = params.get("name", type_name)
+	if node_name.is_empty():
+		return {"error": "Node name is required (cannot be empty)"}
 	var properties: Dictionary = params.get("properties", {})
 
 	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
@@ -104,11 +107,7 @@ func _add_node(params: Dictionary) -> Dictionary:
 	# Mark scene as modified so editor tracks the unsaved change.
 	_plugin.get_editor_interface().mark_scene_as_unsaved()
 
-	var result_data := {"name": str(node.name), "path": MCPCommandHelpers.get_node_path(node, _plugin), "type": type_name}
-	if node_name.is_empty():
-		result_data["warning"] = "Empty name provided; Godot auto-assigned '%s'" % str(node.name)
-
-	return {"result": result_data}
+	return {"result": {"name": str(node.name), "path": MCPCommandHelpers.get_node_path(node, _plugin), "type": type_name}}
 
 
 ## Validate a value against an expected property type.
@@ -565,7 +564,9 @@ func _connect_signal(params: Dictionary) -> Dictionary:
 
 	var ur: EditorUndoRedoManager = _plugin.get_undo_redo()
 	ur.create_action("MCP: Connect signal %s.%s -> %s.%s" % [source_path, signal_name, target_path, method_name])
-	ur.add_do_method(source, "connect", signal_name, Callable(target, method_name))
+	# CONNECT_PERSIST (2) ensures the connection is saved to the .tscn file
+	# and visible to Node.get_signal_connection_list() / get_signals.
+	ur.add_do_method(source, "connect", signal_name, Callable(target, method_name), 2)
 	ur.add_undo_method(source, "disconnect", signal_name, Callable(target, method_name))
 	ur.commit_action()
 
@@ -721,13 +722,10 @@ func _clear_editor_selection() -> Dictionary:
 
 ## Helper: resolve a path string to a Node in the edited scene.
 ## - "" or "." → the scene root node
-## - Bare name matching root's name → the scene root node
+## - Bare name matching root's name AND no child with that name → the scene root node
 ## - Otherwise → root.get_node_or_null(path) for children/descendants
 func _resolve_node(path: String, root: Node) -> Node:
 	if path.is_empty() or path == ".":
-		return root
-	# Bare name (no slashes) that matches the root's own name
-	if not path.contains("/") and root.name == path:
 		return root
 	# Strip editor-internal prefix if present (e.g., /root/@EditorNode@123/.../SceneRoot/Node)
 	if path.begins_with("/root/@"):
@@ -739,7 +737,19 @@ func _resolve_node(path: String, root: Node) -> Node:
 	# them as direct children instead of treating them as absolute scene-tree paths.
 	if not path.contains("/") and not path.contains("."):
 		path = "./" + path
-	return root.get_node_or_null(path)
+	var resolved: Node = root.get_node_or_null(path)
+	if resolved != null:
+		return resolved
+	# Fallback: bare name (no slashes) that matches the root's own name
+	# Only after failing to find it as a child — avoids name collision bugs
+	if not path.contains("/") and root.name == path:
+		return root
+	# Try without the "./" prefix in case get_node_or_null failed on it
+	if path.begins_with("./"):
+		var bare: String = path.substr(2)
+		if bare == root.name:
+			return root
+	return null
 
 
 ## Helper: create node by type. Uses shared MCPNodeFactory.

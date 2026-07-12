@@ -2,7 +2,7 @@
  * Project configuration tools - 12 tools for project settings, input map, and autoloads
  */
 import { callGodot } from '../server.js';
-import { z, Name, FilePath, PropertyValue } from './shared-types.js';
+import { z, Name, FilePath } from './shared-types.js';
 export function registerProjectConfigTools(server, bridge) {
     // 1. get_project_setting
     server.registerTool('get_project_setting', {
@@ -16,7 +16,10 @@ export function registerProjectConfigTools(server, bridge) {
         description: 'Set a project setting value and save project.godot',
         inputSchema: {
             key: z.string().describe('Project setting key path'),
-            value: PropertyValue,
+            value: z
+                .unknown()
+                .refine((v) => v !== undefined, { message: 'value is required' })
+                .describe('Property value'),
         },
     }, async (args) => callGodot(bridge, 'project_config/set_setting_config', args));
     // 3. get_all_project_settings
@@ -24,6 +27,7 @@ export function registerProjectConfigTools(server, bridge) {
         description: 'Get all project settings, optionally filtered by prefix',
         inputSchema: {
             filter: z.string().optional().describe("Prefix filter (e.g. 'display/', 'input/')"),
+            max_results: z.number().int().min(0).optional().default(0).describe('Maximum number of settings to return (default: 0 = no limit). Use filter to narrow results.'),
         },
     }, async (args) => callGodot(bridge, 'project_config/get_all_settings', args));
     // 4. reset_project_setting
@@ -40,7 +44,7 @@ export function registerProjectConfigTools(server, bridge) {
     }, async () => callGodot(bridge, 'project_config/get_input_map'));
     // 6. set_input_map — accepts both flat [events] and nested {deadzone, events} for roundtrip
     server.registerTool('set_input_map', {
-        description: 'Replace the entire input map with the given actions and events',
+        description: 'Replace or merge the input map. When merge=false (default), erases ALL existing actions first (full replacement). When merge=true, only adds/updates the provided actions, preserving existing ones.',
         inputSchema: {
             actions: z
                 .record(z.union([
@@ -51,6 +55,7 @@ export function registerProjectConfigTools(server, bridge) {
                 }),
             ]))
                 .describe('Map of action name to array of input events, or {deadzone, events} object (from get_input_map)'),
+            merge: z.boolean().describe('When true, merges with existing actions instead of replacing all. When false, erases all existing first.'),
         },
     }, async (args) => callGodot(bridge, 'project_config/set_input_map', args));
     // 7. add_input_action
@@ -63,7 +68,7 @@ export function registerProjectConfigTools(server, bridge) {
         },
     }, async (args) => callGodot(bridge, 'project_config/add_input_action', args));
     // 8. remove_input_action
-    server.registerTool('remove_input_action', {
+    server.registerTool('project_config_remove_input_action', {
         description: 'Remove an input action from the InputMap',
         inputSchema: {
             action: z.string().describe('Action name to remove'),

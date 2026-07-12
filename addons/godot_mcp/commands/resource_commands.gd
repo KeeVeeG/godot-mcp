@@ -1,5 +1,6 @@
 ## Resource commands module - 6 tools.
 ## Handles resource CRUD, previews, and autoloads.
+@tool
 class_name MCPResourceCommands
 extends RefCounted
 
@@ -61,6 +62,8 @@ func read_resource(params: Dictionary) -> Dictionary:
 func edit_resource(params: Dictionary) -> Dictionary:
 	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("path", ""))
 	var properties: Dictionary = params.get("properties", {})
+	if properties.is_empty():
+		return {"result": "No properties provided — nothing to update for: %s" % path}
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
 	if not MCPCommandHelpers.validate_path(path):
@@ -115,11 +118,7 @@ func edit_resource(params: Dictionary) -> Dictionary:
 		else:
 			res.set(prop, val)
 
-	MCPCommandHelpers.ensure_dir(path.get_base_dir())
-	var err: Error = ResourceSaver.save(res, path)
-	if err != OK:
-		return {"success": false, "error": "Failed to save resource: %s" % error_string(err)}
-	var result_msg: String = "Resource updated: %s" % path
+	# Validate properties BEFORE saving — if any are invalid, fail without writing to disk
 	var error_msgs: Array = []
 	if not invalid_values.is_empty():
 		error_msgs.append("Invalid values for properties: " + str(invalid_values))
@@ -128,7 +127,7 @@ func edit_resource(params: Dictionary) -> Dictionary:
 	if not not_found.is_empty():
 		error_msgs.append("Unknown properties: " + str(not_found))
 	if not error_msgs.is_empty():
-		var result_data: Dictionary = {"message": result_msg}
+		var result_data: Dictionary = {"message": "Resource NOT saved: %d property errors for: %s" % [error_msgs.size(), path]}
 		if not not_found.is_empty():
 			result_data["not_found_properties"] = not_found
 		if not invalid_values.is_empty():
@@ -136,13 +135,21 @@ func edit_resource(params: Dictionary) -> Dictionary:
 		if not hint_invalid.is_empty():
 			result_data["out_of_range_properties"] = hint_invalid
 		return {"success": false, "error": "; ".join(error_msgs), "result": result_data}
-	return {"result": result_msg}
+
+	MCPCommandHelpers.ensure_dir(path.get_base_dir())
+	var err: Error = ResourceSaver.save(res, path)
+	if err != OK:
+		return {"success": false, "error": "Failed to save resource: %s" % error_string(err)}
+	return {"result": "Resource updated: %s" % path}
 
 
 ## Create a new resource.
 func create_resource(params: Dictionary) -> Dictionary:
-	var type_name: String = params.get("resource_type", params.get("type", ""))
-	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("path", ""))
+	var type_name: String = params.get("type", params.get("resource_type", ""))
+	var raw_path: String = params.get("path", "")
+	if raw_path.ends_with("/"):
+		return {"success": false, "error": "Path cannot end with '/': '%s' (paths ending in / are directories, not files)" % raw_path}
+	var path: String = MCPCommandHelpers.normalize_resource_path(raw_path)
 	var properties: Dictionary = params.get("properties", {})
 	if type_name.is_empty() or path.is_empty():
 		return {"success": false, "error": "type and path are required"}
@@ -213,17 +220,18 @@ func create_resource(params: Dictionary) -> Dictionary:
 				continue
 			not_found.append(prop)
 
-	if not path.get_extension():
-		path += ".tres"
+	if path.get_extension().is_empty():
+		return {"success": false, "error": "Path must include a file extension (e.g. .tres, .res): %s" % path}
 	if FileAccess.file_exists(path):
 		return {"success": false, "error": "Resource already exists: %s" % path}
-	MCPCommandHelpers.ensure_dir(path.get_base_dir())
-	var err: Error = ResourceSaver.save(res, path)
-	if err != OK:
-		return {"success": false, "error": "Failed to save resource: %s" % error_string(err)}
-	_plugin.safe_scan_filesystem()
-	var result_data: Dictionary = {"path": path, "type": type_name}
+	# Windows MAX_PATH limit (260). Godot's accessibility helpers add ~65 chars,
+	# but the absolute path can still exceed the OS limit.
+	if path.length() > 260:
+		return {"success": false, "error": "Path too long: %d characters (maximum is 260)" % path.length()}
+
+	# Validate properties BEFORE saving — if any are invalid, fail without writing to disk
 	var error_msgs: Array = []
+	var result_data: Dictionary = {"path": path, "type": type_name}
 	if not invalid_values.is_empty():
 		error_msgs.append("Invalid values for properties: " + str(invalid_values))
 		result_data["invalid_properties"] = invalid_values
@@ -235,6 +243,12 @@ func create_resource(params: Dictionary) -> Dictionary:
 		result_data["not_found_properties"] = not_found
 	if not error_msgs.is_empty():
 		return {"success": false, "error": "; ".join(error_msgs), "result": result_data}
+
+	MCPCommandHelpers.ensure_dir(path.get_base_dir())
+	var err: Error = ResourceSaver.save(res, path)
+	if err != OK:
+		return {"success": false, "error": "Failed to save resource: %s" % error_string(err)}
+	_plugin.safe_scan_filesystem()
 	return {"result": result_data}
 
 
@@ -268,10 +282,12 @@ func get_resource_preview(params: Dictionary) -> Dictionary:
 	var path: String = MCPCommandHelpers.normalize_resource_path(params.get("path", ""))
 	if path.is_empty():
 		return {"success": false, "error": "Path is required"}
+	if not FileAccess.file_exists(path):
+		return {"success": false, "error": "Resource not found: %s" % path}
 
 	var res: Resource = ResourceLoader.load(path)
 	if res == null:
-		return {"success": false, "error": "Resource not found: %s" % path}
+		return {"success": false, "error": "Path exists but is not a loadable Godot resource (not .tres/.res/.tscn/.scn/etc.): %s" % path}
 
 	var previewer: EditorResourcePreview = _plugin.get_editor_interface().get_resource_previewer()
 	var receiver: _PreviewReceiver = _PreviewReceiver.new()

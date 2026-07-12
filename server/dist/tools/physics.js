@@ -23,11 +23,17 @@ export function registerPhysicsTools(server, bridge) {
     }, async (args) => callGodot(bridge, 'physics/setup_collision', args));
     // 3. set_physics_layers
     server.registerTool('set_physics_layers', {
-        description: 'Set physics collision layers and masks on a node',
+        description: 'Set physics collision layers and masks on a node. Layer/mask values can be a single layer NUMBER (1-32) or an ARRAY of numbers to set multiple layers simultaneously.',
         inputSchema: {
             path: NodePath.describe('Node with collision object'),
-            layer: z.number().int().min(1).max(32).optional().describe('Collision layer (1-32)'),
-            mask: z.number().int().min(1).max(32).optional().describe('Collision mask (1-32)'),
+            layer: z
+                .union([z.number().int().min(1).max(32), z.array(z.number().int().min(1).max(32)).min(1)])
+                .optional()
+                .describe('Collision layer (1-32) or array of layers (e.g. [1, 3, 5])'),
+            mask: z
+                .union([z.number().int().min(1).max(32), z.array(z.number().int().min(1).max(32)).min(1)])
+                .optional()
+                .describe('Collision mask (1-32) or array of masks (e.g. [2, 4])'),
         },
     }, async (args) => callGodot(bridge, 'physics/set_layers', args));
     // 4. get_physics_layers

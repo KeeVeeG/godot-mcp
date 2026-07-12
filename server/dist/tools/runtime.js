@@ -1,8 +1,8 @@
 /**
- * Runtime tools — 19 tools for game runtime interaction
+ * Runtime tools — 23 tools for game runtime interaction
  */
 import { callGodot } from '../server.js';
-import { z, NodePath, ScriptPath, Position3D, PositiveNumber, Timeout, GDScriptCode } from './shared-types.js';
+import { z, NodePath, ScriptPath, Position3D, PositiveNumber, NonNegativeNumber, Timeout, GDScriptCode, FilePath } from './shared-types.js';
 export function registerRuntimeTools(server, bridge) {
     // 1. get_game_scene_tree — {} -> runtime hierarchy
     server.registerTool('get_game_scene_tree', {
@@ -38,7 +38,7 @@ export function registerRuntimeTools(server, bridge) {
         description: '🔴 Game must be running. Capture frames from the running game viewport as PNG files',
         inputSchema: {
             count: z.number().int().min(1).max(60).optional().default(1).describe('Number of frames to capture (default: 1)'),
-            interval: z.number().optional().describe('Interval between captures in seconds'),
+            interval: NonNegativeNumber.optional().describe('Interval between captures in seconds'),
         },
     }, async (args) => callGodot(bridge, 'runtime/capture_frames', args));
     // 6. monitor_properties — {path: string, properties: string[], duration?: number} -> timeline data
@@ -46,7 +46,7 @@ export function registerRuntimeTools(server, bridge) {
         description: '🔴 Game must be running. Monitor specific properties on a game node for changes over time',
         inputSchema: {
             path: NodePath.describe('Node path to monitor'),
-            properties: z.array(z.string()).describe('Property names to monitor'),
+            properties: z.array(z.string()).min(1).describe('Property names to monitor'),
             duration: Timeout.describe('Monitoring duration in seconds'),
         },
     }, async (args) => callGodot(bridge, 'runtime/monitor_properties', args));
@@ -85,8 +85,8 @@ export function registerRuntimeTools(server, bridge) {
     server.registerTool('batch_get_properties', {
         description: '🔴 Game must be running. Get multiple properties from multiple nodes in one call',
         inputSchema: {
-            paths: z.array(z.string()).describe('List of node paths to query'),
-            properties: z.array(z.string()).describe('Property names to read from each node'),
+            paths: z.array(z.string()).min(1).describe('List of node paths to query'),
+            properties: z.array(z.string()).min(1).describe('Property names to read from each node'),
         },
     }, async (args) => callGodot(bridge, 'runtime/batch_get_properties', args));
     // 13. find_ui_elements — {filter?: {type?: string, text?: string, name?: string}} -> UI elements
@@ -97,6 +97,7 @@ export function registerRuntimeTools(server, bridge) {
                 .object({
                 type: z.string().optional().describe("Control type to filter by (e.g. 'Button', 'Label')"),
                 text: z.string().optional().describe('Text content to search for'),
+                name: z.string().optional().describe('Node name to search for (substring match)'),
             })
                 .optional()
                 .describe('Filter criteria for UI element search'),
@@ -107,7 +108,7 @@ export function registerRuntimeTools(server, bridge) {
         description: '🔴 Game must be running. Find and click a button by its text content',
         inputSchema: {
             text: z.string().describe('Button text to find and click'),
-            timeout: Timeout,
+            timeout: Timeout.default(5.0).describe('Timeout in seconds (default: 5.0)'),
         },
     }, async (args) => callGodot(bridge, 'runtime/click_button', args));
     // 15. wait_for_node — {path: string, timeout?: number} -> success
@@ -118,7 +119,7 @@ export function registerRuntimeTools(server, bridge) {
             timeout: Timeout.default(5.0).describe('Timeout in seconds (default: 5.0)'),
         },
     }, async (args) => callGodot(bridge, 'runtime/wait_for_node', args));
-    // 16. find_nearby_nodes — {position: [number,number,number], radius: number, type?: string} -> nodes
+    // 16. find_nearby_nodes — {position: [number,number,number], radius: number} -> nodes
     server.registerTool('find_nearby_nodes', {
         description: '🔴 Game must be running. Find nodes within a radius of a world position',
         inputSchema: {
@@ -126,7 +127,7 @@ export function registerRuntimeTools(server, bridge) {
             radius: PositiveNumber.describe('Search radius'),
         },
     }, async (args) => callGodot(bridge, 'runtime/find_nearby', args));
-    // 17. navigate_to — {path: string, target: [number,number,number], speed?: number} -> success
+    // 17. navigate_to — {path: string, target: [number,number,number]} -> success
     server.registerTool('navigate_to', {
         description: '🔴 Game must be running. Navigate a node to a target position using pathfinding',
         inputSchema: {
@@ -134,7 +135,7 @@ export function registerRuntimeTools(server, bridge) {
             target: Position3D.describe('Target position [x, y, z]'),
         },
     }, async (args) => callGodot(bridge, 'runtime/navigate_to', args));
-    // 18. move_to — {path: string, target: [number,number,number], speed?: number} -> success
+    // 18. move_to — {path: string, target: [number,number,number]} -> success
     server.registerTool('move_to', {
         description: '🔴 Game must be running. Directly move a node to a target position',
         inputSchema: {
@@ -147,9 +148,51 @@ export function registerRuntimeTools(server, bridge) {
         description: '🔴 Game must be running. Watch for signal emissions from a game node',
         inputSchema: {
             path: NodePath.describe('Node path to watch'),
-            signals: z.array(z.string()).describe('Signal names to watch for'),
+            signals: z.array(z.string()).min(1).describe('Signal names to watch for'),
             duration: Timeout.describe('How long to watch in seconds'),
         },
     }, async (args) => callGodot(bridge, 'runtime/watch_signals', args));
+    // 20. unwatch_signals — {path: string, signals?: string[]} -> success
+    server.registerTool('unwatch_signals', {
+        description: '🔴 Game must be running. Stop watching signals on a game node that was previously being monitored',
+        inputSchema: {
+            path: NodePath.describe('Node path to stop watching'),
+            signals: z.array(z.string()).optional().describe('Specific signal names to stop watching (omit to stop all)'),
+        },
+    }, async (args) => callGodot(bridge, 'runtime/unwatch_signals', args));
+    // 21. delete_captured_frames — {paths?: string[]} -> success
+    server.registerTool('delete_captured_frames', {
+        description: '🔴 Game must be running. Delete captured frames from disk that were previously saved by capture_frames',
+        inputSchema: {
+            paths: z.array(FilePath).optional().describe('Specific file paths to delete (omit or pass empty array to delete all captured frames)'),
+        },
+    }, async (args) => callGodot(bridge, 'runtime/delete_captured_frames', args));
+    // 22. stop_monitoring — {path: string} -> monitoring data
+    server.registerTool('stop_monitoring', {
+        description: '🔴 Game must be running. Stop an active property monitoring session that was started by monitor_properties',
+        inputSchema: {
+            path: NodePath.describe('Node path whose monitoring session to stop'),
+        },
+    }, async (args) => callGodot(bridge, 'runtime/stop_monitoring', args));
+    // 23. batch_set_properties — {nodes: {path: string, properties: Record<string, unknown>}[]} -> success
+    server.registerTool('batch_set_properties', {
+        description: '🔴 Game must be running. Set multiple properties on multiple nodes in one call',
+        inputSchema: {
+            nodes: z
+                .array(z.object({
+                path: NodePath.describe('Node path to modify'),
+                properties: z.record(z.unknown()).describe('Dictionary of property_name: value pairs to set'),
+            }))
+                .min(1)
+                .describe('Array of node change descriptors (at least 1 required)'),
+        },
+    }, async (args) => callGodot(bridge, 'runtime/batch_set_properties', args));
+    // 24. get_monitor_results — {monitor_id: number} -> monitor data for a completed session
+    server.registerTool('get_monitor_results', {
+        description: 'Get aggregated results for a completed monitor_properties session by its monitor_id',
+        inputSchema: {
+            monitor_id: z.number().int().describe('Monitor ID returned by monitor_properties'),
+        },
+    }, async (args) => callGodot(bridge, 'runtime/get_monitor_results', args));
 }
 //# sourceMappingURL=runtime.js.map

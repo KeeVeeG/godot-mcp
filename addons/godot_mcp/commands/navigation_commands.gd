@@ -1,5 +1,6 @@
 ## Navigation commands module - 9 tools.
 ## Handles NavigationRegion, NavigationAgent, NavigationLink, and navmesh baking.
+@tool
 class_name MCPNavigationCommands
 extends RefCounted
 
@@ -36,6 +37,24 @@ func execute(command: String, params: Dictionary) -> Dictionary:
 		_: return {"error": "Unknown command: %s" % command}
 
 
+## Convert navigation_layers value to bitmask. If value is in 1-32 range,
+## treat as layer number and convert to bitmask. Otherwise pass through as-is.
+func _nav_layers_to_bitmask(value: Variant) -> int:
+	var raw: int = value as int
+	if raw >= 1 and raw <= 32:
+		return (1 << (raw - 1))
+	return raw
+
+
+## Convert a navigation_layers bitmask to an array of active layer numbers (1-32).
+func _bitmask_to_layers(bitmask: int) -> Array:
+	var layers: Array = []
+	for i: int in range(32):
+		if bitmask & (1 << i):
+			layers.append(i + 1)
+	return layers
+
+
 ## Setup a NavigationRegion2D or NavigationRegion3D. Configures an existing node
 ## or creates a new one when parent_path is provided.
 func setup_navigation_region(params: Dictionary) -> Dictionary:
@@ -45,54 +64,91 @@ func setup_navigation_region(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 	var node_name: String = params.get("name", "")
 
+	if path.is_empty():
+		return {"error": "Path is required"}
+
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
 	# Try to configure an existing node first
-	if not path.is_empty():
-		var existing: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
-		if existing != null:
-			if existing is NavigationRegion2D:
-				var nr: NavigationRegion2D = existing as NavigationRegion2D
-				if properties.has("enabled"):
-					nr.enabled = properties["enabled"] as bool
-				if properties.has("navigation_polygon"):
-					var navpoly: NavigationPolygon = ResourceLoader.load(properties["navigation_polygon"] as String) as NavigationPolygon
-					if navpoly:
-						nr.navigation_polygon = navpoly
-				if properties.has("navigation_layers"):
-					nr.navigation_layers = properties["navigation_layers"] as int
-				return {"result": "NavigationRegion configured: %s" % path}
-			elif existing is NavigationRegion3D:
-				var nr3: NavigationRegion3D = existing as NavigationRegion3D
-				if properties.has("enabled"):
-					nr3.enabled = properties["enabled"] as bool
-				if properties.has("navigation_mesh"):
-					var navmesh: NavigationMesh = ResourceLoader.load(properties["navigation_mesh"] as String) as NavigationMesh
-					if navmesh:
-						nr3.navigation_mesh = navmesh
-				if properties.has("navigation_layers"):
-					nr3.navigation_layers = properties["navigation_layers"] as int
-				return {"result": "NavigationRegion configured: %s" % path}
-			else:
-				return {"error": "Node is not a NavigationRegion: %s" % existing.get_class()}
+	var existing: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if existing != null:
+		if existing is NavigationRegion2D:
+			var nr: NavigationRegion2D = existing as NavigationRegion2D
+			if properties.has("enabled"):
+				nr.enabled = not not properties["enabled"]
+			if properties.has("navigation_polygon"):
+				var navpoly: NavigationPolygon = ResourceLoader.load(properties["navigation_polygon"] as String) as NavigationPolygon
+				if navpoly:
+					nr.navigation_polygon = navpoly
+			elif properties.has("polygon"):
+				var points: Array = properties["polygon"] as Array
+				var packed: PackedVector2Array = PackedVector2Array()
+				for pt: Variant in points:
+					packed.append(MCPVariantCodec._parse_vector2(pt))
+				var navpoly_arr: NavigationPolygon = NavigationPolygon.new()
+				navpoly_arr.add_outline(packed)
+				navpoly_arr.make_polygons_from_outlines()
+				nr.navigation_polygon = navpoly_arr
+			if properties.has("navigation_layers"):
+				nr.navigation_layers = _nav_layers_to_bitmask(properties["navigation_layers"])
+			return {"result": "NavigationRegion already exists, reconfigured: %s" % path}
+		elif existing is NavigationRegion3D:
+			var nr3: NavigationRegion3D = existing as NavigationRegion3D
+			if properties.has("enabled"):
+				nr3.enabled = not not properties["enabled"]
+			if properties.has("navigation_mesh"):
+				var navmesh: NavigationMesh = ResourceLoader.load(properties["navigation_mesh"] as String) as NavigationMesh
+				if navmesh:
+					nr3.navigation_mesh = navmesh
+			if properties.has("navigation_layers"):
+				nr3.navigation_layers = _nav_layers_to_bitmask(properties["navigation_layers"])
+			return {"result": "NavigationRegion already exists, reconfigured: %s" % path}
+		else:
+			return {"error": "Node is not a NavigationRegion: %s" % existing.get_class()}
+
+	# If path given but node doesn't exist, derive parent + name from path
+	if parent_path.is_empty():
+		var last_slash: int = path.rfind("/")
+		if last_slash != -1:
+			parent_path = path.substr(0, last_slash)
+			if node_name.is_empty():
+				node_name = path.substr(last_slash + 1)
+		elif node_name.is_empty():
+			node_name = path
 
 	# Create a new node
 	var parent: Node = root
 	if parent_path != "":
 		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
+	if parent == null and parent_path != "" and parent_path != ".":
+		# Auto-create intermediate parent nodes
+		parent = root
+		var segments := parent_path.split("/", false)
+		for segment: String in segments:
+			if segment.is_empty():
+				continue
+			var existing_child: Node = parent.get_node_or_null("./" + segment)
+			if existing_child != null:
+				parent = existing_child
+			else:
+				var intermediate: Node = Node2D.new() if dimension == "2d" else Node3D.new()
+				intermediate.name = segment
+				parent.add_child(intermediate)
+				intermediate.set_owner(root)
+				parent = intermediate
 	if parent == null:
-		return {"error": "Parent not found"}
+		return {"error": "Parent not found: %s" % parent_path}
 
 	var nav_node: Node = null
 	match dimension:
 		"2d":
 			var region2d: NavigationRegion2D = NavigationRegion2D.new()
 			if properties.has("enabled"):
-				region2d.enabled = properties["enabled"] as bool
+				region2d.enabled = not not properties["enabled"]
 			if properties.has("navigation_layers"):
-				region2d.navigation_layers = properties["navigation_layers"] as int
+				region2d.navigation_layers = _nav_layers_to_bitmask(properties["navigation_layers"])
 			if properties.has("navigation_polygon"):
 				var navpoly2: NavigationPolygon = ResourceLoader.load(properties["navigation_polygon"] as String) as NavigationPolygon
 				if navpoly2:
@@ -110,9 +166,9 @@ func setup_navigation_region(params: Dictionary) -> Dictionary:
 		"3d":
 			var region3d: NavigationRegion3D = NavigationRegion3D.new()
 			if properties.has("enabled"):
-				region3d.enabled = properties["enabled"] as bool
+				region3d.enabled = not not properties["enabled"]
 			if properties.has("navigation_layers"):
-				region3d.navigation_layers = properties["navigation_layers"] as int
+				region3d.navigation_layers = _nav_layers_to_bitmask(properties["navigation_layers"])
 			if properties.has("navigation_mesh"):
 				var navmesh2: NavigationMesh = ResourceLoader.load(properties["navigation_mesh"] as String) as NavigationMesh
 				if navmesh2:
@@ -120,6 +176,13 @@ func setup_navigation_region(params: Dictionary) -> Dictionary:
 			nav_node = region3d
 		_:
 			return {"error": "Invalid dimension: use '2d' or '3d'"}
+
+	# Apply remaining properties (skip already handled ones above)
+	for prop: String in properties:
+		if prop in ["enabled", "navigation_layers", "navigation_polygon", "polygon", "navigation_mesh"]:
+			continue
+		if MCPCommandHelpers.has_property(nav_node, prop):
+			nav_node.set(prop, properties[prop])
 
 	if node_name.is_empty():
 		nav_node.name = "NavigationRegion" + ("2D" if dimension == "2d" else "3D")
@@ -144,55 +207,57 @@ func setup_navigation_agent(params: Dictionary) -> Dictionary:
 	var properties: Dictionary = params.get("properties", {})
 	var node_name: String = params.get("name", "")
 
+	if path.is_empty():
+		return {"error": "Path is required"}
+
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
 	# Try to configure an existing node
-	if not path.is_empty():
-		var existing: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
-		if existing != null:
-			if existing is NavigationAgent2D:
-				var na: NavigationAgent2D = existing as NavigationAgent2D
-				if properties.has("radius"):
-					na.radius = properties["radius"] as float
-				if properties.has("speed"):
-					na.max_speed = properties["speed"] as float
-				if properties.has("max_speed"):
-					na.max_speed = properties["max_speed"] as float
-				if properties.has("target_desired_distance"):
-					na.target_desired_distance = properties["target_desired_distance"] as float
-				if properties.has("path_desired_distance"):
-					na.path_desired_distance = properties["path_desired_distance"] as float
-				if properties.has("avoidance_enabled"):
-					na.avoidance_enabled = properties["avoidance_enabled"] as bool
-				if properties.has("navigation_layers"):
-					na.navigation_layers = properties["navigation_layers"] as int
-				return {"result": "NavigationAgent configured: %s" % path}
-			elif existing is NavigationAgent3D:
-				var na3: NavigationAgent3D = existing as NavigationAgent3D
-				if properties.has("radius"):
-					na3.radius = properties["radius"] as float
-				if properties.has("speed"):
-					na3.max_speed = properties["speed"] as float
-				if properties.has("max_speed"):
-					na3.max_speed = properties["max_speed"] as float
-				if properties.has("target_desired_distance"):
-					na3.target_desired_distance = properties["target_desired_distance"] as float
-				if properties.has("path_desired_distance"):
-					na3.path_desired_distance = properties["path_desired_distance"] as float
-				if properties.has("avoidance_enabled"):
-					na3.avoidance_enabled = properties["avoidance_enabled"] as bool
-				if properties.has("navigation_layers"):
-					na3.navigation_layers = properties["navigation_layers"] as int
-				if properties.has("path_height_offset"):
-					na3.path_height_offset = properties["path_height_offset"] as float
-				return {"result": "NavigationAgent configured: %s" % path}
-			else:
-				return {"error": "Node is not a NavigationAgent: %s" % existing.get_class()}
+	var existing: Node = MCPCommandHelpers.resolve_node_path(_plugin, path)
+	if existing != null:
+		if existing is NavigationAgent2D:
+			var na: NavigationAgent2D = existing as NavigationAgent2D
+			if properties.has("radius"):
+				na.radius = properties["radius"] as float
+			if properties.has("speed"):
+				na.max_speed = properties["speed"] as float
+			if properties.has("max_speed"):
+				na.max_speed = properties["max_speed"] as float
+			if properties.has("target_desired_distance"):
+				na.target_desired_distance = properties["target_desired_distance"] as float
+			if properties.has("path_desired_distance"):
+				na.path_desired_distance = properties["path_desired_distance"] as float
+			if properties.has("avoidance_enabled"):
+				na.avoidance_enabled = not not properties["avoidance_enabled"]
+			if properties.has("navigation_layers"):
+				na.navigation_layers = _nav_layers_to_bitmask(properties["navigation_layers"])
+			return {"result": "NavigationAgent already exists, reconfigured: %s" % path}
+		elif existing is NavigationAgent3D:
+			var na3: NavigationAgent3D = existing as NavigationAgent3D
+			if properties.has("radius"):
+				na3.radius = properties["radius"] as float
+			if properties.has("speed"):
+				na3.max_speed = properties["speed"] as float
+			if properties.has("max_speed"):
+				na3.max_speed = properties["max_speed"] as float
+			if properties.has("target_desired_distance"):
+				na3.target_desired_distance = properties["target_desired_distance"] as float
+			if properties.has("path_desired_distance"):
+				na3.path_desired_distance = properties["path_desired_distance"] as float
+			if properties.has("avoidance_enabled"):
+				na3.avoidance_enabled = not not properties["avoidance_enabled"]
+			if properties.has("navigation_layers"):
+				na3.navigation_layers = _nav_layers_to_bitmask(properties["navigation_layers"])
+			if properties.has("path_height_offset"):
+				na3.path_height_offset = properties["path_height_offset"] as float
+			return {"result": "NavigationAgent already exists, reconfigured: %s" % path}
+		else:
+			return {"error": "Node is not a NavigationAgent: %s" % existing.get_class()}
 
 	# If path given but node doesn't exist, derive parent + name from path
-	if not path.is_empty() and parent_path.is_empty():
+	if parent_path.is_empty():
 		var last_slash: int = path.rfind("/")
 		if last_slash != -1:
 			parent_path = path.substr(0, last_slash)
@@ -205,8 +270,24 @@ func setup_navigation_agent(params: Dictionary) -> Dictionary:
 	var parent: Node = root
 	if parent_path != "":
 		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
+	if parent == null and parent_path != "" and parent_path != ".":
+		# Auto-create intermediate parent nodes
+		parent = root
+		var segments := parent_path.split("/", false)
+		for segment: String in segments:
+			if segment.is_empty():
+				continue
+			var existing_child: Node = parent.get_node_or_null("./" + segment)
+			if existing_child != null:
+				parent = existing_child
+			else:
+				var intermediate: Node = Node2D.new() if dimension == "2d" else Node3D.new()
+				intermediate.name = segment
+				parent.add_child(intermediate)
+				intermediate.set_owner(root)
+				parent = intermediate
 	if parent == null:
-		return {"error": "Parent not found"}
+		return {"error": "Parent not found: %s" % parent_path}
 
 	var agent_node: Node = null
 	match dimension:
@@ -223,9 +304,9 @@ func setup_navigation_agent(params: Dictionary) -> Dictionary:
 			if properties.has("path_desired_distance"):
 				agent2d.path_desired_distance = properties["path_desired_distance"] as float
 			if properties.has("avoidance_enabled"):
-				agent2d.avoidance_enabled = properties["avoidance_enabled"] as bool
+				agent2d.avoidance_enabled = not not properties["avoidance_enabled"]
 			if properties.has("navigation_layers"):
-				agent2d.navigation_layers = properties["navigation_layers"] as int
+				agent2d.navigation_layers = _nav_layers_to_bitmask(properties["navigation_layers"])
 			if properties.has("time_horizon"):
 				agent2d.time_horizon = properties["time_horizon"] as float
 			agent_node = agent2d
@@ -242,9 +323,9 @@ func setup_navigation_agent(params: Dictionary) -> Dictionary:
 			if properties.has("path_desired_distance"):
 				agent3d.path_desired_distance = properties["path_desired_distance"] as float
 			if properties.has("avoidance_enabled"):
-				agent3d.avoidance_enabled = properties["avoidance_enabled"] as bool
+				agent3d.avoidance_enabled = not not properties["avoidance_enabled"]
 			if properties.has("navigation_layers"):
-				agent3d.navigation_layers = properties["navigation_layers"] as int
+				agent3d.navigation_layers = _nav_layers_to_bitmask(properties["navigation_layers"])
 			if properties.has("path_height_offset"):
 				agent3d.path_height_offset = properties["path_height_offset"] as float
 			if properties.has("time_horizon"):
@@ -258,8 +339,10 @@ func setup_navigation_agent(params: Dictionary) -> Dictionary:
 	else:
 		agent_node.name = node_name
 
-	# Apply remaining properties
+	# Apply remaining properties (skip ones already handled explicitly)
 	for prop: String in properties:
+		if prop in ["navigation_layers", "radius", "speed", "max_speed", "target_desired_distance", "path_desired_distance", "avoidance_enabled", "time_horizon", "path_height_offset"]:
+			continue
 		if MCPCommandHelpers.has_property(agent_node, prop):
 			agent_node.set(prop, properties[prop])
 
@@ -274,6 +357,8 @@ func setup_navigation_agent(params: Dictionary) -> Dictionary:
 
 ## Bake a navigation mesh for a NavigationRegion. Uses NavigationServer for
 ## 3D regions and supports bake configuration properties.
+## Set sync=true to use synchronous bake (blocks editor briefly but result
+## is immediately available for find_path). Default is async.
 func bake_navigation_mesh(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	if path.is_empty():
@@ -284,6 +369,9 @@ func bake_navigation_mesh(params: Dictionary) -> Dictionary:
 		return {"error": "Node not found: %s" % path}
 
 	var properties: Dictionary = params.get("properties", {})
+	var use_sync: bool = params.get("sync", false)
+	if not use_sync:
+		use_sync = properties.get("sync", false)
 
 	if node is NavigationRegion3D:
 		var nr: NavigationRegion3D = node as NavigationRegion3D
@@ -305,17 +393,18 @@ func bake_navigation_mesh(params: Dictionary) -> Dictionary:
 		if properties.has("agent_max_slope"):
 			nav_mesh.agent_max_slope = properties["agent_max_slope"] as float
 
-		# Use NavigationServer to bake from source geometry (async to avoid editor freeze)
 		var source_geom: NavigationMeshSourceGeometryData3D = NavigationMeshSourceGeometryData3D.new()
 		var root_node: Node = MCPCommandHelpers.get_scene_root(_plugin)
 		if root_node:
-			var bake_done: Array = [false]
-			var bake_callback: Callable = func() -> void: bake_done[0] = true
 			NavigationServer3D.parse_source_geometry_data(nav_mesh, source_geom, root_node)
-			NavigationServer3D.bake_from_source_geometry_data_async(nav_mesh, source_geom, bake_callback)
+			if use_sync:
+				NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source_geom)
+			else:
+				NavigationServer3D.bake_from_source_geometry_data_async(nav_mesh, source_geom, func(): pass)
 
 		nr.navigation_mesh = nav_mesh
-		return {"result": "Navigation mesh bake started for 3D region: %s (async — check region for completion)" % path}
+		var mode: String = "synchronous" if use_sync else "async"
+		return {"result": "Navigation mesh bake %s for 3D region: %s" % [mode, path]}
 
 	elif node is NavigationRegion2D:
 		var nr2: NavigationRegion2D = node as NavigationRegion2D
@@ -325,18 +414,23 @@ func bake_navigation_mesh(params: Dictionary) -> Dictionary:
 		var nav_poly: NavigationPolygon = nr2.navigation_polygon
 		if properties.has("agent_radius"):
 			nav_poly.agent_radius = properties["agent_radius"] as float
+		if properties.has("cell_size"):
+			nav_poly.cell_size = properties["cell_size"] as float
+		if properties.has("border_size"):
+			nav_poly.border_size = properties["border_size"] as float
 
-		# Use NavigationServer to bake from source geometry (async to avoid editor freeze)
 		var source_geom2d: NavigationMeshSourceGeometryData2D = NavigationMeshSourceGeometryData2D.new()
 		var root_node2d: Node = MCPCommandHelpers.get_scene_root(_plugin)
 		if root_node2d:
-			var bake_done_2d: Array = [false]
-			var bake_callback_2d: Callable = func() -> void: bake_done_2d[0] = true
 			NavigationServer2D.parse_source_geometry_data(nav_poly, source_geom2d, root_node2d)
-			NavigationServer2D.bake_from_source_geometry_data_async(nav_poly, source_geom2d, bake_callback_2d)
+			if use_sync:
+				NavigationServer2D.bake_from_source_geometry_data(nav_poly, source_geom2d)
+			else:
+				NavigationServer2D.bake_from_source_geometry_data_async(nav_poly, source_geom2d, func(): pass)
 
 		nr2.navigation_polygon = nav_poly
-		return {"result": "Navigation polygon bake started for 2D region: %s (async — check region for completion)" % path}
+		var mode: String = "synchronous" if use_sync else "async"
+		return {"result": "Navigation polygon bake %s for 2D region: %s" % [mode, path]}
 
 	else:
 		return {"error": "Node is not a NavigationRegion: %s" % node.get_class()}
@@ -346,7 +440,6 @@ func bake_navigation_mesh(params: Dictionary) -> Dictionary:
 func set_navigation_layers(params: Dictionary) -> Dictionary:
 	var path: String = params.get("path", "")
 	var layer: int = params.get("layer", 0)
-	var mask: int = params.get("mask", 0)
 	if path.is_empty():
 		return {"error": "Path is required"}
 
@@ -354,48 +447,50 @@ func set_navigation_layers(params: Dictionary) -> Dictionary:
 	if node == null:
 		return {"error": "Node not found: %s" % path}
 
+	var layer_bitmask: int = (1 << (layer - 1)) if layer > 0 else 0
+
 	if node is NavigationRegion2D:
 		var nr: NavigationRegion2D = node as NavigationRegion2D
 		if layer > 0:
 			if _undo_helper:
-				_undo_helper.set_property_with_undo(nr, "navigation_layers", layer)
+				_undo_helper.set_property_with_undo(nr, "navigation_layers", layer_bitmask)
 			else:
-				nr.navigation_layers = layer
+				nr.navigation_layers = layer_bitmask
 	elif node is NavigationRegion3D:
 		var nr3: NavigationRegion3D = node as NavigationRegion3D
 		if layer > 0:
 			if _undo_helper:
-				_undo_helper.set_property_with_undo(nr3, "navigation_layers", layer)
+				_undo_helper.set_property_with_undo(nr3, "navigation_layers", layer_bitmask)
 			else:
-				nr3.navigation_layers = layer
+				nr3.navigation_layers = layer_bitmask
 	elif node is NavigationAgent2D:
 		var na: NavigationAgent2D = node as NavigationAgent2D
 		if layer > 0:
 			if _undo_helper:
-				_undo_helper.set_property_with_undo(na, "navigation_layers", layer)
+				_undo_helper.set_property_with_undo(na, "navigation_layers", layer_bitmask)
 			else:
-				na.navigation_layers = layer
+				na.navigation_layers = layer_bitmask
 	elif node is NavigationAgent3D:
 		var na3: NavigationAgent3D = node as NavigationAgent3D
 		if layer > 0:
 			if _undo_helper:
-				_undo_helper.set_property_with_undo(na3, "navigation_layers", layer)
+				_undo_helper.set_property_with_undo(na3, "navigation_layers", layer_bitmask)
 			else:
-				na3.navigation_layers = layer
+				na3.navigation_layers = layer_bitmask
 	elif node is NavigationLink2D:
 		var link2d: NavigationLink2D = node as NavigationLink2D
 		if layer > 0:
 			if _undo_helper:
-				_undo_helper.set_property_with_undo(link2d, "navigation_layers", layer)
+				_undo_helper.set_property_with_undo(link2d, "navigation_layers", layer_bitmask)
 			else:
-				link2d.navigation_layers = layer
+				link2d.navigation_layers = layer_bitmask
 	elif node is NavigationLink3D:
 		var link3d: NavigationLink3D = node as NavigationLink3D
 		if layer > 0:
 			if _undo_helper:
-				_undo_helper.set_property_with_undo(link3d, "navigation_layers", layer)
+				_undo_helper.set_property_with_undo(link3d, "navigation_layers", layer_bitmask)
 			else:
-				link3d.navigation_layers = layer
+				link3d.navigation_layers = layer_bitmask
 	else:
 		return {"error": "Node does not support navigation layers: %s" % node.get_class()}
 
@@ -417,15 +512,22 @@ func get_navigation_info(params: Dictionary) -> Dictionary:
 		var nr: NavigationRegion2D = node as NavigationRegion2D
 		result["enabled"] = nr.enabled
 		result["navigation_layers"] = nr.navigation_layers
+		result["active_layers"] = _bitmask_to_layers(nr.navigation_layers)
 		if nr.navigation_polygon:
 			result["has_polygon"] = true
 			result["polygon_path"] = nr.navigation_polygon.resource_path
+			var poly: NavigationPolygon = nr.navigation_polygon
+			result["vertices_count"] = poly.get_vertices().size()
+			result["polygon_count"] = poly.get_polygon_count()
+			result["agent_radius"] = poly.agent_radius
+			result["cell_size"] = poly.cell_size
 		else:
 			result["has_polygon"] = false
 	elif node is NavigationRegion3D:
 		var nr3: NavigationRegion3D = node as NavigationRegion3D
 		result["enabled"] = nr3.enabled
 		result["navigation_layers"] = nr3.navigation_layers
+		result["active_layers"] = _bitmask_to_layers(nr3.navigation_layers)
 		if nr3.navigation_mesh:
 			result["has_mesh"] = true
 			result["mesh_path"] = nr3.navigation_mesh.resource_path
@@ -446,6 +548,7 @@ func get_navigation_info(params: Dictionary) -> Dictionary:
 		result["path_desired_distance"] = na.path_desired_distance
 		result["avoidance_enabled"] = na.avoidance_enabled
 		result["navigation_layers"] = na.navigation_layers
+		result["active_layers"] = _bitmask_to_layers(na.navigation_layers)
 		result["is_target_reached"] = na.is_target_reached()
 		if na.is_navigation_finished():
 			result["navigation_finished"] = true
@@ -461,6 +564,7 @@ func get_navigation_info(params: Dictionary) -> Dictionary:
 		result["path_desired_distance"] = na3.path_desired_distance
 		result["avoidance_enabled"] = na3.avoidance_enabled
 		result["navigation_layers"] = na3.navigation_layers
+		result["active_layers"] = _bitmask_to_layers(na3.navigation_layers)
 		result["is_target_reached"] = na3.is_target_reached()
 		if na3.is_navigation_finished():
 			result["navigation_finished"] = true
@@ -473,6 +577,7 @@ func get_navigation_info(params: Dictionary) -> Dictionary:
 		var link2d: NavigationLink2D = node as NavigationLink2D
 		result["enabled"] = link2d.enabled
 		result["navigation_layers"] = link2d.navigation_layers
+		result["active_layers"] = _bitmask_to_layers(link2d.navigation_layers)
 		var start2d: Vector2 = link2d.start_position
 		var end2d: Vector2 = link2d.end_position
 		result["start_position"] = {"x": start2d.x, "y": start2d.y}
@@ -482,6 +587,7 @@ func get_navigation_info(params: Dictionary) -> Dictionary:
 		var link3d: NavigationLink3D = node as NavigationLink3D
 		result["enabled"] = link3d.enabled
 		result["navigation_layers"] = link3d.navigation_layers
+		result["active_layers"] = _bitmask_to_layers(link3d.navigation_layers)
 		var start3d: Vector3 = link3d.start_position
 		var end3d: Vector3 = link3d.end_position
 		result["start_position"] = {"x": start3d.x, "y": start3d.y, "z": start3d.z}
@@ -496,15 +602,60 @@ func get_navigation_info(params: Dictionary) -> Dictionary:
 ## Setup a NavigationLink2D or NavigationLink3D for connecting navigation regions.
 func setup_navigation_link(params: Dictionary) -> Dictionary:
 	var parent_path: String = params.get("parent", params.get("parent_path", ""))
-	var dimension: String = params.get("dimension", "2d")
+	var dimension: String = params.get("dimension", "")
 	var properties: Dictionary = params.get("properties", {})
 	var node_name: String = params.get("name", "")
 
+	# Auto-detect dimension from position array lengths if not explicitly set
+	if dimension.is_empty():
+		if properties.has("start_position"):
+			var sp: Variant = properties["start_position"]
+			if sp is Array:
+				var arr: Array = sp as Array
+				dimension = "3d" if arr.size() >= 3 else "2d"
+		if dimension.is_empty() and properties.has("end_position"):
+			var ep: Variant = properties["end_position"]
+			if ep is Array:
+				var arr: Array = ep as Array
+				dimension = "3d" if arr.size() >= 3 else "2d"
+	if dimension.is_empty():
+		dimension = "2d"
+
+	# Validate position array consistency with detected dimension
+	if properties.has("start_position") and properties.has("end_position"):
+		var sp_size: int = -1
+		var ep_size: int = -1
+		if properties["start_position"] is Array:
+			sp_size = (properties["start_position"] as Array).size()
+		if properties["end_position"] is Array:
+			ep_size = (properties["end_position"] as Array).size()
+		if sp_size >= 0 and ep_size >= 0 and sp_size != ep_size:
+			return {"error": "Dimension mismatch: start_position has %d components, end_position has %d. Both must be either 2D (2 components) or 3D (3 components)." % [sp_size, ep_size]}
+
 	var parent: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	if parent == null:
+		return {"error": "No scene open"}
 	if parent_path != "":
 		parent = MCPCommandHelpers.resolve_node_path(_plugin, parent_path)
+	if parent == null and parent_path != "" and parent_path != ".":
+		# Auto-create intermediate parent nodes
+		parent = MCPCommandHelpers.get_scene_root(_plugin)
+		var root: Node = parent
+		var segments := parent_path.split("/", false)
+		for segment: String in segments:
+			if segment.is_empty():
+				continue
+			var existing_child: Node = parent.get_node_or_null("./" + segment)
+			if existing_child != null:
+				parent = existing_child
+			else:
+				var intermediate: Node = Node2D.new() if dimension == "2d" else Node3D.new()
+				intermediate.name = segment
+				parent.add_child(intermediate)
+				intermediate.set_owner(root)
+				parent = intermediate
 	if parent == null:
-		return {"error": "Parent not found"}
+		return {"error": "Parent not found: %s" % parent_path}
 
 	var link_node: Node = null
 	match dimension:
@@ -515,11 +666,11 @@ func setup_navigation_link(params: Dictionary) -> Dictionary:
 			if properties.has("end_position"):
 				link2d.end_position = MCPVariantCodec._parse_vector2(properties["end_position"])
 			if properties.has("bidirectional"):
-				link2d.bidirectional = properties["bidirectional"] as bool
+				link2d.bidirectional = not not properties["bidirectional"]
 			if properties.has("enabled"):
-				link2d.enabled = properties["enabled"] as bool
+				link2d.enabled = not not properties["enabled"]
 			if properties.has("navigation_layers"):
-				link2d.navigation_layers = properties["navigation_layers"] as int
+				link2d.navigation_layers = _nav_layers_to_bitmask(properties["navigation_layers"])
 			link_node = link2d
 		"3d":
 			var link3d: NavigationLink3D = NavigationLink3D.new()
@@ -528,11 +679,11 @@ func setup_navigation_link(params: Dictionary) -> Dictionary:
 			if properties.has("end_position"):
 				link3d.end_position = MCPVariantCodec._parse_vector3(properties["end_position"])
 			if properties.has("bidirectional"):
-				link3d.bidirectional = properties["bidirectional"] as bool
+				link3d.bidirectional = not not properties["bidirectional"]
 			if properties.has("enabled"):
-				link3d.enabled = properties["enabled"] as bool
+				link3d.enabled = not not properties["enabled"]
 			if properties.has("navigation_layers"):
-				link3d.navigation_layers = properties["navigation_layers"] as int
+				link3d.navigation_layers = _nav_layers_to_bitmask(properties["navigation_layers"])
 			link_node = link3d
 		_:
 			return {"error": "Invalid dimension: use '2d' or '3d'"}
@@ -542,8 +693,10 @@ func setup_navigation_link(params: Dictionary) -> Dictionary:
 	else:
 		link_node.name = node_name
 
-	# Apply remaining properties
+	# Apply remaining properties (skip vector/bool/nav props already handled explicitly above)
 	for prop: String in properties:
+		if prop == "start_position" or prop == "end_position" or prop == "navigation_layers" or prop == "bidirectional" or prop == "enabled":
+			continue
 		if MCPCommandHelpers.has_property(link_node, prop):
 			link_node.set(prop, properties[prop])
 
@@ -586,7 +739,10 @@ func find_navigation_path(params: Dictionary) -> Dictionary:
 			var result: Array = []
 			for pt: Vector2 in path:
 				result.append({"x": pt.x, "y": pt.y})
-			return {"result": {"path": result, "point_count": result.size(), "dimension": "2d"}}
+			var response: Dictionary = {"path": result, "point_count": result.size(), "dimension": "2d"}
+			if result.is_empty():
+				response["warning"] = "Empty path. If you just baked the navigation mesh, ensure bake_mesh was called with sync=true or wait for async bake to complete."
+			return {"result": response}
 		"3d":
 			var start_vec3: Vector3 = Vector3(start[0] as float, start[1] as float, start[2] as float if start.size() > 2 else 0.0)
 			var end_vec3: Vector3 = Vector3(end[0] as float, end[1] as float, end[2] as float if end.size() > 2 else 0.0)
@@ -605,7 +761,10 @@ func find_navigation_path(params: Dictionary) -> Dictionary:
 			var result3: Array = []
 			for pt3: Vector3 in path3d:
 				result3.append({"x": pt3.x, "y": pt3.y, "z": pt3.z})
-			return {"result": {"path": result3, "point_count": result3.size(), "dimension": "3d"}}
+			var response3: Dictionary = {"path": result3, "point_count": result3.size(), "dimension": "3d"}
+			if result3.is_empty():
+				response3["warning"] = "Empty path. If you just baked the navigation mesh, ensure bake_mesh was called with sync=true or wait for async bake to complete."
+			return {"result": response3}
 		_:
 			return {"error": "Invalid dimension: use '2d' or '3d'"}
 
@@ -620,7 +779,7 @@ func _remove_navigation_node(params: Dictionary, expected_class: String) -> Dict
 	if root == null:
 		return {"error": "No scene open"}
 	
-	var node: Node = root.get_node_or_null(node_path)
+	var node: Node = MCPCommandHelpers.resolve_node_path(_plugin, node_path)
 	if node == null:
 		return {"error": "Node not found: %s" % node_path}
 	

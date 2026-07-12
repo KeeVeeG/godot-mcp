@@ -1,6 +1,7 @@
 ## Platform-specific commands module - 6 tools.
 ## Provides platform configuration for iOS, Android, and Web,
 ## platform capability queries, and platform build validation.
+@tool
 class_name MCPPlatformSpecificCommands
 extends RefCounted
 
@@ -166,6 +167,23 @@ func get_platform_settings(params: Dictionary) -> Dictionary:
 				"pwa": ProjectSettings.get_setting("export/web/progressive_web_app", defaults.get("pwa", false)),
 				"renderer": ProjectSettings.get_setting("rendering/renderer/rendering_method", defaults.get("renderer", "gl_compatibility")),
 			}
+		"windows":
+			current_settings = {
+				"architecture": ProjectSettings.get_setting("export/windows/architecture", defaults.get("architecture", "x86_64")),
+				"console_wrapper": ProjectSettings.get_setting("export/windows/console_wrapper", defaults.get("console_wrapper", false)),
+				"icon": ProjectSettings.get_setting("export/windows/icon", defaults.get("icon", "")),
+			}
+		"linux":
+			current_settings = {
+				"architecture": ProjectSettings.get_setting("export/linux/architecture", defaults.get("architecture", "x86_64")),
+				"icon": ProjectSettings.get_setting("export/linux/icon", defaults.get("icon", "")),
+			}
+		"macos":
+			current_settings = {
+				"architecture": ProjectSettings.get_setting("export/macos/architecture", defaults.get("architecture", "universal")),
+				"bundle_id": ProjectSettings.get_setting("application/config/bundle_identifier", defaults.get("bundle_id", "com.company.game")),
+				"min_macos_version": ProjectSettings.get_setting("export/macos/min_macos_version", defaults.get("min_macos_version", "10.15")),
+			}
 		_:
 			current_settings = defaults
 
@@ -185,6 +203,7 @@ func configure_ios(params: Dictionary) -> Dictionary:
 		return {"result": {"success": true, "platform": "ios", "applied_changes": [], "change_count": 0, "message": "No settings to apply"}}
 
 	var applied: Array = []
+	var notes: Array = []
 
 	if settings.has("bundle_id"):
 		var bundle_id: String = settings["bundle_id"] as String
@@ -195,25 +214,32 @@ func configure_ios(params: Dictionary) -> Dictionary:
 
 	if settings.has("team_id"):
 		var team_id: String = settings["team_id"] as String
+		if team_id.is_empty():
+			notes.append("Empty team_id provided — this will cause signing failures in Xcode. Apple Team IDs are typically 10 alphanumeric characters.")
 		ProjectSettings.set_setting("export/ios/team_id", team_id)
 		applied.append({"setting": "team_id", "value": team_id})
 
 	if settings.has("signing"):
 		var signing: Dictionary = settings["signing"] as Dictionary
-		var signing_keys: Array = []
-		for key: String in signing:
-			ProjectSettings.set_setting("export/ios/%s" % key, signing[key])
-			signing_keys.append(key)
-			applied.append({"setting": "signing/%s" % key, "value": signing[key]})
-		# Track which sub-keys were written so get_platform_settings can discover them.
-		# Merge with existing sub-keys to preserve previously set arbitrary keys.
-		var signing_existing: Array = []
-		if ProjectSettings.has_setting("export/ios/_sub_keys"):
-			signing_existing = ProjectSettings.get_setting("export/ios/_sub_keys") as Array
-		for signing_existing_key in signing_existing:
-			if not signing_keys.has(signing_existing_key):
-				signing_keys.append(signing_existing_key)
-		ProjectSettings.set_setting("export/ios/_sub_keys", signing_keys)
+		if signing.is_empty():
+			notes.append("Empty signing object provided — no signing configuration changes were made")
+		else:
+			var signing_keys: Array = []
+			for key: String in signing:
+				ProjectSettings.set_setting("export/ios/%s" % key, signing[key])
+				signing_keys.append(key)
+				applied.append({"setting": "signing/%s" % key, "value": signing[key]})
+			# Track which sub-keys were written so get_platform_settings can discover them.
+			# Replace existing sub-keys — clear any previously-set keys not in the new set.
+			var signing_existing: Array = []
+			if ProjectSettings.has_setting("export/ios/_sub_keys"):
+				signing_existing = ProjectSettings.get_setting("export/ios/_sub_keys") as Array
+			# Clear old sub-keys that are no longer in the new signing object
+			for existing_key in signing_existing:
+				if not signing_keys.has(existing_key):
+					var old_key_path: String = "export/ios/%s" % existing_key
+					ProjectSettings.clear(old_key_path)
+			ProjectSettings.set_setting("export/ios/_sub_keys", signing_keys)
 
 	ProjectSettings.save()
 
@@ -222,6 +248,7 @@ func configure_ios(params: Dictionary) -> Dictionary:
 		"platform": "ios",
 		"applied_changes": applied,
 		"change_count": applied.size(),
+		"notes": notes,
 		"message": "iOS configuration updated: %d setting(s) applied" % applied.size(),
 	}}
 
@@ -234,6 +261,8 @@ func configure_android(params: Dictionary) -> Dictionary:
 		return {"result": {"success": true, "platform": "android", "applied_changes": [], "change_count": 0, "message": "No settings to apply"}}
 
 	var applied: Array = []
+	var perm_warnings: Array = []
+	var notes: Array = []
 
 	if settings.has("package_name"):
 		var package_name: String = settings["package_name"] as String
@@ -244,35 +273,62 @@ func configure_android(params: Dictionary) -> Dictionary:
 
 	if settings.has("keystore"):
 		var keystore: Dictionary = settings["keystore"] as Dictionary
-		var keystore_keys: Array = []
-		for key: String in keystore:
-			# Isolate keystore keys under export/android/keystore/ to prevent
-			# collisions with top-level settings (package_name, permissions).
-			ProjectSettings.set_setting("export/android/keystore/%s" % key, keystore[key])
-			keystore_keys.append(key)
-			applied.append({"setting": "keystore/%s" % key, "value": keystore[key]})
-		# Track which sub-keys were written so get_platform_settings can discover them.
-		# Merge with existing sub-keys to preserve previously set arbitrary keys.
-		var keystore_existing: Array = []
-		if ProjectSettings.has_setting("export/android/keystore/_sub_keys"):
-			keystore_existing = ProjectSettings.get_setting("export/android/keystore/_sub_keys") as Array
-		for keystore_existing_key in keystore_existing:
-			if not keystore_keys.has(keystore_existing_key):
-				keystore_keys.append(keystore_existing_key)
-		ProjectSettings.set_setting("export/android/keystore/_sub_keys", keystore_keys)
+		if keystore.is_empty():
+			notes.append("Empty keystore object provided — no keystore changes were made")
+		else:
+			var keystore_keys: Array = []
+			for key: String in keystore:
+				var key_value = keystore[key]
+				# Warn about empty keystore values — they will cause export failures
+				if key_value is String and key_value == "":
+					if key == "path":
+						notes.append("Empty keystore path provided — keystore file will not be found during export")
+					elif key == "alias":
+						notes.append("Empty keystore alias provided — key alias will not be found during signing")
+					elif key in ["password", "alias_password"]:
+						notes.append("Empty %s provided — signing will fail without a valid keystore password" % key)
+				# Isolate keystore keys under export/android/keystore/ to prevent
+				# collisions with top-level settings (package_name, permissions).
+				ProjectSettings.set_setting("export/android/keystore/%s" % key, key_value)
+				keystore_keys.append(key)
+				var display_value = key_value
+				if key == "password" or key == "alias_password":
+					display_value = "[REDACTED]"
+				applied.append({"setting": "keystore/%s" % key, "value": display_value})
+			# Track which sub-keys were written so get_platform_settings can discover them.
+			# Replace existing sub-keys — clear any previously-set keys not in the new set.
+			var keystore_existing: Array = []
+			if ProjectSettings.has_setting("export/android/keystore/_sub_keys"):
+				keystore_existing = ProjectSettings.get_setting("export/android/keystore/_sub_keys") as Array
+			# Clear old sub-keys that are no longer in the new keystore object
+			for existing_key in keystore_existing:
+				if not keystore_keys.has(existing_key):
+					var old_key_path: String = "export/android/keystore/%s" % existing_key
+					ProjectSettings.clear(old_key_path)
+			ProjectSettings.set_setting("export/android/keystore/_sub_keys", keystore_keys)
 
 	if settings.has("permissions"):
 		var permissions: Array = settings["permissions"] as Array
-		var warnings: Array = []
+		# Deduplicate permissions — duplicates can cause build issues
+		var seen: Dictionary = {}
+		var deduped: Array = []
 		for perm in permissions:
 			var perm_str: String = perm as String
-			# Warn about permissions that don't follow standard Android format
-			if not "." in perm_str:
-				warnings.append(perm_str)
-		if not warnings.is_empty():
-			applied.append({"setting": "warnings", "value": "Non-standard permission format detected: %s. Android permissions typically use 'android.permission.PERMISSION_NAME' or dotted custom format." % ", ".join(warnings)})
-		ProjectSettings.set_setting("export/android/permissions", permissions)
-		applied.append({"setting": "permissions", "value": permissions})
+			if seen.has(perm_str):
+				continue
+			seen[perm_str] = true
+			deduped.append(perm_str)
+			# Warn about permissions that don't follow standard Android format.
+			# Valid formats: "android.permission.X" (system) or dotted namespace (e.g. "com.company.PERMISSION").
+			# A proper dotted namespace must have ≥2 segments, each starting with a letter.
+			var perm_regex := RegEx.new()
+			perm_regex.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$")
+			if perm_regex.search(perm_str) == null:
+				perm_warnings.append("Non-standard permission format: '%s'. Android permissions should use 'android.permission.PERMISSION_NAME' or a dotted custom namespace (e.g. 'com.company.PERMISSION')." % perm_str)
+		if deduped.size() < permissions.size():
+			notes.append("%d duplicate permission(s) removed" % (permissions.size() - deduped.size()))
+		ProjectSettings.set_setting("export/android/permissions", deduped)
+		applied.append({"setting": "permissions", "value": deduped})
 
 	ProjectSettings.save()
 
@@ -281,6 +337,8 @@ func configure_android(params: Dictionary) -> Dictionary:
 		"platform": "android",
 		"applied_changes": applied,
 		"change_count": applied.size(),
+		"warnings": perm_warnings,
+		"notes": notes,
 		"message": "Android configuration updated: %d setting(s) applied" % applied.size(),
 	}}
 
@@ -293,6 +351,7 @@ func configure_web(params: Dictionary) -> Dictionary:
 		return {"result": {"success": true, "platform": "web", "applied_changes": [], "change_count": 0, "message": "No settings to apply"}}
 
 	var applied: Array = []
+	var web_warnings: Array = []
 
 	if settings.has("canvas_resize"):
 		var canvas_resize: bool = settings["canvas_resize"] as bool
@@ -304,7 +363,7 @@ func configure_web(params: Dictionary) -> Dictionary:
 		ProjectSettings.set_setting("export/web/threads", threading)
 		applied.append({"setting": "threading", "value": threading})
 		if threading:
-			applied.append({"setting": "note", "value": "Threading requires COOP/COEP headers on your web server"})
+			web_warnings.append("Threading requires COOP/COEP headers on your web server")
 
 	if settings.has("pwa"):
 		var pwa: bool = settings["pwa"] as bool
@@ -318,6 +377,7 @@ func configure_web(params: Dictionary) -> Dictionary:
 		"platform": "web",
 		"applied_changes": applied,
 		"change_count": applied.size(),
+		"warnings": web_warnings,
 		"message": "Web configuration updated: %d setting(s) applied" % applied.size(),
 	}}
 
@@ -387,7 +447,7 @@ func validate_platform_build(params: Dictionary) -> Dictionary:
 				issues.append({"severity": "error", "type": "default_package", "message": "Package name is still the default - configure a unique identifier"})
 
 			# Check SDK versions
-			var min_sdk: int = ProjectSettings.get_setting("export/android/min_sdk", 0)
+			var min_sdk: int = ProjectSettings.get_setting("export/android/min_sdk", PLATFORM_DEFAULTS["android"]["min_sdk"])
 			if min_sdk < 21:
 				warnings.append({"severity": "warning", "type": "low_min_sdk", "message": "min_sdk below 21 may limit device compatibility"})
 
@@ -469,6 +529,7 @@ func _read_nested_settings(prefix: String, known_keys: Array) -> Dictionary:
 ## (export/android/) for backward compatibility.
 func _read_keystore_settings() -> Dictionary:
 	const KNOWN_KEYS: Array = ["path", "password", "alias"]
+	const SENSITIVE_KEYS: Array = ["password", "alias_password"]
 	var prefix_new: String = "export/android/keystore"
 	# Try the new isolated prefix first
 	var result: Dictionary = _read_nested_settings(prefix_new, KNOWN_KEYS)
@@ -486,24 +547,113 @@ func _read_keystore_settings() -> Dictionary:
 					ProjectSettings.set_setting(full_key_old, null)
 			var migrated_keys: Array = old_result.keys()
 			ProjectSettings.set_setting("%s/_sub_keys" % prefix_new, migrated_keys)
-			return old_result
-		return {}
+			result = old_result
+		else:
+			return {}
+	# Mask sensitive fields for security — passwords must not leak through tool output
+	for key: String in SENSITIVE_KEYS:
+		if result.has(key):
+			result[key] = "[REDACTED]"
 	return result
 
 
 ## Helper: Check if a platform has custom configuration.
+## Compares current ProjectSettings against PLATFORM_DEFAULTS for all known settings.
 func _has_platform_config(platform: String) -> bool:
+	var defaults: Dictionary = PLATFORM_DEFAULTS.get(platform, {})
+	if defaults.is_empty():
+		return false
+
 	match platform:
 		"ios":
-			var bundle_id: String = ProjectSettings.get_setting("application/config/bundle_identifier", "")
-			return not bundle_id.is_empty() and bundle_id != "com.company.game"
+			var bundle_id: String = ProjectSettings.get_setting("application/config/bundle_identifier", defaults.get("bundle_id", ""))
+			if bundle_id != defaults.get("bundle_id", ""):
+				return true
+			var team_id: String = ProjectSettings.get_setting("export/ios/team_id", defaults.get("team_id", ""))
+			if team_id != defaults.get("team_id", ""):
+				return true
+			var signing_style: String = ProjectSettings.get_setting("export/ios/signing_style", defaults.get("signing_style", "automatic"))
+			if signing_style != defaults.get("signing_style", "automatic"):
+				return true
+			var arch: String = ProjectSettings.get_setting("export/ios/architecture", defaults.get("architecture", "universal"))
+			if arch != defaults.get("architecture", "universal"):
+				return true
+			# Check for any signing sub-keys
+			var signing_keys: Array = ["identity", "provisioning_profile"]
+			if ProjectSettings.has_setting("export/ios/_sub_keys"):
+				signing_keys = ProjectSettings.get_setting("export/ios/_sub_keys") as Array
+			for key: String in signing_keys:
+				if ProjectSettings.has_setting("export/ios/%s" % key):
+					return true
+			return false
+
 		"android":
-			var package_name: String = ProjectSettings.get_setting("export/android/package_name", "")
-			return not package_name.is_empty() and package_name != "com.company.game"
+			var package_name: String = ProjectSettings.get_setting("export/android/package_name", defaults.get("package_name", ""))
+			if package_name != defaults.get("package_name", ""):
+				return true
+			var min_sdk: int = ProjectSettings.get_setting("export/android/min_sdk", defaults.get("min_sdk", 21))
+			if min_sdk != defaults.get("min_sdk", 21):
+				return true
+			var target_sdk: int = ProjectSettings.get_setting("export/android/target_sdk", defaults.get("target_sdk", 34))
+			if target_sdk != defaults.get("target_sdk", 34):
+				return true
+			var permissions: Array = ProjectSettings.get_setting("export/android/permissions", defaults.get("permissions", []))
+			if str(permissions) != str(defaults.get("permissions", [])):
+				return true
+			# Check for any keystore sub-keys
+			var keystore_keys: Array = ["path", "password", "alias"]
+			if ProjectSettings.has_setting("export/android/keystore/_sub_keys"):
+				keystore_keys = ProjectSettings.get_setting("export/android/keystore/_sub_keys") as Array
+			for key: String in keystore_keys:
+				if ProjectSettings.has_setting("export/android/keystore/%s" % key):
+					return true
+			return false
+
 		"web":
-			return ProjectSettings.get_setting("export/web/resize_canvas", false) or \
-				   ProjectSettings.get_setting("export/web/threads", false) or \
-				   ProjectSettings.get_setting("export/web/progressive_web_app", false)
+			var web_defaults: Dictionary = defaults
+			var actual_canvas: bool = ProjectSettings.get_setting("export/web/resize_canvas", web_defaults.get("canvas_resize", true))
+			var actual_threading: bool = ProjectSettings.get_setting("export/web/threads", web_defaults.get("threading", false))
+			var actual_pwa: bool = ProjectSettings.get_setting("export/web/progressive_web_app", web_defaults.get("pwa", false))
+			var actual_renderer: String = ProjectSettings.get_setting("rendering/renderer/rendering_method", web_defaults.get("renderer", "gl_compatibility"))
+			var default_canvas: bool = web_defaults.get("canvas_resize", true)
+			var default_threading: bool = web_defaults.get("threading", false)
+			var default_pwa: bool = web_defaults.get("pwa", false)
+			var default_renderer: String = web_defaults.get("renderer", "gl_compatibility")
+			return actual_canvas != default_canvas or actual_threading != default_threading or actual_pwa != default_pwa or actual_renderer != default_renderer
+
+		"windows":
+			var arch: String = ProjectSettings.get_setting("export/windows/architecture", defaults.get("architecture", "x86_64"))
+			if arch != defaults.get("architecture", "x86_64"):
+				return true
+			var console_wrapper: bool = ProjectSettings.get_setting("export/windows/console_wrapper", defaults.get("console_wrapper", false))
+			if console_wrapper != defaults.get("console_wrapper", false):
+				return true
+			var icon: String = ProjectSettings.get_setting("export/windows/icon", defaults.get("icon", ""))
+			if icon != defaults.get("icon", ""):
+				return true
+			return false
+
+		"linux":
+			var arch: String = ProjectSettings.get_setting("export/linux/architecture", defaults.get("architecture", "x86_64"))
+			if arch != defaults.get("architecture", "x86_64"):
+				return true
+			var icon: String = ProjectSettings.get_setting("export/linux/icon", defaults.get("icon", ""))
+			if icon != defaults.get("icon", ""):
+				return true
+			return false
+
+		"macos":
+			var arch: String = ProjectSettings.get_setting("export/macos/architecture", defaults.get("architecture", "universal"))
+			if arch != defaults.get("architecture", "universal"):
+				return true
+			var bundle_id: String = ProjectSettings.get_setting("application/config/bundle_identifier", defaults.get("bundle_id", ""))
+			if bundle_id != defaults.get("bundle_id", ""):
+				return true
+			var min_macos: String = ProjectSettings.get_setting("export/macos/min_macos_version", defaults.get("min_macos_version", "10.15"))
+			if min_macos != defaults.get("min_macos_version", "10.15"):
+				return true
+			return false
+
 	return false
 
 

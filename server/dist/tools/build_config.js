@@ -24,14 +24,22 @@ export function registerBuildConfigTools(server, bridge) {
     server.registerTool('set_scripting_backend', {
         description: 'Set the scripting backend for the project',
         inputSchema: {
-            backend: z.enum(['gdscript', 'csharp']).optional().default('gdscript').describe('Scripting language backend: gdscript or csharp (default: gdscript)'),
+            backend: z
+                .enum(['gdscript', 'csharp', 'visual_script'])
+                .optional()
+                .default('gdscript')
+                .describe('Scripting language backend: gdscript, csharp, or visual_script (note: VisualScript was removed in Godot 4.0) (default: gdscript)'),
         },
     }, async (args) => callGodot(bridge, 'build_config/set_scripting_backend', args));
     // 4. set_export_filter
     server.registerTool('set_export_filter', {
         description: 'Set which resources to include in exports',
         inputSchema: {
-            filter: z.enum(['all_resources', 'selected_resources']).optional().default('all_resources').describe('Export filter mode (default: all_resources)'),
+            filter: z
+                .enum(['all_resources', 'selected_resources', 'selected_classes'])
+                .optional()
+                .default('all_resources')
+                .describe('Export filter mode: all_resources, selected_resources, or selected_classes (default: all_resources)'),
         },
     }, async (args) => callGodot(bridge, 'build_config/set_export_filter', args));
     // 5. set_custom_features
@@ -59,7 +67,7 @@ export function registerBuildConfigTools(server, bridge) {
     server.registerTool('get_build_command', {
         description: 'Get the CLI command to export/build the project for a specific platform',
         inputSchema: {
-            platform: z.enum(['windows', 'linux', 'web', 'android', 'macos', 'ios']).describe('Target platform: windows, linux, web, android, macos, or ios'),
+            platform: z.string().min(1).describe('Target platform (e.g. windows, linux, web, android, macos, ios)'),
         },
     }, async (args) => callGodot(bridge, 'build_config/get_build_command', args));
 }

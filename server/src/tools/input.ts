@@ -1,5 +1,5 @@
 /**
- * Input tools — 7 tools for input simulation
+ * Input tools — 8 tools for input simulation
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -14,7 +14,7 @@ export function registerInputTools(server: McpServer, bridge: GodotBridge): void
     {
       description: 'Simulate a keyboard key press/release in the running game',
       inputSchema: {
-        keycode: z.string().describe("Key code name (e.g. 'KEY_ENTER', 'KEY_SPACE', 'KEY_A')"),
+        keycode: z.string().min(1, 'Keycode is required').describe("Key code name (e.g. 'KEY_ENTER', 'KEY_SPACE', 'KEY_A')"),
         pressed: Pressed,
         echo: z.boolean().optional().describe('Whether this is an echo/repeat event'),
       },
@@ -55,7 +55,7 @@ export function registerInputTools(server: McpServer, bridge: GodotBridge): void
     {
       description: 'Simulate an input action (from InputMap) being pressed/released',
       inputSchema: {
-        action: z.string().describe("Input action name (e.g. 'ui_accept', 'move_left')"),
+        action: z.string().min(1, 'Action name is required').describe("Input action name (e.g. 'ui_accept', 'move_left')"),
         pressed: Pressed,
       },
     },
@@ -101,7 +101,7 @@ export function registerInputTools(server: McpServer, bridge: GodotBridge): void
       description: 'Add or modify an input action and its event mappings',
       inputSchema: {
         action: z.string().describe('Action name'),
-        deadzone: z.number().min(0).max(1).optional().default(0.5).describe('Input deadzone value (0-1, default: 0.5)'),
+        deadzone: z.number().min(0).max(1).optional().describe('Input deadzone value (0-1). Omit to preserve existing deadzone when modifying an action, or use default 0.5 for new actions.'),
         events: z
           .array(
             z
@@ -115,5 +115,17 @@ export function registerInputTools(server: McpServer, bridge: GodotBridge): void
       },
     },
     async (args) => callGodot(bridge, 'input/set_action', args as Record<string, unknown>),
+  );
+
+  // 8. remove_input_action — {action: string} -> success
+  server.registerTool(
+    'remove_input_action',
+    {
+      description: 'Remove an input action from the InputMap',
+      inputSchema: {
+        action: z.string().min(1, 'Action name is required').describe('Action name to remove'),
+      },
+    },
+    async (args) => callGodot(bridge, 'input/remove_action', args as Record<string, unknown>),
   );
 }

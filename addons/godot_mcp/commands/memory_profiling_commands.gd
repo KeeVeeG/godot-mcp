@@ -1,6 +1,7 @@
 ## Memory profiling commands module - 6 tools.
 ## Provides memory usage breakdown, object tracking, leak detection,
 ## and garbage collection control.
+@tool
 class_name MCPMemoryProfilingCommands
 extends RefCounted
 
@@ -87,10 +88,16 @@ func track_object_creation(params: Dictionary) -> Dictionary:
 	var duration: float = params.get("duration", 10.0)
 
 	if cls_name.is_empty():
-		return {"error": "class_name is required"}
+		return {"error": "@tool
+class_name is required"}
 
 	if not ClassDB.class_exists(cls_name):
 		return {"error": "Unknown class: %s" % cls_name}
+
+	# Prevent parallel tracking sessions from overwriting each other's state.
+	# Only one tracking session is supported at a time.
+	if _tracking_active:
+		return {"error": "Tracking already active for class '%s'. Call stop_object_tracking first." % _tracked_class}
 
 	# Take baseline count
 	var baseline: int = _count_objects_of_class(cls_name)
@@ -156,16 +163,28 @@ func stop_object_tracking(_params: Dictionary) -> Dictionary:
 func find_memory_leaks(_params: Dictionary) -> Dictionary:
 	var issues: Array = []
 
-	# Check for orphan nodes
+	# Check for orphan nodes.
+	# In editor context, orphan nodes are expected (editor internals, scene
+	# transition timing, addon previews). Only flag as a real issue at runtime.
+	var is_editor: bool = Engine.is_editor_hint()
 	var orphan_count: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
 	if orphan_count > 0:
-		issues.append({
-			"severity": "warning",
-			"type": "orphan_nodes",
-			"count": orphan_count,
-			"message": "%d orphan nodes detected. These are nodes not in any scene tree." % orphan_count,
-			"suggestion": "Ensure all dynamically created nodes are added to the scene tree or freed with queue_free()",
-		})
+		if is_editor:
+			issues.append({
+				"severity": "info",
+				"type": "orphan_nodes",
+				"count": orphan_count,
+				"message": "%d orphan nodes detected (normal in editor context)." % orphan_count,
+				"suggestion": "Orphan nodes are common in the editor due to internal editor nodes, addon previews, and scene transition timing. Run this check during gameplay for accurate leak detection.",
+			})
+		else:
+			issues.append({
+				"severity": "warning",
+				"type": "orphan_nodes",
+				"count": orphan_count,
+				"message": "%d orphan nodes detected. These are nodes not in any scene tree." % orphan_count,
+				"suggestion": "Ensure all dynamically created nodes are added to the scene tree or freed with queue_free(). For nodes already removed from tree, use call_deferred('free').",
+			})
 
 	# Check for high resource count
 	var resource_count: int = int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT))
@@ -289,12 +308,43 @@ func force_garbage_collection(_params: Dictionary) -> Dictionary:
 
 
 ## Helper: Count objects of a specific class.
+## For base classes (Object, Node, Resource, RefCounted), uses Performance
+## monitors for engine-wide totals. For specific Node subclasses, walks from
+## the editor's base control to cover all open scenes and editor UI.
+## NOTE: Engine-wide per-class counting for non-Node classes is impossible from
+## GDScript — ObjectDB::debug_objects() is C++-only. Base class approximations:
+##   Object:     OBJECT_COUNT
+##   Node:       OBJECT_NODE_COUNT
+##   Resource:   OBJECT_RESOURCE_COUNT (path-cached Resources only — a subset)
+##   RefCounted: OBJECT_COUNT - OBJECT_NODE_COUNT - OBJECT_ORPHAN_NODE_COUNT
+##               ≈ RefCounted + rare plain Object instances (close approximation)
 func _count_objects_of_class(cls_name: String) -> int:
-	var count: int = 0
-	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
+	# For base classes, use Performance monitors — the only engine-wide counts
+	# available from GDScript. Walking the scene tree alone misses
+	# editor-internal nodes, singletons, and non-tree objects.
+	if cls_name == "Object":
+		return int(Performance.get_monitor(Performance.OBJECT_COUNT))
+	if cls_name == "Node":
+		return int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	if cls_name == "Resource":
+		return int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT))
+	if cls_name == "RefCounted":
+		# RefCounted ≈ total objects - all nodes (in-tree + orphan).
+		# In the editor (DEBUG), OBJECT_ORPHAN_NODE_COUNT is available
+		# and accounts for nodes not in any scene tree.
+		# Slightly overcounts due to rare plain Object instances.
+		var total: int = int(Performance.get_monitor(Performance.OBJECT_COUNT))
+		var nodes_in_tree: int = int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+		var orphan_nodes: int = int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+		return total - nodes_in_tree - orphan_nodes
+
+	# For specific Node subclasses, walk from the editor's base control.
+	# This covers ALL loaded scenes and the editor's own UI tree,
+	# unlike get_edited_scene_root() which only covers one scene.
+	var root: Node = _plugin.get_editor_interface().get_base_control()
 	if root != null:
-		count = _count_class_recursive(root, cls_name)
-	return count
+		return _count_class_recursive(root, cls_name)
+	return 0
 
 
 ## Helper: Recursively count nodes of a class.

@@ -1,6 +1,7 @@
-﻿## Visual testing commands module - 10 tools.
+## Visual testing commands module - 10 tools.
 ## Provides screenshot capture with context, pixel-level comparison,
 ## visual regression recording, and baseline management.
+@tool
 class_name MCPVisualTestingCommands
 extends RefCounted
 
@@ -17,10 +18,55 @@ const DIFFS_DIR: String = "user://mcp_visual_tests/diffs/"
 var _test_results: Array = []
 ## Visual regression recordings
 var _recordings: Dictionary = {}
+## Whether the report was explicitly cleared (skip disk fallback)
+var _report_cleared: bool = false
 
 
 func set_plugin(plugin: EditorPlugin) -> void:
 	_plugin = plugin
+
+
+## Get the active editor SubViewport (2D or 3D) for proper resolution screenshots.
+## The scene's internal viewport returns 2?2 pixels in the editor � we must use the
+## editor's rendering SubViewport instead. Returns null if neither is available.
+func _get_current_editor_viewport() -> SubViewport:
+	var editor_interface: EditorInterface = _plugin.get_editor_interface()
+	# Try 3D viewport first (most common for visual tests)
+	var vp_3d: SubViewport = editor_interface.get_editor_viewport_3d(0)
+	if vp_3d != null and vp_3d.get_visible_rect().size.x > 10:
+		return vp_3d
+	# Fall back to 2D viewport
+	var vp_2d: SubViewport = editor_interface.get_editor_viewport_2d()
+	if vp_2d != null and vp_2d.get_visible_rect().size.x > 10:
+		return vp_2d
+	# Last resort: return whichever is non-null
+	if vp_3d != null:
+		return vp_3d
+	return vp_2d
+
+
+## Build a human-readable suffix for missing nodes in screenshot capture messages.
+func _missing_nodes_suffix(context: Dictionary) -> String:
+	var count: int = context.get("nodes_missing", 0)
+	if count > 0:
+		var missing: Array = context.get("missing_nodes", [])
+		return " (%d nodes found, %d not found: %s)" % [context.get("nodes_found", 0), count, ", ".join(missing)]
+	return ""
+
+
+## Validate screenshot/baseline/recording names � only alphanumeric, underscores, and hyphens.
+## Max length 100 chars (keeps total path well under Windows MAX_PATH ? 260).
+## Returns an error string, or empty string if valid.
+func _validate_name(value: String) -> String:
+	if value.is_empty():
+		return "name is required"
+	if value.length() > 100:
+		return "Name is too long (%d chars). Maximum is 100 characters." % value.length()
+	var regex := RegEx.new()
+	regex.compile("^[a-zA-Z0-9_\\-]+$")
+	if not regex.search(value):
+		return "Name '%s' contains invalid characters. Only a-z, A-Z, 0-9, '_', '-' allowed." % value
+	return ""
 
 
 func get_commands() -> Dictionary:
@@ -54,23 +100,28 @@ func take_screenshot_with_context(params: Dictionary) -> Dictionary:
 	if name.is_empty():
 		return {"error": "name is required"}
 
+	var name_err: String = _validate_name(name)
+	if not name_err.is_empty():
+		return {"error": name_err}
+
 	_ensure_dirs()
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
-	# Capture viewport screenshot
-	var viewport: Viewport = root.get_viewport()
+	# Capture viewport screenshot � use editor SubViewport (not scene's 2?2 internal viewport)
+	var viewport: Viewport = _get_current_editor_viewport()
 	if viewport == null:
-		return {"error": "No viewport available"}
-
+		return {"error": "No editor viewport available � open a 2D or 3D editor tab"}
+	RenderingServer.force_draw(true)
 	var image: Image = viewport.get_texture().get_image()
 	if image == null:
 		return {"error": "Failed to capture viewport"}
 
-	# Save screenshot
+	# Save screenshot � detect overwrite
 	var screenshot_path: String = VISUAL_DIR + "%s.png" % name
+	var overwritten: bool = FileAccess.file_exists(screenshot_path)
 	image.save_png(ProjectSettings.globalize_path(screenshot_path))
 
 	# Build context metadata
@@ -78,7 +129,7 @@ func take_screenshot_with_context(params: Dictionary) -> Dictionary:
 		"name": name,
 		"timestamp": Time.get_unix_time_from_system(),
 		"timestamp_human": Time.get_datetime_string_from_system(),
-		"viewport_size": {"x": viewport.get_visible_rect().size.x, "y": viewport.get_visible_rect().size.y},
+		"viewport_size": {"x": image.get_width(), "y": image.get_height()},
 		"scene_path": root.scene_file_path,
 		"node_count": MCPCommandHelpers.count_nodes(root),
 	}
@@ -86,11 +137,20 @@ func take_screenshot_with_context(params: Dictionary) -> Dictionary:
 	# Include node properties if requested
 	if include_props and include_nodes.size() > 0:
 		var node_data: Dictionary = {}
+		var missing_nodes: Array = []
+		var nodes_found: int = 0
 		for node_path: String in include_nodes:
 			var node: Node = root.get_node_or_null(node_path)
 			if node != null:
 				node_data[node_path] = _get_node_snapshot(node)
+				nodes_found += 1
+			else:
+				missing_nodes.append(node_path)
 		context["node_snapshots"] = node_data
+		context["nodes_found"] = nodes_found
+		context["nodes_missing"] = missing_nodes.size()
+		if missing_nodes.size() > 0:
+			context["missing_nodes"] = missing_nodes
 
 	# Save context alongside screenshot
 	var context_path: String = VISUAL_DIR + "%s_context.json" % name
@@ -105,7 +165,8 @@ func take_screenshot_with_context(params: Dictionary) -> Dictionary:
 		"viewport_size": context["viewport_size"],
 		"node_count": context["node_count"],
 		"timestamp": context["timestamp_human"],
-		"message": "Screenshot captured: %s" % name,
+		"overwritten": overwritten,
+		"message": "Screenshot captured: %s%s%s" % [name, " (overwritten previous)" if overwritten else "", _missing_nodes_suffix(context)],
 	}}
 
 
@@ -119,7 +180,7 @@ func compare_screenshots(params: Dictionary) -> Dictionary:
 	if baseline_path.is_empty() or current_path.is_empty():
 		return {"error": "Both baseline and current paths are required"}
 
-	# Resolve paths — handle both res:// and user:// virtual paths
+	# Resolve paths � handle both res:// and user:// virtual paths
 	var baseline_global: String = baseline_path
 	if baseline_path.begins_with("res://") or baseline_path.begins_with("user://"):
 		baseline_global = ProjectSettings.globalize_path(baseline_path)
@@ -191,6 +252,7 @@ func compare_screenshots(params: Dictionary) -> Dictionary:
 
 	var mismatch_ratio: float = float(different_pixels) / float(total_pixels)
 	var matches: bool = mismatch_ratio <= threshold
+	var pixel_perfect: bool = different_pixels == 0
 
 	# Save diff image
 	_ensure_dirs()
@@ -203,6 +265,7 @@ func compare_screenshots(params: Dictionary) -> Dictionary:
 
 	return {"result": {
 		"matches": matches,
+		"pixel_perfect": pixel_perfect,
 		"mismatch_ratio": mismatch_ratio,
 		"mismatch_percentage": "%.4f%%" % (mismatch_ratio * 100.0),
 		"different_pixels": different_pixels,
@@ -283,19 +346,36 @@ func record_visual_regression(params: Dictionary) -> Dictionary:
 	if test_name.is_empty():
 		return {"error": "test_name is required"}
 
+	var name_err: String = _validate_name(test_name)
+	if not name_err.is_empty():
+		return {"error": name_err}
+
 	_ensure_dirs()
 
 	var recording_dir: String = VISUAL_DIR + "recordings/%s/" % test_name
-	if not DirAccess.dir_exists_absolute(recording_dir):
+	var overwritten: bool = DirAccess.dir_exists_absolute(recording_dir)
+	if overwritten:
+		# Clean old frames so overwriting with fewer frames doesn't leave orphans
+		var recording_global: String = ProjectSettings.globalize_path(recording_dir)
+		var old_dir: DirAccess = DirAccess.open(recording_global)
+		if old_dir != null:
+			old_dir.list_dir_begin()
+			var old_file: String = old_dir.get_next()
+			while old_file != "":
+				if not old_dir.current_is_dir():
+					DirAccess.remove_absolute(recording_global.path_join(old_file))
+				old_file = old_dir.get_next()
+			old_dir.list_dir_end()
+	else:
 		DirAccess.make_dir_recursive_absolute(recording_dir)
 
 	var root: Node = MCPCommandHelpers.get_scene_root(_plugin)
 	if root == null:
 		return {"error": "No scene open"}
 
-	var viewport: Viewport = root.get_viewport()
+	var viewport: Viewport = _get_current_editor_viewport()
 	if viewport == null:
-		return {"error": "No viewport available"}
+		return {"error": "No editor viewport available � open a 2D or 3D editor tab"}
 
 	var captured_paths: Array = []
 	var capture_times: Array = []
@@ -323,6 +403,9 @@ func record_visual_regression(params: Dictionary) -> Dictionary:
 
 	_recordings[test_name] = recording_data
 
+	# New recording invalidates cleared-report state
+	_report_cleared = false
+
 	# Save recording manifest
 	var manifest_path: String = recording_dir + "manifest.json"
 	var file: FileAccess = FileAccess.open(manifest_path, FileAccess.WRITE)
@@ -337,7 +420,8 @@ func record_visual_regression(params: Dictionary) -> Dictionary:
 		"total_duration": recording_data["total_duration"],
 		"recording_dir": recording_dir,
 		"manifest_path": manifest_path,
-		"message": "Recorded %d frames over %.1fs" % [captured_paths.size(), recording_data["total_duration"]],
+		"overwritten": overwritten,
+		"message": "Recorded %d frames over %.1fs%s" % [captured_paths.size(), recording_data["total_duration"], " (overwritten previous)" if overwritten else ""],
 	}}
 
 
@@ -355,12 +439,32 @@ func get_visual_diff_report(_params: Dictionary) -> Dictionary:
 			failed += 1
 			failures.append(entry)
 
+	# Fallback: if _recordings is empty, scan disk for recording directories.
+	# In-memory state may be lost across await boundaries or plugin reloads,
+	# but recordings are always persisted to user://mcp_visual_tests/recordings/.
+	var recordings_count: int = _recordings.size()
+	if recordings_count == 0 and not _report_cleared:
+		var rec_dir: String = VISUAL_DIR + "recordings/"
+		var rec_global: String = ProjectSettings.globalize_path(rec_dir)
+		if DirAccess.dir_exists_absolute(rec_dir):
+			var dir: DirAccess = DirAccess.open(rec_global)
+			if dir != null:
+				dir.list_dir_begin()
+				var entry_name: String = dir.get_next()
+				while entry_name != "":
+					if dir.current_is_dir() and not entry_name.begins_with("."):
+						var manifest: String = rec_dir + entry_name + "/manifest.json"
+						if FileAccess.file_exists(manifest):
+							recordings_count += 1
+					entry_name = dir.get_next()
+				dir.list_dir_end()
+
 	return {"result": {
 		"total_assertions": total,
 		"passed": passed,
 		"failed": failed,
 		"pass_rate": "%.1f%%" % (100.0 if total == 0 else (float(passed) / float(total) * 100.0)),
-		"recordings_count": _recordings.size(),
+		"recordings_count": recordings_count,
 		"failures": failures,
 	}}
 
@@ -373,11 +477,15 @@ func set_visual_baseline(params: Dictionary) -> Dictionary:
 	if name.is_empty() or screenshot_path.is_empty():
 		return {"error": "name and screenshot_path are required"}
 
+	var name_err: String = _validate_name(name)
+	if not name_err.is_empty():
+		return {"error": name_err}
+
 	_ensure_dirs()
 
 	# Resolve source path
 	var source_global: String = screenshot_path
-	if screenshot_path.begins_with("res://"):
+	if screenshot_path.begins_with("res://") or screenshot_path.begins_with("user://"):
 		source_global = ProjectSettings.globalize_path(screenshot_path)
 
 	if not FileAccess.file_exists(source_global) and not FileAccess.file_exists(screenshot_path):
@@ -388,6 +496,7 @@ func set_visual_baseline(params: Dictionary) -> Dictionary:
 	# Copy to baseline directory
 	var baseline_path: String = BASELINE_DIR + "%s.png" % name
 	var baseline_global: String = ProjectSettings.globalize_path(baseline_path)
+	var overwritten: bool = FileAccess.file_exists(baseline_path)
 
 	var src_file: FileAccess = FileAccess.open(actual_source, FileAccess.READ)
 	if src_file == null:
@@ -406,7 +515,8 @@ func set_visual_baseline(params: Dictionary) -> Dictionary:
 		"name": name,
 		"baseline_path": baseline_path,
 		"source": screenshot_path,
-		"message": "Visual baseline '%s' set from %s" % [name, screenshot_path],
+		"overwritten": overwritten,
+		"message": "Visual baseline '%s' %s from %s" % [name, "updated" if overwritten else "set", screenshot_path],
 	}}
 
 
@@ -416,6 +526,10 @@ func delete_screenshot(params: Dictionary) -> Dictionary:
 
 	if name.is_empty():
 		return {"error": "name is required"}
+
+	var name_err: String = _validate_name(name)
+	if not name_err.is_empty():
+		return {"error": name_err}
 
 	var screenshot_path: String = VISUAL_DIR + "%s.png" % name
 	var context_path: String = VISUAL_DIR + "%s_context.json" % name
@@ -452,6 +566,10 @@ func delete_visual_recording(params: Dictionary) -> Dictionary:
 	if test_name.is_empty():
 		return {"error": "test_name is required"}
 
+	var name_err: String = _validate_name(test_name)
+	if not name_err.is_empty():
+		return {"error": name_err}
+
 	var recording_dir: String = VISUAL_DIR + "recordings/%s/" % test_name
 	var recording_global: String = ProjectSettings.globalize_path(recording_dir)
 
@@ -468,10 +586,11 @@ func delete_visual_recording(params: Dictionary) -> Dictionary:
 	var file_name: String = dir.get_next()
 	while file_name != "":
 		if not dir.current_is_dir():
-			var file_path: String = recording_global + file_name
+			var file_path: String = recording_global.path_join(file_name)
 			var err: Error = DirAccess.remove_absolute(file_path)
 			if err == OK:
-				deleted_count += 1
+				if file_name.ends_with(".png"):
+					deleted_count += 1
 		file_name = dir.get_next()
 	dir.list_dir_end()
 
@@ -498,6 +617,7 @@ func clear_visual_diff_report(_params: Dictionary) -> Dictionary:
 
 	_test_results.clear()
 	_recordings.clear()
+	_report_cleared = true
 
 	return {"result": {
 		"success": true,

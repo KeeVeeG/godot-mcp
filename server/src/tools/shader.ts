@@ -21,6 +21,7 @@ export function registerShaderTools(server: McpServer, bridge: GodotBridge): voi
           .default('canvas_item')
           .describe('Shader type: visual/canvas_item (2D), spatial (3D), particles, sky, fog, texture_blit (default: canvas_item)'),
         content: z.string().optional().describe('Initial shader code'),
+        overwrite: z.boolean().optional().default(false).describe('Allow overwriting an existing shader file (default: false)'),
       },
     },
     async (args) => callGodot(bridge, 'shader/create', args as Record<string, unknown>),
@@ -47,6 +48,7 @@ export function registerShaderTools(server: McpServer, bridge: GodotBridge): voi
         path: FilePath.describe('Shader file path'),
         old_text: z.string().describe('Text to find and replace'),
         new_text: z.string().describe('Replacement text'),
+        replace_all: z.boolean().optional().default(false).describe('Replace all occurrences when multiple matches exist (default: false — fails on multiple matches)'),
       },
     },
     async (args) => callGodot(bridge, 'shader/edit', args as Record<string, unknown>),
@@ -145,7 +147,8 @@ export function registerShaderTools(server: McpServer, bridge: GodotBridge): voi
   server.registerTool(
     'validate_shader',
     {
-      description: 'Validate a shader file for compilation errors',
+      description:
+        "Validate a shader file for compilation errors. NOTE: Godot 4.x does NOT expose the ShaderLanguage class (C++ internal) to GDScript — only text-level checks (brace matching, vec arg counts, semicolons) and ResourceLoader.load() are performed. Undeclared variables and type mismatches are NOT detected. This is a known Godot engine limitation, not an addon bug. Use Godot's Shader Editor Output panel (which has direct access to the C++ compiler) for definitive validation. Heuristic: if get_shader_uniform_list() returns empty despite declared uniforms, compilation likely failed.",
       inputSchema: {
         path: FilePath.describe('Shader file path to validate'),
       },

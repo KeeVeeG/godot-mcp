@@ -1,5 +1,6 @@
 ## Shared helper functions for command modules.
 ## Replaces duplicate implementations across 8+ modules.
+@tool
 class_name MCPCommandHelpers
 extends RefCounted
 
@@ -37,6 +38,20 @@ static func get_scene_root(plugin: EditorPlugin) -> Node:
 static func get_edited_scene_root(plugin: EditorPlugin) -> Node:
 	return get_scene_root(plugin)
 
+## Get a nested property from a node, supporting dot/colon notation.
+## Converts "position.x" or "position:x" → NodePath("position:x") → Object.get_indexed().
+## Falls back to Object.get() for simple properties without dots/colons.
+static func get_nested_property(node: Object, property_path: String) -> Variant:
+	if property_path.contains(".") or property_path.contains(":"):
+		# Godot's get_indexed uses colon as sub-property separator, not dot.
+		# NodePath automatically parses colon-separated sub-names.
+		# Support both dot ("position.x") and colon ("position:x") notation.
+		var np_str: String = property_path.replace(".", ":")
+		return node.get_indexed(NodePath(np_str))
+	else:
+		return node.get(property_path)
+
+
 ## Resolve a node path relative to the scene root.
 ## Empty or "." path returns the root itself.
 ## Accepts both scene-relative paths and full editor paths.
@@ -45,9 +60,6 @@ static func resolve_node_path(plugin: EditorPlugin, path: String) -> Node:
 	if root == null:
 		return null
 	if path.is_empty() or path == ".":
-		return root
-	# Bare name matching root's own name → return root
-	if not path.contains("/") and root.name == path:
 		return root
 	# Strip editor-internal prefix if present (e.g., /root/@EditorNode@123/.../SceneRoot/Node)
 	if path.begins_with("/root/@"):
@@ -170,30 +182,160 @@ static func walk_directory(dir_path: String, extensions: PackedStringArray, call
 
 
 ## Compare actual vs expected with operator. Returns true/false.
+## If actual is a Vector type and expected is an Array, expected is
+## automatically converted to the matching Vector type for comparison.
 static func compare_values(actual: Variant, expected: Variant, operator: String) -> bool:
+	# Normalize packed arrays from JSON bridge to plain Array.
+	# Godot's JSON.parse() returns PackedFloat64Array/PackedInt32Array for numeric JSON arrays,
+	# which fail the `is Array` check below — they are separate types in Godot 4.
+	var cmp_expected: Variant = expected
+	if cmp_expected is PackedInt32Array or cmp_expected is PackedInt64Array or cmp_expected is PackedFloat32Array or cmp_expected is PackedFloat64Array:
+		cmp_expected = Array(cmp_expected)
+	# Normalize: if expected is a String (from wait_for_game_event property: prefix parsing),
+	# try str_to_var() to convert to a GDScript literal (Array, Vector, etc.).
+	if cmp_expected is String:
+		var parsed = str_to_var(cmp_expected as String)
+		if parsed != null:
+			cmp_expected = parsed
+	# Normalize: if actual is a Vector/Color and expected is an Array, convert expected to matching type
+	if cmp_expected is Array:
+		if actual is Vector2 and (cmp_expected as Array).size() >= 2:
+			var a: Array = cmp_expected as Array
+			cmp_expected = Vector2(float(a[0]), float(a[1]))
+		elif actual is Vector3 and (cmp_expected as Array).size() >= 3:
+			var a: Array = cmp_expected as Array
+			cmp_expected = Vector3(float(a[0]), float(a[1]), float(a[2]))
+		elif actual is Vector4 and (cmp_expected as Array).size() >= 4:
+			var a: Array = cmp_expected as Array
+			cmp_expected = Vector4(float(a[0]), float(a[1]), float(a[2]), float(a[3]))
+		elif actual is Color and (cmp_expected as Array).size() >= 3:
+			var a: Array = cmp_expected as Array
+			cmp_expected = Color(float(a[0]), float(a[1]), float(a[2]), float(a[3]) if a.size() >= 4 else 1.0)
+
+	# Separate block: Dictionary → Color conversion for JSON bridge compatibility.
+	# The MCP bridge serializes Color as {"r", "g", "b", "a"} dictionaries.
+	# Must be OUTSIDE the Array block (lines 196-208) because Dictionary ≠ Array.
+	if cmp_expected is Dictionary and actual is Color:
+		var d: Dictionary = cmp_expected as Dictionary
+		cmp_expected = Color(
+			float(d.get("r", 0.0)),
+			float(d.get("g", 0.0)),
+			float(d.get("b", 0.0)),
+			float(d.get("a", 1.0))
+		)
+
 	match operator:
 		">":
 			if actual is float or actual is int:
-				return actual > float(expected)
+				return actual > float(cmp_expected)
+			if actual is Vector2 or actual is Vector3 or actual is Vector4:
+				return _vector_cmp(actual, cmp_expected, ">")
+			return false
 		"<":
 			if actual is float or actual is int:
-				return actual < float(expected)
+				return actual < float(cmp_expected)
+			if actual is Vector2 or actual is Vector3 or actual is Vector4:
+				return _vector_cmp(actual, cmp_expected, "<")
+			return false
 		">=":
 			if actual is float or actual is int:
-				return actual >= float(expected)
+				return actual >= float(cmp_expected)
+			if actual is Vector2 or actual is Vector3 or actual is Vector4:
+				return _vector_cmp(actual, cmp_expected, ">=")
+			return false
 		"<=":
 			if actual is float or actual is int:
-				return actual <= float(expected)
-		"contains":
-			if actual is String:
-				return (actual as String).find(str(expected)) != -1
-			if actual is Array:
-				return (actual as Array).has(expected)
+				return actual <= float(cmp_expected)
+			if actual is Vector2 or actual is Vector3 or actual is Vector4:
+				return _vector_cmp(actual, cmp_expected, "<=")
 			return false
-		"==", _:
-			var a_str: String = str(actual)
-			var e_str: String = str(expected)
-			return a_str == e_str
+		"!=":
+			return not _is_equal(actual, cmp_expected)
+		"contains":
+			# StringName (node.name, node.bus, etc.) has TYPE_STRING_NAME,
+			# which does NOT pass `is String` in GDScript. Convert both
+			# StringName and String to a plain String for comparison.
+			if actual is String or actual is StringName:
+				return String(actual).find(String(cmp_expected)) != -1
+			if actual is Array:
+				return (actual as Array).has(cmp_expected)
+			return false
+		"==":
+			return _is_equal(actual, cmp_expected)
+		_:
+			push_warning("MCPCommandHelpers.compare_values: unknown operator '%s'" % operator)
+			return false
+	return false
+
+
+## Type-aware equality check. Uses is_equal_approx for Vector/Color types,
+## falls back to string comparison for other types.
+static func _is_equal(a: Variant, b: Variant) -> bool:
+	if a is Vector2 and b is Vector2:
+		return (a as Vector2).is_equal_approx(b as Vector2)
+	if a is Vector3 and b is Vector3:
+		return (a as Vector3).is_equal_approx(b as Vector3)
+	if a is Vector4 and b is Vector4:
+		return (a as Vector4).is_equal_approx(b as Vector4)
+	if a is Color and b is Color:
+		return (a as Color).is_equal_approx(b as Color)
+	# Null handling: both null or both "null" string (from JSON bridge)
+	if (a == null or (a is String and (a as String) == "null")) and (b == null or (b is String and (b as String) == "null")):
+		return true
+	return str(a) == str(b)
+
+
+## Component-wise comparison of Vector2/3/4 values.
+## Returns true only if ALL components satisfy the operator.
+static func _vector_cmp(a: Variant, b: Variant, op: String) -> bool:
+	if a is Vector2:
+		var v2: Vector2 = a as Vector2
+		var other: Vector2
+		if b is Vector2:
+			other = b as Vector2
+		elif b is Array:
+			var arr: Array = b as Array
+			other = Vector2(float(arr[0]), float(arr[1]))
+		else:
+			return false
+		match op:
+			">": return v2.x > other.x and v2.y > other.y
+			">=": return v2.x >= other.x and v2.y >= other.y
+			"<": return v2.x < other.x and v2.y < other.y
+			"<=": return v2.x <= other.x and v2.y <= other.y
+		return false
+	elif a is Vector3:
+		var v3: Vector3 = a as Vector3
+		var other: Vector3
+		if b is Vector3:
+			other = b as Vector3
+		elif b is Array:
+			var arr: Array = b as Array
+			other = Vector3(float(arr[0]), float(arr[1]), float(arr[2]))
+		else:
+			return false
+		match op:
+			">": return v3.x > other.x and v3.y > other.y and v3.z > other.z
+			">=": return v3.x >= other.x and v3.y >= other.y and v3.z >= other.z
+			"<": return v3.x < other.x and v3.y < other.y and v3.z < other.z
+			"<=": return v3.x <= other.x and v3.y <= other.y and v3.z <= other.z
+		return false
+	elif a is Vector4:
+		var v4: Vector4 = a as Vector4
+		var other: Vector4
+		if b is Vector4:
+			other = b as Vector4
+		elif b is Array:
+			var arr: Array = b as Array
+			other = Vector4(float(arr[0]), float(arr[1]), float(arr[2]), float(arr[3]))
+		else:
+			return false
+		match op:
+			">": return v4.x > other.x and v4.y > other.y and v4.z > other.z and v4.w > other.w
+			">=": return v4.x >= other.x and v4.y >= other.y and v4.z >= other.z and v4.w >= other.w
+			"<": return v4.x < other.x and v4.y < other.y and v4.z < other.z and v4.w < other.w
+			"<=": return v4.x <= other.x and v4.y <= other.y and v4.z <= other.z and v4.w <= other.w
+		return false
 	return false
 
 
@@ -204,10 +346,10 @@ static func normalize_scene_path(path: String) -> String:
 	if path.is_empty():
 		return path
 	if path.begins_with("res://"):
-		return path
+		return path.simplify_path()
 	if path.begins_with("/"):
-		return "res:/" + path  # handle /home/... style
-	return "res://" + path
+		return ("res:/" + path).simplify_path()  # handle /home/... style
+	return ("res://" + path).simplify_path()
 
 
 ## Validate resource path. Blocks traversal, allows res://
@@ -232,8 +374,10 @@ static func normalize_resource_path(path: String) -> String:
 	# Remove leading "./"
 	while normalized.begins_with("./"):
 		normalized = normalized.substr(2)
-	# Remove trailing slash
+	# Remove trailing slash, but preserve res:// protocol
 	normalized = normalized.rstrip("/")
+	if normalized == "res:":
+		normalized = "res://"
 	# If no protocol prefix, prepend res://
 	if not (normalized.begins_with("res://") or normalized.begins_with("user://")):
 		normalized = "res://" + normalized
@@ -285,10 +429,16 @@ static func escape_regex(text: String) -> String:
 	return result
 
 
-## Check if a value is null, including string "null" from JSON via MCP bridge.
-## JSON null arrives as TYPE_STRING "null", not TYPE_NIL, due to bridge serialization.
+## Check if a value is null, including string "null"/"None" from JSON via MCP bridge.
+## JSON null arrives as TYPE_STRING "null" (JSON parser) or "None" (Python serialization
+## in some MCP bridge implementations), not TYPE_NIL, due to bridge serialization.
 static func is_null(value: Variant) -> bool:
-	return (value == null) or (value is String and (value as String) == "null")
+	if value == null:
+		return true
+	if value is String:
+		var s: String = (value as String).to_lower()
+		return s == "null" or s == "none"
+	return false
 
 
 ## Validate a value against a property's hint constraints (enum ranges, numeric ranges).
