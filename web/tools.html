@@ -5,19 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Godot MCP — Tools Catalog</title>
     <meta name="description" content="Browse all 300+ MCP tools for Godot Engine organized by category. Scene manipulation, runtime inspection, animation, physics, and more." />
-    <link rel="canonical" href="https://keeveeg.github.io/godot-mcp/tools.html" />
+    <link rel="canonical" href="https://nikita-abaturov.ru/godot-mcp/tools.html" />
     <meta name="robots" content="index, follow" />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://keeveeg.github.io/godot-mcp/tools.html" />
+    <meta property="og:url" content="https://nikita-abaturov.ru/godot-mcp/tools.html" />
     <meta property="og:title" content="Godot MCP — Tools Catalog" />
     <meta property="og:description" content="Browse all 300+ MCP tools for Godot Engine organized by category. Scene manipulation, runtime inspection, animation, physics, and more." />
     <meta property="og:site_name" content="Godot MCP" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://keeveeg.github.io/godot-mcp/tools.html" />
+    <meta name="twitter:url" content="https://nikita-abaturov.ru/godot-mcp/tools.html" />
     <meta name="twitter:title" content="Godot MCP — Tools Catalog" />
     <meta name="twitter:description" content="Browse all 300+ MCP tools for Godot Engine organized by category. Scene manipulation, runtime inspection, animation, physics, and more." />
 
@@ -28,7 +28,7 @@
         "@type": "ItemList",
         "name": "Godot MCP Tools Catalog",
         "description": "Complete list of 300+ MCP tools for Godot Engine, organized by category.",
-        "url": "https://keeveeg.github.io/godot-mcp/tools.html",
+        "url": "https://nikita-abaturov.ru/godot-mcp/tools.html",
         "numberOfItems": 300,
         "itemListElement": [
           {
@@ -96,44 +96,43 @@
     </nav>
 
     <main id="main-content">
-    <!-- ────────────────────────────────────────────────────────────
+      <!-- ────────────────────────────────────────────────────────────
      HERO / HEADER
      ──────────────────────────────────────────────────────────── -->
-    <section class="tools-hero" aria-label="Tools catalog header">
-      <div class="container">
-        <a href="index.html" class="back-link">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          Back to Home
-        </a>
-        <div style="margin-top: var(--space-xl)">
-          <span class="section-label">Reference</span>
-          <h1>Tools <span class="gradient-text">Catalog</span></h1>
-          <p class="tools-count" id="toolsCount">Loading tools&hellip;</p>
-          <div class="tools-search-wrap">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <section class="tools-hero" aria-label="Tools catalog header">
+        <div class="container">
+          <a href="index.html" class="back-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6" />
             </svg>
-            <input type="search" class="tools-search" id="toolsSearch" placeholder="Filter tools by name or description&hellip;" autocomplete="off" spellcheck="false" />
+            Back to Home
+          </a>
+          <div style="margin-top: var(--space-xl)">
+            <span class="section-label">Reference</span>
+            <h1>Tools <span class="gradient-text">Catalog</span></h1>
+            <p class="tools-count" id="toolsCount">Loading tools&hellip;</p>
+            <div class="tools-search-wrap">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input type="search" class="tools-search" id="toolsSearch" placeholder="Filter tools by name or description&hellip;" autocomplete="off" spellcheck="false" />
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ────────────────────────────────────────────────────────────
+      <!-- ────────────────────────────────────────────────────────────
      TOOLS LIST
      ──────────────────────────────────────────────────────────── -->
-    <section class="tools-section" aria-label="Tools list">
-      <div class="container">
-        <div class="tools-categories" id="toolsCategories">
-          <div class="tools-loading" id="toolsLoading">Loading tools catalog&hellip;</div>
+      <section class="tools-section" aria-label="Tools list">
+        <div class="container">
+          <div class="tools-categories" id="toolsCategories">
+            <div class="tools-loading" id="toolsLoading">Loading tools catalog&hellip;</div>
+          </div>
+          <div class="tools-no-results" id="toolsNoResults">No tools match your search.</div>
         </div>
-        <div class="tools-no-results" id="toolsNoResults">No tools match your search.</div>
-      </div>
-    </section>
-
+      </section>
     </main>
 
     <!-- ────────────────────────────────────────────────────────────
@@ -161,6 +160,7 @@
             <h3>Project</h3>
             <ul>
               <li><a href="https://github.com/KeeVeeG/godot-mcp">GitHub</a></li>
+              <li><a href="https://github.com/KeeVeeG/godot-mcp/releases">Releases</a></li>
               <li><a href="index.html#architecture">Architecture</a></li>
               <li><a href="index.html#features">Features</a></li>
               <li><a href="index.html#install">Installation</a></li>
@@ -172,7 +172,11 @@
               <li><a href="https://godotengine.org/">Godot Engine</a></li>
               <li><a href="https://modelcontextprotocol.io/">MCP Protocol</a></li>
               <li><a href="https://docs.godotengine.org/">Godot Docs</a></li>
-      </ul>
+            </ul>
+          </div>
+          <div class="footer-col">
+            <h3>Author</h3>
+            <a href="https://nikita-abaturov.ru/" class="footer-author">Nikita Abaturov</a>
           </div>
         </div>
         <div class="footer-bottom">
